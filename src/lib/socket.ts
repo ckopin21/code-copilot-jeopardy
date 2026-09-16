@@ -65,6 +65,7 @@ function safeSnapshot(snapshot: RoomSnapshot, role: Identity['role'], playerId?:
   const revealFinal = copy.phase === 'final-review' || copy.phase === 'recap';
 
   copy.players = copy.players.map((player) => {
+    if (role === 'host') return revealFinal ? player : { ...player, finalAnswer: null };
     const own = role === 'player' && player.id === playerId;
     if (revealFinal || own) return player;
     return { ...player, finalWager: null, finalAnswer: null };
