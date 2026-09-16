@@ -157,6 +157,8 @@ export interface FinalRoundState {
   acceptedAnswers: string[];
   explanation?: string;
   reviewPlayerIndex: number;
+  participantIds: string[];
+  responsesClosed: boolean;
 }
 
 export interface RoomState {
