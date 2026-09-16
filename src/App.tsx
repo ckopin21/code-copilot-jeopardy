@@ -187,7 +187,7 @@ function Menu({ onNavigate }: { onNavigate: (mode: AppMode, fresh?: boolean) => 
   const savedPlayers = preview ? `${preview.totalPlayers} player${preview.totalPlayers === 1 ? '' : 's'}` : 'Saved locally';
   const savedActivity = preview ? relativeTime(preview.updatedAt, now) : 'available';
 
-  return <main className="menu-shell showcase-menu menu-shell-v2" onPointerDown={activateMenuAudio}>
+  return <main className={`menu-shell showcase-menu menu-shell-v2${fullscreen ? ' menu-fullscreen' : ''}`} onPointerDown={activateMenuAudio}>
     <div className="menu-backdrop" aria-hidden="true"><i/><i/><i/></div>
     <section className="menu-card menu-card-v2">
       <div className="brand-mark hero-brand menu-logo-v2"><span>BLUE STAGE</span><strong>TRIVIA</strong></div>
