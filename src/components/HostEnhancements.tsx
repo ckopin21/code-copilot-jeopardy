@@ -27,7 +27,7 @@ function phaseLabel(room: RoomSnapshot): string {
 }
 
 export function HostEnhancements() {
-  const [credentials] = useState(() => readCredentials());
+  const [credentials, setCredentials] = useState<HostRoomCredentials | null>(() => readCredentials());
   const [room, setRoom] = useState<RoomSnapshot | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [preflightOpen, setPreflightOpen] = useState(false);
@@ -41,13 +41,31 @@ export function HostEnhancements() {
   const transitionTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
-    const onState = (snapshot: RoomSnapshot) => setRoom(snapshot);
+    const syncCredentials = () => {
+      const latest = readCredentials();
+      setCredentials((current) => {
+        if (!latest) return current;
+        if (current?.roomCode === latest.roomCode && current.hostToken === latest.hostToken) return current;
+        return latest;
+      });
+    };
+    syncCredentials();
+    const timer = window.setInterval(syncCredentials, 250);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    const onState = (snapshot: RoomSnapshot) => {
+      setRoom(snapshot);
+      const latest = readCredentials();
+      if (latest?.roomCode === snapshot.code) setCredentials(latest);
+    };
     socket.on('room:state', onState);
     return () => socket.off('room:state', onState);
   }, []);
 
   useEffect(() => {
-    if (!room || !credentials) return;
+    if (!room || !credentials || credentials.roomCode !== room.code) return;
     const update = () => setHealth(getPlayerConnectionHealth(room.code));
     update();
     const timer = window.setInterval(update, 1000);
@@ -98,7 +116,7 @@ export function HostEnhancements() {
   const connectedCount = room?.players.filter((player) => player.connected).length ?? 0;
   const allReady = Boolean(room?.players.length) && room!.players.filter((player) => player.connected).every((player) => ['good', 'fair'].includes(healthMap.get(player.id)?.quality ?? ''));
 
-  if (!credentials || !room) return null;
+  if (!credentials || !room || credentials.roomCode !== room.code) return null;
 
   const hostAction = async (event: string, payload: Record<string, unknown> = {}) => {
     setActionMessage('');
