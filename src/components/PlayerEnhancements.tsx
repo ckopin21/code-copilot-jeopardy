@@ -55,7 +55,7 @@ export function PlayerEnhancements() {
     const onTest = async () => {
       setTestToast(true);
       try { navigator.vibrate?.([45, 35, 90]); } catch { /* optional */ }
-      try { await audio.unlock(); audio.cue('locked'); } catch { /* optional */ }
+      try { await audio.unlock(); audio.cue('diagnostic'); } catch { /* optional */ }
       const saved = readCredentials();
       if (saved) {
         try { await emitAck('player:reconnect', saved); } catch { /* reconnect loop handles failures */ }
@@ -95,6 +95,7 @@ export function PlayerEnhancements() {
       <label><input type="checkbox" checked={accessibility.largeText} onChange={(event) => updateAccessibility({ largeText: event.target.checked })}/>Large text</label>
       <label><input type="checkbox" checked={accessibility.highContrast} onChange={(event) => updateAccessibility({ highContrast: event.target.checked })}/>High contrast</label>
       <label><input type="checkbox" checked={accessibility.reduceMotion} onChange={(event) => updateAccessibility({ reduceMotion: event.target.checked })}/>Reduce motion</label>
+      <label><input type="checkbox" checked={accessibility.soundCaptions} onChange={(event) => updateAccessibility({ soundCaptions: event.target.checked })}/>Sound captions</label>
       <button onClick={() => setAccessOpen(false)}>Done</button>
     </section>}
 
