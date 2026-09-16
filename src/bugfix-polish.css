@@ -92,3 +92,13 @@
     transform: none !important;
   }
 }
+
+
+/* Keep floating streak pills clear of Daily Double question content. */
+.player-phone-v2:is(.phone-fire,.phone-cold):has(.phone-public-wager) .phone-question-stage-v2 {
+  padding-top: 64px !important;
+}
+
+.player-phone-v2:is(.phone-fire,.phone-cold) > .final-phone-v2 {
+  padding-top: 68px !important;
+}

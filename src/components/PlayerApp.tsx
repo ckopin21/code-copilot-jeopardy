@@ -31,6 +31,7 @@ export function PlayerApp() {
   const [recovering, setRecovering] = useState(false);
   const [hostSuspended, setHostSuspended] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
+  const [joining, setJoining] = useState(false);
   const [modifierReveal, setModifierReveal] = useState<2 | 3 | null>(null);
   const syncFailuresRef = useRef(0);
   const lastQuestionIdRef = useRef('');
@@ -188,6 +189,8 @@ export function PlayerApp() {
   }, []);
 
   const join = async () => {
+    if (joining) return;
+    setJoining(true);
     setError('');
     try {
       resumeClientSession();
@@ -202,6 +205,8 @@ export function PlayerApp() {
       history.replaceState(null, '', url);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not join room');
+    } finally {
+      setJoining(false);
     }
   };
 
@@ -319,7 +324,7 @@ export function PlayerApp() {
       <fieldset><legend>Avatar</legend><div className="avatar-picker-v2">{AVATARS.map((item)=><button type="button" className={item===avatar?'selected':''} key={item} onClick={()=>setAvatar(item)}>{item}</button>)}</div></fieldset>
       <fieldset><legend>Accent</legend><div className="color-picker-v2">{ACCENT_COLORS.map((item)=><button type="button" aria-label={item} className={item===accent?'selected':''} style={{background:item}} key={item} onClick={()=>setAccent(item)} />)}</div></fieldset>
       {error && <p className={error.startsWith('Room code scanned') ? 'form-success' : 'form-error'}>{error}</p>}
-      <button className="primary-button giant" disabled={!roomCode || !name.trim() || Boolean(credentials)} onClick={join}>Join Game</button>
+      <button className="primary-button giant" disabled={!roomCode || !name.trim() || Boolean(credentials) || joining} aria-busy={joining} onClick={join}>{joining ? 'Joining…' : 'Join Game'}</button>
       <button className="text-button" onClick={leaveToMenu}>Back to menu</button>
       {showScanner && <QrScanner onResult={handleQrResult} onClose={()=>setShowScanner(false)}/>} 
     </section></main>;
@@ -339,7 +344,7 @@ export function PlayerApp() {
   return <main className={`player-phone-v2 ${me.onFire?'phone-fire':''} ${me.isCold?'phone-cold':''}`} style={{'--accent':me.accent} as React.CSSProperties}>
     <header className="phone-header-v2"><button className="phone-menu" onClick={leaveToMenu} aria-label="Leave game">←</button><span className="phone-avatar">{me.avatar}</span><div className="phone-identity"><strong>{me.name}</strong><small>{!recovering && socket.connected ? `ROOM ${room.code}` : 'RECONNECTING…'}</small></div><div className="phone-score-stack"><b>{me.score.toLocaleString()}</b>{showFinalWager && me.finalWagerSubmitted && me.finalWager !== null && <small className="phone-wager-pill">WAGER {me.finalWager.toLocaleString()}</small>}</div></header>
 
-    {modifierReveal && <div className={`modifier-reveal-overlay x${modifierReveal}`} aria-live="polite"><div className="modifier-reveal-card"><span>{modifierReveal === 2 ? 'FINAL SIX' : 'FINAL THREE'}</span><strong>{modifierReveal === 2 ? 'DOUBLE POINTS' : 'TRIPLE POINTS'}</strong><p>{modifierReveal === 2 ? 'Every clue is now worth 2×.' : 'Every remaining clue is now worth 3×.'}</p></div></div>}
+    {modifierReveal && <div className={`modifier-reveal-overlay x${modifierReveal}`} aria-live="polite"><div className="modifier-reveal-card"><span>{modifierReveal === 2 ? 'FINAL SIX' : 'FINAL THREE'}</span><strong>{modifierReveal === 2 ? 'DOUBLE POINTS' : 'TRIPLE POINTS'}</strong><p>{modifierReveal === 2 ? 'Every question is now worth 2×.' : 'Every remaining question is now worth 3×.'}</p></div></div>}
 
     {room.phase === 'lobby' && <section className="phone-state-v2"><div className="ready-ring"><span>{me.avatar}</span></div><div className="section-kicker">CONNECTED</div><h1>{room.gameStartedAt === null ? 'You’re in.' : 'Game reset.'}</h1><p>Your seat is ready. Watch the host screen for the next game.</p></section>}
     {room.phase === 'paused' && <section className="phone-state-v2"><div className="section-kicker">PAUSED</div><h1>Game paused</h1><p>Waiting for the game to resume.</p></section>}

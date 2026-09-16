@@ -450,15 +450,9 @@ export function HostAppV3() {
 
   const revealAnswer = async () => {
     if (!current || revealRunningRef.current) return;
-    const lastBoardClue = room.remainingQuestions === 0;
-    if (lastBoardClue) await runRevealTension();
     const ok = await perform('host:reveal-answer');
-    if (!ok) {
-      cancelRevealTension();
-      return;
-    }
-    if (lastBoardClue) finishRevealTension();
-    else audio.cue('reveal');
+    if (!ok) return;
+    audio.cue('reveal');
   };
 
   const beginFinalReview = async () => {
@@ -481,7 +475,6 @@ export function HostAppV3() {
     void perform('host:remove-player', { playerId });
   };
 
-  const spectacleFinal = room.phase.startsWith('final');
   const spectacleText = revealBeat === 1 ? 'LOCK IT IN' : revealBeat === 2 ? 'NO MORE CHANGES' : revealBeat === 3 ? 'THE ANSWER IS…' : 'REVEALED';
 
   return (
@@ -500,8 +493,8 @@ export function HostAppV3() {
       {error && <div className="error-banner" role="alert">{error}<button onClick={() => setError('')}>×</button></div>}
       <PlayerStrip players={room.players} activeId={current?.buzzWinnerId ?? current?.dailyDoublePlayerId} scoreOverrides={scoreOverrides} />
 
-      {modifierReveal && <div className={`modifier-reveal-overlay x${modifierReveal}`} aria-live="polite"><div className="modifier-reveal-card"><span>{modifierReveal === 2 ? 'FINAL SIX' : 'FINAL THREE'}</span><strong>{modifierReveal === 2 ? 'DOUBLE POINTS' : 'TRIPLE POINTS'}</strong><p>{modifierReveal === 2 ? 'Every clue is now worth 2×.' : 'Every remaining clue is now worth 3×.'}</p></div></div>}
-      {revealBeat > 0 && <div className={`final-reveal-spectacle beat-${revealBeat}`} aria-live="assertive"><div className="final-reveal-card"><small>{spectacleFinal ? 'FINAL ROUND' : 'FINAL BOARD QUESTION'}</small><strong>{spectacleText}</strong><div className="reveal-pulse-dots"><i/><i/><i/></div></div></div>}
+      {modifierReveal && <div className={`modifier-reveal-overlay x${modifierReveal}`} aria-live="polite"><div className="modifier-reveal-card"><span>{modifierReveal === 2 ? 'FINAL SIX' : 'FINAL THREE'}</span><strong>{modifierReveal === 2 ? 'DOUBLE POINTS' : 'TRIPLE POINTS'}</strong><p>{modifierReveal === 2 ? 'Every question is now worth 2×.' : 'Every remaining question is now worth 3×.'}</p></div></div>}
+      {revealBeat > 0 && <div className={`final-reveal-spectacle beat-${revealBeat}`} aria-live="assertive"><div className="final-reveal-card"><small>FINAL ROUND</small><strong>{spectacleText}</strong><div className="reveal-pulse-dots"><i/><i/><i/></div></div></div>}
 
       {room.phase === 'lobby' && <section className="lobby-layout showcase-lobby">
         <article className="lobby-hero panel-v2">
@@ -533,14 +526,14 @@ export function HostAppV3() {
           })}</div>
           <h2>Rules</h2>
           <div className="settings-grid-v2">
-            <label data-tooltip="Quick uses 16 clues, Standard 25, and Marathon 36 including the $1000 row.">Game length<select value={settings.gameLength} onChange={(event) => void updateSettings({ gameLength: event.target.value as GameSettings['gameLength'] })}><option value="quick">Quick · 16 questions</option><option value="standard">Standard · 25 questions</option><option value="marathon">Marathon · 36 questions</option></select></label>
+            <label data-tooltip="Quick uses 16 questions, Standard 25, and Marathon 36 including the $1000 row.">Game length<select value={settings.gameLength} onChange={(event) => void updateSettings({ gameLength: event.target.value as GameSettings['gameLength'] })}><option value="quick">Quick · 16 questions</option><option value="standard">Standard · 25 questions</option><option value="marathon">Marathon · 36 questions</option></select></label>
             <label data-tooltip="How long players have once answering or buzzing is active. Unlimited disables the countdown.">Answer timer<select value={settings.timerSeconds ?? 'none'} onChange={(event) => void updateSettings({ timerSeconds: event.target.value === 'none' ? null : Number(event.target.value) as GameSettings['timerSeconds'] })}>{[5,10,15,20,30].map((seconds)=><option key={seconds} value={seconds}>{seconds}s</option>)}<option value="none">Unlimited</option></select></label>
             <label data-tooltip="How many hidden Daily Doubles are placed on the board.">Daily Doubles<input type="number" min="0" max="6" value={settings.dailyDoubleCount} onChange={(event) => void updateSettings({ dailyDoubleCount: Number(event.target.value), dailyDoublesEnabled: Number(event.target.value) > 0 })} /></label>
             <label data-tooltip="Misses in a row before the Cold Streak effect appears.">Cold streak<input type="number" min="2" max="8" value={settings.coldStreakThreshold} onChange={(event) => void updateSettings({ coldStreakThreshold: Number(event.target.value) })} /></label>
           </div>
           <div className="toggle-grid-v2">
             <label className="toggle-v2" data-tooltip="Allow incorrect answers to push a player's score below zero."><input type="checkbox" checked={settings.allowNegativeScores} onChange={(event) => void updateSettings({ allowNegativeScores: event.target.checked })} /><span>Negative scores</span></label>
-            <label className="toggle-v2" data-tooltip="The last six board clues are worth 2× and the last three are worth 3×."><input type="checkbox" checked={settings.lateGameModifiers} onChange={(event) => void updateSettings({ lateGameModifiers: event.target.checked })} /><span>Double / Triple finale</span></label>
+            <label className="toggle-v2" data-tooltip="The last six board questions are worth 2× and the last three are worth 3×."><input type="checkbox" checked={settings.lateGameModifiers} onChange={(event) => void updateSettings({ lateGameModifiers: event.target.checked })} /><span>Double / Triple finale</span></label>
             <label className="toggle-v2" data-tooltip="Late-game 2× and 3× multipliers also multiply Daily Double wagers."><input type="checkbox" checked={settings.dailyDoubleStacksWithMultiplier} onChange={(event) => void updateSettings({ dailyDoubleStacksWithMultiplier: event.target.checked })} /><span>Stack Daily Double</span></label>
             <label className="toggle-v2" data-tooltip="Show On Fire and Cold Streak effects based on consecutive results."><input type="checkbox" checked={settings.streaksEnabled} onChange={(event) => void updateSettings({ streaksEnabled: event.target.checked })} /><span>Streaks</span></label>
             <label className="toggle-v2" data-tooltip="After the board, play a secret-wager final question."><input type="checkbox" checked={settings.finalRoundEnabled} onChange={(event) => void updateSettings({ finalRoundEnabled: event.target.checked })} /><span>Final Round</span></label>
@@ -616,7 +609,7 @@ export function HostAppV3() {
 
       {room.phase === 'recap' && <EndgameRecap players={room.players} onReset={() => void resetGame()} onMenu={goMenu} />}
 
-      {showJoin && <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Join game"><section className="modal-card join-modal-v2 expanded-qr-modal"><button className="modal-close" onClick={() => setShowJoin(false)} aria-label="Close">×</button><div className="section-kicker">JOIN GAME</div>{qr && <img src={qr} alt="QR code to join or reconnect to the game" />}<strong className="modal-room-code">{room.code}</strong><a href={credentials.joinUrl}>{credentials.joinUrl}</a><p>Returning players reconnect to the same reserved seat on the same phone and browser.</p></section></div>}
+      {showJoin && <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Join game" onClick={() => setShowJoin(false)}><section className="modal-card join-modal-v2 expanded-qr-modal" onClick={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setShowJoin(false)} aria-label="Close">×</button><div className="section-kicker">JOIN GAME</div>{qr && <img src={qr} alt="QR code to join or reconnect to the game" />}<strong className="modal-room-code">{room.code}</strong><a href={credentials.joinUrl}>{credentials.joinUrl}</a><p>Returning players reconnect to the same reserved seat on the same phone and browser.</p></section></div>}
 
       {reviewId && <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Question review"><section className="modal-card review-modal-v2"><button className="modal-close" onClick={() => setReviewId(null)} aria-label="Close">×</button>{(() => {
         const entry = historyEntries.find((item) => item.questionId === reviewId);
@@ -626,7 +619,7 @@ export function HostAppV3() {
       })()}</section></div>}
 
       {presentationMode && room.phase === 'board' && <BoardPresentation room={room} onBack={() => setPresentationMode(false)} onSelect={selectBoardQuestion} onReview={(questionId) => setReviewId(questionId)} results={boardResults} />}
-      {room.phase === 'board' && scoreFlights[0] && <ScoreFlight flight={scoreFlights[0]} onImpact={handleScoreImpact} onComplete={handleScoreComplete} />}
+      {scoreFlights[0] && <ScoreFlight flight={scoreFlights[0]} onImpact={handleScoreImpact} onComplete={handleScoreComplete} />}
     </main>
   );
 }
