@@ -78,6 +78,41 @@ describe('BrowserGameEngine production state', () => {
     expect(state.currentQuestion?.answerRevealed).toBe(true);
     expect(state.players.find((player) => player.id === one.playerId)?.score).toBe(-value);
   });
+  it('penalizes the selecting player when the host reveals a normal question with no buzz', () => {
+    const { engine, host } = setup({ dailyDoublesEnabled: false, finalRoundEnabled: false, allowNegativeScores: true });
+    const one = addPlayer(engine, host.roomCode, 'One');
+    addPlayer(engine, host.roomCode, 'Two');
+    engine.startGame(host.roomCode, host.hostToken);
+    const tile = firstUnused(engine, host.roomCode);
+    engine.selectQuestion(host.roomCode, host.hostToken, tile.questionId);
+    const value = engine.snapshot(host.roomCode).currentQuestion!.effectiveValue;
+
+    engine.revealAnswer(host.roomCode, host.hostToken);
+
+    const state = engine.snapshot(host.roomCode);
+    const owner = state.players.find((player) => player.id === one.playerId)!;
+    expect(state.currentQuestion?.answerRevealed).toBe(true);
+    expect(state.currentQuestion?.timedOut).toBe(true);
+    expect(owner.score).toBe(-value);
+    expect(owner.stats.incorrect).toBe(1);
+  });
+
+  it('does not apply the no-buzz penalty when a Daily Double answer is revealed for judging', () => {
+    const { engine, host } = setup({ gameLength: 'quick', dailyDoublesEnabled: true, dailyDoubleCount: 16, finalRoundEnabled: false, allowNegativeScores: true });
+    const player = addPlayer(engine, host.roomCode, 'Daily');
+    engine.startGame(host.roomCode, host.hostToken);
+    const daily = engine.snapshot(host.roomCode).board!.questions.find((question) => question.dailyDouble)!;
+    engine.selectQuestion(host.roomCode, host.hostToken, daily.questionId, player.playerId);
+    engine.setDailyDoubleWager(host.roomCode, host.hostToken, 100);
+    const before = engine.snapshot(host.roomCode).players.find((candidate) => candidate.id === player.playerId)!;
+
+    engine.revealAnswer(host.roomCode, host.hostToken);
+
+    const after = engine.snapshot(host.roomCode).players.find((candidate) => candidate.id === player.playerId)!;
+    expect(after.score).toBe(before.score);
+    expect(after.stats.incorrect).toBe(before.stats.incorrect);
+  });
+
   it('reconnects a reserved seat without changing player identity or seat', () => {
     const { engine, host } = setup();
     const player = addPlayer(engine, host.roomCode);

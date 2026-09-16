@@ -781,6 +781,9 @@ export class BrowserGameEngine {
     const room = this.hostRoom(roomCode, hostToken);
     const current = room.state.currentQuestion;
     if (!current) throw new Error('No current question');
+    if (current.responseMode !== 'text' && !current.dailyDouble && !current.buzzWinnerId && !current.answerRevealed) {
+      this.penalizeUnansweredTurn(room);
+    }
     if (current.responseMode === 'text') current.responsesClosed = true;
     current.answerRevealed = true;
     current.buzzOpen = false;

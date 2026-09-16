@@ -90,7 +90,7 @@ export function HostEnhancements() {
     let duration = 0;
     if (room.phase === 'board' && room.board && (previous === 'lobby' || gameChanged)) {
       next = { key: `categories-${room.gameStartedAt}`, eyebrow: 'ROUND START', title: 'Tonight’s Categories', categories: room.board.categories };
-      duration = 2900;
+      duration = 5500;
       audio.cue('category');
     } else if (room.phase === 'daily-double-wager' && previous !== 'daily-double-wager') {
       next = { key: `dd-${room.currentQuestion?.questionId}`, eyebrow: 'SPECIAL QUESTION', title: 'DAILY DOUBLE', detail: 'One player. One locked wager.' };
@@ -237,6 +237,6 @@ export function HostEnhancements() {
       </section>
     </div>}
 
-    {transition && <div className="game-transition-overlay" key={transition.key} aria-live="polite"><section><small>{transition.eyebrow}</small><h1>{transition.title}</h1>{transition.detail && <p>{transition.detail}</p>}{transition.categories && <div className="category-intro-grid">{transition.categories.map((category, index) => <span key={category} style={{ '--intro-index': index } as React.CSSProperties}>{category}</span>)}</div>}</section></div>}
+    {transition && <div className={`game-transition-overlay ${transition.categories ? 'category-transition' : ''}`} key={transition.key} aria-live="polite"><section><small>{transition.eyebrow}</small><h1>{transition.title}</h1>{transition.detail && <p>{transition.detail}</p>}{transition.categories && <div className="category-intro-grid">{transition.categories.map((category, index) => <span key={category} style={{ '--intro-index': index } as React.CSSProperties}>{category}</span>)}</div>}</section></div>}
   </>;
 }

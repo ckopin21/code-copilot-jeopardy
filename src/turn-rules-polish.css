@@ -34,3 +34,61 @@
   .modifier-reveal-card { min-width:calc(100vw - 28px); padding:22px 18px; }
   .modifier-reveal-card strong { font-size:2.6rem; }
 }
+
+
+/* Gameplay UX fixes: readable category intro, visible turn ownership, and unclipped mobile timers. */
+.game-transition-overlay.category-transition {
+  animation-duration: 5.5s !important;
+}
+
+.showcase-player-card.is-turn {
+  border-color: #ffd166 !important;
+  box-shadow: 0 0 0 2px rgba(255,209,102,.55), 0 0 26px rgba(255,209,102,.24) !important;
+}
+.turn-pill {
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding: 2px 6px;
+  border: 1px solid rgba(255,209,102,.72);
+  border-radius: 999px;
+  background: rgba(87,61,0,.72);
+  color: #ffe39a;
+  font-size: .48rem;
+  line-height: 1.15;
+  font-weight: 1000;
+  letter-spacing: .09em;
+}
+.phone-turn-line {
+  color: #ffd166 !important;
+  font-weight: 1000 !important;
+  letter-spacing: .075em !important;
+}
+
+.player-phone-v2 .phone-question-v2 {
+  width: 100%;
+  overflow: visible !important;
+}
+.player-phone-v2 .phone-question-v2 .timer,
+.player-phone-v2 .final-phone-v2 .timer {
+  width: min(520px, calc(100vw - 36px));
+  max-width: 100%;
+  min-height: 54px;
+  margin: 8px auto 2px;
+  padding: 2px 8px 10px;
+  box-sizing: border-box;
+  overflow: visible !important;
+  position: relative;
+  z-index: 4;
+}
+.player-phone-v2 .phone-question-v2 .timer > span,
+.player-phone-v2 .final-phone-v2 .timer > span {
+  display: block;
+  min-height: 34px;
+  line-height: 1.2;
+  overflow: visible;
+}
+.player-phone-v2 .phone-question-v2 .timer-track,
+.player-phone-v2 .final-phone-v2 .timer-track {
+  width: 100%;
+  margin-top: 4px;
+}
