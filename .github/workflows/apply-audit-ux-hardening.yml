@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/apply-audit-ux-hardening.yml'
       - 'scripts/apply-audit-ux-hardening.py'
+      - 'scripts/repair-audit-ux-script.py'
 
 permissions:
   contents: write
@@ -22,6 +23,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci --no-audit --no-fund
+      - run: python scripts/repair-audit-ux-script.py
       - run: python scripts/apply-audit-ux-hardening.py
       - run: npm run typecheck
       - run: npm run lint -- --max-warnings=0
@@ -33,6 +35,7 @@ jobs:
         run: |
           rm .github/workflows/apply-audit-ux-hardening.yml
           rm scripts/apply-audit-ux-hardening.py
+          rm scripts/repair-audit-ux-script.py
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
