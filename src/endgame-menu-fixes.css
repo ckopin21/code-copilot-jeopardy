@@ -1,0 +1,233 @@
+/* Keep late-game multiplier information in normal document flow so it never covers the category/value row. */
+.showcase-question-card .question-modifier-strip {
+  position: static !important;
+  inset: auto !important;
+  transform: none !important;
+  width: 100% !important;
+  box-sizing: border-box;
+  margin: clamp(5px, .9vh, 10px) 0 clamp(7px, 1.2vh, 14px) !important;
+  flex: 0 0 auto;
+}
+
+.showcase-question-card .question-meta-v2 {
+  position: relative;
+  z-index: 2;
+  margin-bottom: 0 !important;
+}
+
+.showcase-question-card:has(.question-modifier-strip) > h1 {
+  margin-top: clamp(5px, 1vh, 12px) !important;
+}
+
+/* Give the final answer a deliberate beat before standings appear. */
+.endgame-hold {
+  display: grid !important;
+  place-content: center;
+  justify-items: center;
+  gap: clamp(8px, 1.6vh, 18px);
+  text-align: center;
+}
+
+.endgame-hold h1 {
+  margin: 0;
+  font-size: clamp(2.4rem, 7vw, 6.5rem);
+}
+
+.endgame-hold .helper-copy {
+  margin: 0;
+  font-size: clamp(.9rem, 1.6vw, 1.25rem);
+}
+
+.endgame-hold-pulse {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.endgame-hold-pulse i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ffd166;
+  animation: endgameHoldPulse .8s ease-in-out infinite alternate;
+}
+
+.endgame-hold-pulse i:nth-child(2) { animation-delay: .16s; }
+.endgame-hold-pulse i:nth-child(3) { animation-delay: .32s; }
+
+@keyframes endgameHoldPulse {
+  from { transform: scale(.72); opacity: .42; }
+  to { transform: scale(1.18); opacity: 1; }
+}
+
+/* Podium stays up until the host explicitly chooses to continue. */
+.podium-scene {
+  position: relative;
+  min-height: 0 !important;
+  overflow: hidden;
+}
+
+.podium-stats-button {
+  position: relative;
+  z-index: 8;
+  align-self: center;
+  justify-self: center;
+  margin-top: clamp(6px, 1.2vh, 14px);
+  min-width: min(320px, 72vw);
+}
+
+/* Fit awards, standings, and controls inside the host's remaining viewport. */
+.showcase-host .recap-scene-v2.stats-after-podium {
+  display: grid !important;
+  grid-template-rows: auto auto minmax(0, .8fr) minmax(0, 1.2fr) auto;
+  gap: clamp(5px, 1vh, 12px) !important;
+  align-content: stretch;
+  min-height: 0 !important;
+  height: 100%;
+  overflow: hidden !important;
+  padding: clamp(8px, 1.4vh, 18px) clamp(10px, 1.5vw, 24px) clamp(8px, 1.4vh, 18px) !important;
+  box-sizing: border-box;
+}
+
+.showcase-host .stats-after-podium > h1 {
+  margin: 0 !important;
+  line-height: .95;
+  font-size: clamp(2rem, 5.2vh, 4.4rem) !important;
+}
+
+.showcase-host .stats-after-podium .recap-grid-v2 {
+  min-height: 0;
+  overflow: hidden;
+  gap: clamp(6px, .8vw, 12px) !important;
+}
+
+.showcase-host .stats-after-podium .postgame-awards {
+  grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)) !important;
+  align-items: stretch;
+}
+
+.showcase-host .stats-after-podium .standings-grid {
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)) !important;
+  align-items: stretch;
+}
+
+.showcase-host .stats-after-podium.recap-count-1 .standings-grid {
+  grid-template-columns: minmax(320px, 680px) !important;
+  justify-content: center;
+}
+
+.showcase-host .stats-after-podium .recap-card-v2 {
+  min-height: 0 !important;
+  height: 100%;
+  overflow: hidden;
+  padding: clamp(7px, 1vh, 13px) clamp(8px, .9vw, 14px) !important;
+  box-sizing: border-box;
+}
+
+.showcase-host .stats-after-podium .postgame-awards .recap-card-v2 {
+  display: grid;
+  align-content: center;
+  gap: clamp(2px, .5vh, 6px);
+}
+
+.showcase-host .stats-after-podium .postgame-awards .recap-card-v2 > strong {
+  font-size: clamp(1rem, 2.4vh, 1.65rem) !important;
+  line-height: 1.12;
+}
+
+.showcase-host .stats-after-podium .recap-player-heading {
+  margin: 0 !important;
+  gap: clamp(4px, .6vw, 9px) !important;
+}
+
+.showcase-host .stats-after-podium .recap-player-heading h2 {
+  margin: 0 !important;
+  font-size: clamp(.9rem, 1.8vh, 1.25rem) !important;
+}
+
+.showcase-host .stats-after-podium .recap-player-heading > strong {
+  font-size: clamp(1.25rem, 2.8vh, 2rem) !important;
+}
+
+.showcase-host .stats-after-podium .player-award-pills {
+  margin: clamp(3px, .5vh, 6px) 0 !important;
+  gap: 4px !important;
+  flex-wrap: wrap;
+}
+
+.showcase-host .stats-after-podium .player-award-pills .player-wager-pill {
+  font-size: clamp(.48rem, .9vh, .62rem) !important;
+  padding: 2px 6px !important;
+}
+
+.showcase-host .stats-after-podium .recap-stats-list {
+  display: grid !important;
+  grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr) !important;
+  gap: clamp(2px, .45vh, 5px) clamp(6px, .8vw, 12px) !important;
+  align-content: start;
+  margin: clamp(4px, .7vh, 8px) 0 0 !important;
+  font-size: clamp(.62rem, 1.25vh, .82rem) !important;
+  line-height: 1.15;
+}
+
+.showcase-host .stats-after-podium .recap-stats-list dt,
+.showcase-host .stats-after-podium .recap-stats-list dd {
+  margin: 0 !important;
+  min-width: 0;
+}
+
+.showcase-host .stats-after-podium .recap-stats-list dd {
+  text-align: right;
+  color: #ffd166;
+  font-weight: 900;
+}
+
+.showcase-host .stats-after-podium > .control-row-v2 {
+  margin: 0 !important;
+  padding: 0 !important;
+  min-height: 0;
+}
+
+/* The saved-game preview is the single continue action. */
+.saved-game-preview[role="button"] {
+  cursor: pointer !important;
+  transition: transform .16s ease, filter .16s ease, box-shadow .16s ease, border-color .16s ease;
+}
+
+.saved-game-preview[role="button"]:hover,
+.saved-game-preview[role="button"]:focus-visible {
+  transform: translateY(-3px);
+  filter: brightness(1.08);
+  border-color: #ffd166 !important;
+  box-shadow: 0 14px 30px rgba(0,0,0,.34), 0 0 24px rgba(255,209,102,.16);
+  outline: none;
+}
+
+.saved-game-preview[role="button"]:active {
+  transform: translateY(0) scale(.985);
+}
+
+.saved-game-preview + .menu-mode-grid .menu-continue {
+  display: none !important;
+}
+
+@media (max-height: 760px) and (min-width: 760px) {
+  .showcase-host .stats-after-podium {
+    gap: 4px !important;
+    padding-top: 6px !important;
+    padding-bottom: 6px !important;
+  }
+
+  .showcase-host .stats-after-podium .postgame-awards .recap-player-heading span {
+    font-size: 1rem !important;
+  }
+
+  .showcase-host .stats-after-podium .recap-stats-list {
+    font-size: .58rem !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .endgame-hold-pulse i { animation: none !important; }
+  .saved-game-preview[role="button"] { transition: none !important; }
+}
