@@ -17,6 +17,8 @@ export type GamePhase =
 export type ConnectionState = 'connected' | 'reconnecting' | 'disconnected';
 export type GameLength = 'quick' | 'standard' | 'marathon';
 export type Difficulty = 'easy' | 'medium' | 'hard' | 'mixed';
+export type ResponseMode = 'buzz' | 'text';
+export type AutoGradeConfidence = 'high' | 'medium' | 'low';
 
 export interface Question {
   id: string;
@@ -29,6 +31,7 @@ export interface Question {
   difficulty: 'easy' | 'medium' | 'hard';
   explanation?: string;
   dailyDoubleEligible?: boolean;
+  responseMode?: ResponseMode;
   tags: string[];
 }
 
@@ -119,6 +122,14 @@ export interface TimerState {
   remainingMs: number | null;
 }
 
+export interface TextResponseState {
+  answer: string;
+  submittedAt: number;
+  autoCorrect: boolean;
+  autoConfidence: AutoGradeConfidence;
+  resolvedCorrect: boolean | null;
+}
+
 export interface CurrentQuestionState {
   questionId: string;
   text: string;
@@ -128,6 +139,9 @@ export interface CurrentQuestionState {
   explanation?: string;
   answerRevealed: boolean;
   acceptedAnswers?: string[];
+  responseMode?: ResponseMode;
+  textResponses?: Record<string, TextResponseState>;
+  responsesClosed?: boolean;
   dailyDouble: boolean;
   dailyDoublePlayerId: string | null;
   wager: number | null;

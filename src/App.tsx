@@ -1,12 +1,18 @@
+import { useMemo, useState } from 'react';
 import { HostApp } from './components/HostApp';
 import { PlayerApp } from './components/PlayerApp';
 import { PresentationApp } from './components/PresentationApp';
+import { audio } from './lib/audio';
+import { menuUrl, resetInstance } from './lib/resetInstance';
 import './styles.css';
 
-function go(mode: 'host' | 'player') {
-  const url = new URL(location.href);
-  url.search = `?mode=${mode}`;
-  url.hash = '';
+const HOST_KEY = 'blue-stage-host-room';
+
+function go(mode: 'host' | 'player', fresh = false) {
+  audio.stop();
+  const url = new URL('./', location.href);
+  url.searchParams.set('mode', mode);
+  if (fresh) url.searchParams.set('fresh', '1');
   location.href = url.toString();
 }
 
@@ -16,5 +22,37 @@ export default function App() {
   if (mode === 'host') return <HostApp/>;
   if (mode === 'player') return <PlayerApp/>;
   if (mode === 'presentation') return <PresentationApp/>;
-  return <main className="landing-screen"><div className="landing-glow"/><section className="landing-card"><div className="logo-lockup"><span>BLUE STAGE</span><strong>TRIVIA</strong></div><p>Fast buzzers. Big wagers. One final answer.</p><div className="landing-actions"><button className="primary-button giant" onClick={()=>go('host')}>Host a Game</button><button className="secondary-button giant" onClick={()=>go('player')}>Join on Phone</button></div><small>Original game-show visuals and procedural audio.</small></section></main>;
+  return <Menu/>;
 }
+
+function Menu() {
+  const [resetting, setResetting] = useState(false);
+  const hasSavedHost = useMemo(() => Boolean(localStorage.getItem(HOST_KEY)), []);
+
+  const hardReset = async () => {
+    if (!confirm('Reset this entire Blue Stage instance? This clears saved rooms, seats, scores, and cached Blue Stage data, then reloads the newest build.')) return;
+    setResetting(true);
+    audio.stop();
+    await resetInstance();
+  };
+
+  return <main className="menu-shell">
+    <div className="menu-backdrop" aria-hidden="true"><i/><i/><i/></div>
+    <section className="menu-card">
+      <div className="brand-mark hero-brand"><span>BLUE STAGE</span><strong>TRIVIA</strong></div>
+      <p className="menu-subtitle">A fast, local multiplayer game show built for one shared screen and player phones.</p>
+      <div className="menu-actions">
+        <button className="primary-button menu-primary" onClick={()=>go('host', true)}><span>Start New Game</span><small>Fresh room, fresh board, zero scores</small></button>
+        {hasSavedHost && <button className="secondary-button menu-secondary" onClick={()=>go('host')}><span>Continue Game</span><small>Reconnect to the saved host room</small></button>}
+        <button className="secondary-button menu-secondary" onClick={()=>go('player')}><span>Join a Game</span><small>Use this device as a player controller</small></button>
+      </div>
+      <div className="menu-utility">
+        <button className="text-button" disabled={resetting} onClick={() => void hardReset()}>{resetting ? 'Resetting…' : 'Reset Instance'}</button>
+        <span>Use this after an update if you want every saved Blue Stage state cleared.</span>
+      </div>
+    </section>
+    <footer className="menu-footer"><span>PHONE BUZZERS</span><b>•</b><span>DAILY DOUBLES</span><b>•</b><span>FINAL ROUND</span></footer>
+  </main>;
+}
+
+export { menuUrl };

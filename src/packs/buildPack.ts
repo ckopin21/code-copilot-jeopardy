@@ -1,7 +1,7 @@
-import type { Difficulty, Question, QuestionPack, QuestionValue } from '../shared/types';
+import type { Difficulty, Question, QuestionPack, QuestionValue, ResponseMode } from '../shared/types';
 import { QUESTION_VALUES } from '../shared/types';
 
-type QA = [question: string, answer: string | string[], explanation?: string, tags?: string[]];
+type QA = [question: string, answer: string | string[], explanation?: string, tags?: string[], responseMode?: ResponseMode];
 export type CategoryData = { name: string; questions: QA[] };
 
 export function buildPack(
@@ -13,7 +13,7 @@ export function buildPack(
     if (category.questions.length !== QUESTION_VALUES.length) {
       throw new Error(`${meta.id}/${category.name} must contain exactly ${QUESTION_VALUES.length} questions`);
     }
-    category.questions.forEach(([text, answers, explanation, tags], index) => {
+    category.questions.forEach(([text, answers, explanation, tags, responseMode], index) => {
       const value = QUESTION_VALUES[index] as QuestionValue;
       const difficulty: Exclude<Difficulty, 'mixed'> = index < 2 ? 'easy' : index < 4 ? 'medium' : 'hard';
       const acceptedAnswers = Array.isArray(answers) ? answers : [answers];
@@ -27,6 +27,7 @@ export function buildPack(
         difficulty,
         explanation,
         dailyDoubleEligible: true,
+        responseMode: responseMode ?? (tags?.includes('free-response') || tags?.includes('typed') ? 'text' : 'buzz'),
         tags: tags ?? []
       });
     });

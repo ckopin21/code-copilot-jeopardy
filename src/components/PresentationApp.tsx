@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { RoomSnapshot } from '../shared/types';
 import { emitAck, socket } from '../lib/socket';
 import { Board } from './Board';
@@ -6,37 +6,74 @@ import { PlayerStrip } from './PlayerStrip';
 import { Timer } from './Timer';
 import { audio } from '../lib/audio';
 
+function musicFor(room: RoomSnapshot) {
+  if (room.phase.startsWith('final')) return 'final' as const;
+  if (room.phase === 'recap') return 'winner' as const;
+  if (room.currentQuestion?.dailyDouble) return 'daily-double' as const;
+  if (room.phase === 'question') return 'thinking' as const;
+  if (room.multiplier === 3) return 'triple' as const;
+  if (room.multiplier === 2) return 'double' as const;
+  return room.phase === 'lobby' ? 'lobby' as const : 'board' as const;
+}
+
 export function PresentationApp() {
   const roomCode = new URLSearchParams(location.search).get('room')?.toUpperCase() ?? '';
   const [room, setRoom] = useState<RoomSnapshot | null>(null);
   const [error, setError] = useState('');
+  const [audioReady, setAudioReady] = useState(false);
+
   useEffect(() => {
     const onState = (snapshot: RoomSnapshot) => setRoom(snapshot);
     socket.on('room:state', onState);
-    void emitAck<RoomSnapshot>('presentation:join', { roomCode }).then(setRoom).catch((error) => setError(error instanceof Error ? error.message : 'Could not join'));
-    return () => { socket.off('room:state', onState); };
+    void emitAck<RoomSnapshot>('presentation:join', { roomCode }).then(setRoom).catch((err) => setError(err instanceof Error ? err.message : 'Could not join game'));
+    return () => { socket.off('room:state', onState); audio.stop(); };
   }, [roomCode]);
+
+  const musicState = room ? musicFor(room) : null;
   useEffect(() => {
-    if (!room) return;
-    const state = room.phase.startsWith('final') ? 'final' : room.phase === 'recap' ? 'winner' : room.multiplier === 3 ? 'triple' : room.multiplier === 2 ? 'double' : room.phase === 'lobby' ? 'lobby' : room.phase === 'question' ? 'thinking' : 'board';
-    const unlock = () => { void audio.setMusic(state); window.removeEventListener('pointerdown', unlock); };
-    window.addEventListener('pointerdown', unlock);
-    return () => window.removeEventListener('pointerdown', unlock);
+    if (!audioReady || !musicState) return;
+    void audio.setMusic(musicState);
+  }, [audioReady, musicState]);
+
+  const winners = useMemo(() => {
+    if (!room || room.phase !== 'recap' || !room.players.length) return [];
+    const max = Math.max(...room.players.map((player) => player.score));
+    return room.players.filter((player) => player.score === max);
   }, [room]);
-  if (!room) return <main className="center-screen"><h1>{error || 'Connecting to game…'}</h1></main>;
+
+  if (!room) return <main className="presentation-shell presentation-boot"><div className="brand-mark"><span>BLUE STAGE</span><strong>TRIVIA</strong></div><p>{error || 'Connecting to game…'}</p></main>;
+
   const current = room.currentQuestion;
   const active = current?.buzzWinnerId ?? current?.dailyDoublePlayerId;
-  const winners = room.phase === 'recap' && room.players.length ? room.players.filter((player) => player.score === Math.max(...room.players.map((item) => item.score))) : [];
-  return <main className="presentation-shell"><PlayerStrip players={room.players} activeId={active}/>
-    {room.phase === 'lobby' && <section className="center-screen"><div className="logo-lockup"><span>BLUE STAGE</span><strong>TRIVIA</strong></div><h2>Room {room.code}</h2><p>Players join from their phones.</p></section>}
-    {room.phase === 'board' && room.board && <section className="game-stage presentation">{room.multiplier > 1 && <div className={`modifier-banner x${room.multiplier}`}>{room.multiplier === 2 ? 'DOUBLE POINTS' : 'TRIPLE POINTS'}</div>}<Board board={room.board}/></section>}
-    {room.phase === 'paused' && <section className="center-screen"><h1>PAUSED</h1></section>}
-    {room.phase === 'daily-double-wager' && <section className="center-screen daily-double-scene"><div className="burst-label">DAILY DOUBLE</div><h1>{room.players.find((player) => player.id === current?.dailyDoublePlayerId)?.name} is wagering</h1></section>}
-    {(room.phase === 'question' || room.phase === 'daily-double-question') && current && <section className={`center-screen question-scene ${current.dailyDouble ? 'daily-double-scene' : ''}`}><div className="question-meta"><span>{current.category}</span><strong>{current.dailyDouble ? `WAGER ${current.wager}` : `${current.effectiveValue} POINTS`}</strong></div><h1>{current.text}</h1><Timer timer={room.timer}/>{current.buzzWinnerId && <div className="buzz-winner">{room.players.find((player) => player.id === current.buzzWinnerId)?.avatar} {room.players.find((player) => player.id === current.buzzWinnerId)?.name}</div>}{current.answerRevealed && <div className="revealed-answer">{current.acceptedAnswers?.[0]}</div>}</section>}
-    {room.phase === 'final-category' && <section className="center-screen final-scene"><div className="eyebrow">FINAL ROUND</div><h1>{room.finalRound?.category}</h1></section>}
-    {room.phase === 'final-wager' && <section className="center-screen final-scene"><div className="eyebrow">FINAL ROUND</div><h1>Place your wagers</h1></section>}
-    {room.phase === 'final-question' && <section className="center-screen final-scene"><div className="eyebrow">FINAL QUESTION · {room.finalRound?.category}</div><h1>{room.finalRound?.question}</h1><Timer timer={room.timer}/></section>}
-    {room.phase === 'final-review' && room.finalRound && <section className="center-screen final-scene"><div className="eyebrow">FINAL ANSWER</div><h1>{room.players[room.finalRound.reviewPlayerIndex]?.name}</h1><div className="final-response"><small>WAGER</small><strong>{room.players[room.finalRound.reviewPlayerIndex]?.finalWager}</strong><small>ANSWER</small><strong>{room.players[room.finalRound.reviewPlayerIndex]?.finalAnswer || '(No answer)'}</strong></div></section>}
-    {room.phase === 'recap' && <section className="center-screen recap-scene"><div className="eyebrow">WINNER</div><h1>{winners.length === 1 ? `${winners[0].avatar} ${winners[0].name}` : 'TIE GAME'}</h1><div className="presentation-scores">{[...room.players].sort((a,b)=>b.score-a.score).map((player)=><div key={player.id}><span>{player.avatar} {player.name}</span><strong>{player.score.toLocaleString()}</strong></div>)}</div></section>}
+  const responseCount = Object.keys(current?.textResponses ?? {}).length;
+  const reviewPlayer = room.phase === 'final-review' && room.finalRound ? room.players[room.finalRound.reviewPlayerIndex] : null;
+
+  return <main className="presentation-shell">
+    {!audioReady && <button className="presentation-audio-gate" onClick={async () => { await audio.unlock(); setAudioReady(true); }}>Enable game audio</button>}
+    <PlayerStrip players={room.players} activeId={active}/>
+
+    {room.phase === 'lobby' && <section className="presentation-center"><div className="brand-mark hero-brand"><span>BLUE STAGE</span><strong>TRIVIA</strong></div><div className="presentation-room"><small>ROOM CODE</small><strong>{room.code}</strong></div><p>Players join from their phones.</p></section>}
+
+    {room.phase === 'board' && room.board && <section className="game-stage presentation-board"><div className="presentation-round-header"><span>{room.remainingQuestions} QUESTIONS LEFT</span>{room.multiplier > 1 && <strong>{room.multiplier === 2 ? 'DOUBLE POINTS' : 'TRIPLE POINTS'}</strong>}</div><Board board={room.board}/></section>}
+
+    {room.phase === 'paused' && <section className="presentation-center"><div className="section-kicker">PAUSED</div><h1>Game paused</h1></section>}
+
+    {room.phase === 'daily-double-wager' && <section className="presentation-center daily-double-v2"><div className="section-kicker gold">DAILY DOUBLE</div><h1>{room.players.find((player) => player.id === current?.dailyDoublePlayerId)?.name}</h1><p>is choosing a wager.</p></section>}
+
+    {(room.phase === 'question' || room.phase === 'daily-double-question') && current && <section className={`presentation-question ${current.dailyDouble ? 'daily-double-v2' : ''}`}><article>
+      <div className="question-meta-v2"><span>{current.category}</span><strong>{current.dailyDouble ? `WAGER ${current.wager}` : `${current.effectiveValue} POINTS`}</strong>{current.responseMode === 'text' && <em>FREE RESPONSE</em>}</div>
+      <h1>{current.text}</h1>
+      <Timer timer={room.timer}/>
+      {current.responseMode === 'text' && !current.answerRevealed && <div className="presentation-response-count"><strong>{responseCount}/{room.players.length}</strong><span>RESPONSES IN</span></div>}
+      {current.buzzWinnerId && <div className="winner-chip presentation-winner">{room.players.find((player) => player.id === current.buzzWinnerId)?.avatar}<span>{room.players.find((player) => player.id === current.buzzWinnerId)?.name}</span></div>}
+      {current.answerRevealed && <div className="answer-reveal-v2 presentation-answer"><small>CORRECT ANSWER</small><strong>{current.acceptedAnswers?.join(' / ')}</strong></div>}
+    </article></section>}
+
+    {room.phase === 'final-category' && <section className="presentation-center final-stage"><div className="section-kicker gold">FINAL ROUND</div><h1>{room.finalRound?.category}</h1></section>}
+    {room.phase === 'final-wager' && <section className="presentation-center final-stage"><div className="section-kicker gold">FINAL ROUND</div><h1>Place your wagers</h1><div className="presentation-lock-status">{room.players.map((player)=><span className={player.finalWagerSubmitted?'done':''} key={player.id}>{player.avatar} {player.name}</span>)}</div></section>}
+    {room.phase === 'final-question' && <section className="presentation-question final-stage"><article><div className="question-meta-v2"><span>FINAL ROUND</span><strong>{room.finalRound?.category}</strong></div><h1>{room.finalRound?.question}</h1><Timer timer={room.timer}/><div className="presentation-response-count"><strong>{room.players.filter((player)=>player.finalAnswerSubmitted).length}/{room.players.length}</strong><span>RESPONSES IN</span></div></article></section>}
+    {room.phase === 'final-review' && room.finalRound && reviewPlayer && <section className="presentation-question final-stage"><article><div className="section-kicker gold">FINAL ANSWER</div><div className="answer-reveal-v2 presentation-answer"><small>CORRECT ANSWER</small><strong>{room.finalRound.acceptedAnswers.join(' / ')}</strong></div><div className="presentation-final-player"><span>{reviewPlayer.avatar}</span><h1>{reviewPlayer.name}</h1><p>{reviewPlayer.finalAnswer || '(No answer)'}</p><strong>WAGER {reviewPlayer.finalWager ?? 0}</strong></div></article></section>}
+
+    {room.phase === 'recap' && <section className="presentation-center presentation-recap"><div className="section-kicker gold">GAME COMPLETE</div><h1>{winners.length === 1 ? `${winners[0].avatar} ${winners[0].name}` : 'TIE GAME'}</h1><div className="presentation-scores-v2">{[...room.players].sort((a,b)=>b.score-a.score).map((player)=><div key={player.id}><span>{player.avatar} {player.name}</span><strong>{player.score.toLocaleString()}</strong></div>)}</div></section>}
   </main>;
 }
