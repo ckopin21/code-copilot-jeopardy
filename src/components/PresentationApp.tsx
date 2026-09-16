@@ -35,11 +35,16 @@ export function PresentationApp() {
     void audio.setMusic(musicState);
   }, [audioReady, musicState]);
 
-  const winners = useMemo(() => {
-    if (!room || room.phase !== 'recap' || !room.players.length) return [];
-    const max = Math.max(...room.players.map((player) => player.score));
-    return room.players.filter((player) => player.score === max);
+  const resultPlayers = useMemo(() => {
+    if (!room) return [];
+    const ids = room.resultPlayerIds?.length ? new Set(room.resultPlayerIds) : null;
+    return ids ? room.players.filter((player) => ids.has(player.id)) : room.players;
   }, [room]);
+  const winners = useMemo(() => {
+    if (!room || room.phase !== 'recap' || !resultPlayers.length) return [];
+    const max = Math.max(...resultPlayers.map((player) => player.score));
+    return resultPlayers.filter((player) => player.score === max);
+  }, [room, resultPlayers]);
 
   if (!room) return <main className="presentation-shell presentation-boot"><div className="brand-mark"><span>BLUE STAGE</span><strong>TRIVIA</strong></div><p>{error || 'Connecting to game…'}</p></main>;
 
@@ -47,7 +52,11 @@ export function PresentationApp() {
   const active = current?.buzzWinnerId ?? current?.dailyDoublePlayerId;
   const responseCount = Object.keys(current?.textResponses ?? {}).length;
   const connectedPlayers = room.players.filter((player) => player.connected);
-  const reviewPlayer = room.phase === 'final-review' && room.finalRound ? room.players[room.finalRound.reviewPlayerIndex] : null;
+  const finalPlayers = room.finalRound ? connectedPlayers.filter((player) => room.finalRound!.participantIds.includes(player.id)) : connectedPlayers;
+  const reviewPlayerId = room.phase === 'final-review' && room.finalRound
+    ? room.finalRound.reviewPlayerId ?? room.finalRound.participantIds[room.finalRound.reviewPlayerIndex]
+    : null;
+  const reviewPlayer = reviewPlayerId ? room.players.find((player) => player.id === reviewPlayerId) ?? null : null;
 
   return <main className="presentation-shell">
     {!audioReady && <button className="presentation-audio-gate" onClick={async () => { await audio.unlock(); setAudioReady(true); }}>Enable game audio</button>}
@@ -71,10 +80,10 @@ export function PresentationApp() {
     </article></section>}
 
     {room.phase === 'final-category' && <section className="presentation-center final-stage"><div className="section-kicker gold">FINAL ROUND</div><h1>{room.finalRound?.category}</h1></section>}
-    {room.phase === 'final-wager' && <section className="presentation-center final-stage"><div className="section-kicker gold">FINAL ROUND</div><h1>Place your wagers</h1><div className="presentation-lock-status">{connectedPlayers.map((player)=><span className={player.finalWagerSubmitted?'done':''} key={player.id}>{player.avatar} {player.name}</span>)}</div></section>}
-    {room.phase === 'final-question' && <section className="presentation-question final-stage"><article><div className="question-meta-v2"><span>FINAL ROUND</span><strong>{room.finalRound?.category}</strong></div><h1>{room.finalRound?.question}</h1><Timer timer={room.timer} serverNow={room.serverNow}/><div className="presentation-response-count"><strong>{connectedPlayers.filter((player)=>player.finalAnswerSubmitted).length}/{connectedPlayers.length}</strong><span>RESPONSES IN</span></div></article></section>}
+    {room.phase === 'final-wager' && <section className="presentation-center final-stage"><div className="section-kicker gold">FINAL ROUND</div><h1>Place your wagers</h1><div className="presentation-lock-status">{finalPlayers.map((player)=><span className={player.finalWagerSubmitted?'done':''} key={player.id}>{player.avatar} {player.name}</span>)}</div></section>}
+    {room.phase === 'final-question' && <section className="presentation-question final-stage"><article><div className="question-meta-v2"><span>FINAL ROUND</span><strong>{room.finalRound?.category}</strong></div><h1>{room.finalRound?.question}</h1><Timer timer={room.timer} serverNow={room.serverNow}/><div className="presentation-response-count"><strong>{finalPlayers.filter((player)=>player.finalAnswerSubmitted).length}/{finalPlayers.length}</strong><span>RESPONSES IN</span></div></article></section>}
     {room.phase === 'final-review' && room.finalRound && reviewPlayer && <section className="presentation-question final-stage"><article><div className="section-kicker gold">FINAL ANSWER</div><div className="answer-reveal-v2 presentation-answer"><small>CORRECT ANSWER</small><strong>{room.finalRound.acceptedAnswers.join(' / ')}</strong></div><div className="presentation-final-player"><span>{reviewPlayer.avatar}</span><h1>{reviewPlayer.name}</h1><p>{reviewPlayer.finalAnswer || '(No answer)'}</p><strong>WAGER {reviewPlayer.finalWager ?? 0}</strong></div></article></section>}
 
-    {room.phase === 'recap' && <section className="presentation-center presentation-recap"><div className="section-kicker gold">GAME COMPLETE</div><h1>{winners.length === 1 ? `${winners[0].avatar} ${winners[0].name}` : 'TIE GAME'}</h1><div className="presentation-scores-v2">{[...room.players].sort((a,b)=>b.score-a.score).map((player)=><div key={player.id}><span>{player.avatar} {player.name}</span><strong>{player.score.toLocaleString()}</strong></div>)}</div></section>}
+    {room.phase === 'recap' && <section className="presentation-center presentation-recap"><div className="section-kicker gold">GAME COMPLETE</div><h1>{winners.length === 1 ? `${winners[0].avatar} ${winners[0].name}` : 'TIE GAME'}</h1><div className="presentation-scores-v2">{[...resultPlayers].sort((a,b)=>b.score-a.score).map((player)=><div key={player.id}><span>{player.avatar} {player.name}</span><strong>{player.score.toLocaleString()}</strong></div>)}</div></section>}
   </main>;
 }

@@ -166,8 +166,13 @@ export interface FinalRoundState {
   question: string;
   acceptedAnswers: string[];
   explanation?: string;
+  /** Index within participantIds. Kept for progress display and persisted-state compatibility. */
   reviewPlayerIndex: number;
+  /** Stable identity for the player currently under Final review. */
+  reviewPlayerId?: string | null;
   participantIds: string[];
+  /** Players who were in the game when Final began. Late joins spectate until the next game. */
+  rosterIds?: string[];
   responsesClosed: boolean;
 }
 
@@ -188,6 +193,8 @@ export interface RoomState {
   remainingQuestions: number;
   selectedPackIds: string[];
   finalRound: FinalRoundState | null;
+  /** Frozen scoreboard roster used once a game reaches recap. */
+  resultPlayerIds?: string[];
   gameStartedAt: number | null;
   gameEndedAt: number | null;
 }

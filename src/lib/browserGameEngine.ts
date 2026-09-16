@@ -51,6 +51,11 @@ function loadRooms(): RoomRecord[] {
   };
   return parse(localStorage.getItem(STORAGE_KEY)) ?? parse(localStorage.getItem(STORAGE_BACKUP_KEY)) ?? [];
 }
+function validStoredRooms(raw: string | null): boolean {
+  if (!raw) return false;
+  try { return Array.isArray(JSON.parse(raw)); }
+  catch { return false; }
+}
 function preferredDifficulty(value: number): Question['difficulty'] {
   if (value <= 200) return 'easy';
   if (value === 300) return 'medium';
@@ -85,8 +90,28 @@ export class BrowserGameEngine {
       record.state.hostConnected = false;
       record.state.players.forEach((player) => { player.connected = false; });
       if (record.state.finalRound) {
-        record.state.finalRound.participantIds ??= previouslyConnected.length ? previouslyConnected : record.state.players.map((player) => player.id);
-        record.state.finalRound.responsesClosed ??= record.state.phase === 'final-review' || record.state.phase === 'recap';
+        const finalRound = record.state.finalRound;
+        finalRound.participantIds ??= previouslyConnected.length ? previouslyConnected : record.state.players.map((player) => player.id);
+        finalRound.rosterIds ??= record.state.players.map((player) => player.id);
+        finalRound.responsesClosed ??= record.state.phase === 'final-review' || record.state.phase === 'recap';
+        if (record.state.phase === 'final-review') {
+          const unresolved = (playerId: string) => {
+            const candidate = record.state.players.find((player) => player.id === playerId);
+            return Boolean(candidate && !candidate.finalResolved);
+          };
+          if (!finalRound.reviewPlayerId || !unresolved(finalRound.reviewPlayerId)) {
+            const legacyId = record.state.players[finalRound.reviewPlayerIndex]?.id;
+            finalRound.reviewPlayerId = legacyId && finalRound.participantIds.includes(legacyId) && unresolved(legacyId)
+              ? legacyId
+              : finalRound.participantIds.find(unresolved) ?? null;
+          }
+          finalRound.reviewPlayerIndex = finalRound.reviewPlayerId
+            ? Math.max(0, finalRound.participantIds.indexOf(finalRound.reviewPlayerId))
+            : 0;
+        }
+      }
+      if (record.state.phase === 'recap' && !record.state.resultPlayerIds?.length) {
+        record.state.resultPlayerIds = record.state.finalRound?.rosterIds ?? record.state.players.map((player) => player.id);
       }
       if (record.state.timer.running && record.state.timer.endsAt) {
         record.state.timer.remainingMs = Math.max(0, record.state.timer.endsAt - now);
@@ -102,7 +127,7 @@ export class BrowserGameEngine {
     try {
       const serialized = JSON.stringify([...this.rooms.values()]);
       const previous = localStorage.getItem(STORAGE_KEY);
-      if (previous && previous !== serialized) localStorage.setItem(STORAGE_BACKUP_KEY, previous);
+      if (previous && previous !== serialized && validStoredRooms(previous)) localStorage.setItem(STORAGE_BACKUP_KEY, previous);
       localStorage.setItem(STORAGE_KEY, serialized);
     } catch { /* keep the in-memory game running */ }
   }
@@ -143,6 +168,21 @@ export class BrowserGameEngine {
     return room.state.players.filter((player) => ids.has(player.id)).sort((a, b) => a.seat - b.seat);
   }
   private activeFinalParticipants(room: RoomRecord): Player[] { return this.finalParticipants(room).filter((player) => player.connected); }
+  private setNextFinalReviewPlayer(room: RoomRecord): void {
+    const finalRound = room.state.finalRound;
+    if (!finalRound) return;
+    const nextId = finalRound.participantIds.find((playerId) => {
+      const player = room.state.players.find((candidate) => candidate.id === playerId);
+      return Boolean(player && !player.finalResolved);
+    });
+    if (!nextId) {
+      finalRound.reviewPlayerId = null;
+      this.finishGame(room);
+      return;
+    }
+    finalRound.reviewPlayerId = nextId;
+    finalRound.reviewPlayerIndex = Math.max(0, finalRound.participantIds.indexOf(nextId));
+  }
 
   snapshot(roomCode: string): RoomSnapshot {
     const state = structuredClone(this.room(roomCode).state);
@@ -172,6 +212,7 @@ export class BrowserGameEngine {
       remainingQuestions: 0,
       selectedPackIds,
       finalRound: null,
+      resultPlayerIds: [],
       gameStartedAt: null,
       gameEndedAt: null
     };
@@ -187,7 +228,6 @@ export class BrowserGameEngine {
 
   joinPlayer(roomCode: string, input: { name: string; avatar: string; accent: string }): PlayerJoinCredentials {
     const room = this.room(roomCode);
-    if (room.state.locked || (room.state.phase !== 'lobby' && room.state.settings.lockRoomOnStart)) throw new Error('Room is locked');
     if (room.state.players.length >= 5) throw new Error('Room already has 5 players');
     const occupiedSeats = new Set(room.state.players.map((player) => player.seat));
     const seat = [1, 2, 3, 4, 5].find((candidate) => !occupiedSeats.has(candidate));
@@ -196,10 +236,15 @@ export class BrowserGameEngine {
     const reconnectToken = randomToken();
     const duplicateCount = room.state.players.filter((player) => player.name.toLowerCase() === input.name.toLowerCase()).length;
     const name = duplicateCount ? `${input.name} ${duplicateCount + 1}` : input.name;
+    const finalRosterFrozen = Boolean(room.state.finalRound);
     room.state.players.push({
       id: playerId, seat, name, avatar: input.avatar, accent: input.accent, score: 0, connected: true,
       positiveStreak: 0, coldStreak: 0, onFire: false, isCold: false, buzzEligible: false, hasBuzzedThisQuestion: false,
-      finalWager: null, finalWagerSubmitted: false, finalAnswer: null, finalAnswerSubmitted: false, finalResolved: false,
+      finalWager: finalRosterFrozen ? 0 : null,
+      finalWagerSubmitted: finalRosterFrozen,
+      finalAnswer: null,
+      finalAnswerSubmitted: finalRosterFrozen,
+      finalResolved: finalRosterFrozen,
       stats: defaultStats()
     });
     room.state.players.sort((a, b) => a.seat - b.seat);
@@ -291,17 +336,14 @@ export class BrowserGameEngine {
 
     if (room.state.finalRound) {
       room.state.finalRound.participantIds = room.state.finalRound.participantIds.filter((idValue) => idValue !== playerId);
+      room.state.finalRound.rosterIds = (room.state.finalRound.rosterIds ?? []).filter((idValue) => idValue !== playerId);
       if (room.state.phase === 'final-question' && !room.state.finalRound.responsesClosed) {
         const active = this.activeFinalParticipants(room);
         if (active.length === 0 || active.every((candidate) => candidate.finalAnswerSubmitted)) this.closeFinalResponsesInternal(room);
       }
-      if (room.state.phase === 'final-review') {
-        const participants = new Set(room.state.finalRound.participantIds);
-        const nextIndex = room.state.players.findIndex((candidate) => participants.has(candidate.id) && !candidate.finalResolved);
-        if (nextIndex === -1) this.finishGame(room);
-        else room.state.finalRound.reviewPlayerIndex = nextIndex;
-      }
+      if (room.state.phase === 'final-review') this.setNextFinalReviewPlayer(room);
     }
+    if (room.state.resultPlayerIds?.length) room.state.resultPlayerIds = room.state.resultPlayerIds.filter((idValue) => idValue !== playerId);
     this.persist();
   }
 
@@ -426,6 +468,7 @@ export class BrowserGameEngine {
     room.state.multiplier = 1;
     room.state.remainingQuestions = 0;
     room.state.finalRound = null;
+    room.state.resultPlayerIds = [];
     room.state.gameStartedAt = null;
     room.state.gameEndedAt = null;
     room.state.players.forEach((player) => this.resetPlayerForGame(player));
@@ -447,6 +490,7 @@ export class BrowserGameEngine {
     room.state.gameStartedAt = Date.now();
     room.state.gameEndedAt = null;
     room.state.finalRound = null;
+    room.state.resultPlayerIds = [];
     room.finalQuestionId = null;
     room.state.players.forEach((player) => this.resetPlayerForGame(player));
     this.persist();
@@ -821,7 +865,9 @@ export class BrowserGameEngine {
       acceptedAnswers: question.acceptedAnswers,
       explanation: question.explanation,
       reviewPlayerIndex: 0,
+      reviewPlayerId: null,
       participantIds,
+      rosterIds: room.state.players.map((player) => player.id),
       responsesClosed: false
     };
     const participants = new Set(participantIds);
@@ -901,10 +947,7 @@ export class BrowserGameEngine {
     if (!finalRound) return;
     this.closeFinalResponsesInternal(room);
     room.state.phase = 'final-review';
-    const participants = new Set(finalRound.participantIds);
-    const nextIndex = room.state.players.findIndex((player) => participants.has(player.id) && !player.finalResolved);
-    if (nextIndex === -1) this.finishGame(room);
-    else finalRound.reviewPlayerIndex = nextIndex;
+    this.setNextFinalReviewPlayer(room);
   }
 
   beginFinalReview(roomCode: string, hostToken: string): RoomSnapshot {
@@ -928,10 +971,7 @@ export class BrowserGameEngine {
     this.addScore(player, isCorrect ? wager : -wager, room.state.settings);
     if (isCorrect) player.stats.correct += 1; else player.stats.incorrect += 1;
     player.finalResolved = true;
-    const participants = new Set(room.state.finalRound.participantIds);
-    const nextIndex = room.state.players.findIndex((candidate) => participants.has(candidate.id) && !candidate.finalResolved);
-    if (nextIndex === -1) this.finishGame(room);
-    else room.state.finalRound.reviewPlayerIndex = nextIndex;
+    this.setNextFinalReviewPlayer(room);
     this.persist();
     return this.snapshot(roomCode);
   }
@@ -940,6 +980,9 @@ export class BrowserGameEngine {
     room.state.phase = 'recap';
     room.state.gameEndedAt = Date.now();
     if (room.state.finalRound) room.state.finalRound.responsesClosed = true;
+    const frozenRoster = room.state.finalRound?.rosterIds ?? room.state.players.map((player) => player.id);
+    const existing = new Set(room.state.players.map((player) => player.id));
+    room.state.resultPlayerIds = frozenRoster.filter((playerId) => existing.has(playerId));
     this.stopTimerInternal(room);
   }
   endGame(roomCode: string, hostToken: string): RoomSnapshot { const room = this.hostRoom(roomCode, hostToken); this.finishGame(room); this.persist(); return this.snapshot(roomCode); }

@@ -147,6 +147,7 @@ describe('BrowserGameEngine production state', () => {
     const recovered = new BrowserGameEngine(new FixedRandom(), 60_000).snapshot(host.roomCode);
     expect(recovered.code).toBe(expected.code);
     expect(recovered.board?.questions.length).toBe(expected.board?.questions.length);
+    expect(() => JSON.parse(localStorage.getItem('blue-stage-p2p-engine-v2-backup') ?? '')).not.toThrow();
   });
 
   it('restores an active timer instead of erasing it on host reload', () => {
@@ -191,6 +192,52 @@ describe('BrowserGameEngine production state', () => {
     expect(state.phase).toBe('final-category');
     expect(state.finalRound?.participantIds).toEqual([one.playerId]);
     expect(state.players.find((player) => player.id === two.playerId)?.finalResolved).toBe(true);
+  });
+
+  it('keeps Final review stable and late joins out of the frozen result roster', () => {
+    const { engine, host } = setup({ gameLength: 'quick', dailyDoublesEnabled: false, finalRoundEnabled: true });
+    const early = addPlayer(engine, host.roomCode, 'Early');
+    const finalist = addPlayer(engine, host.roomCode, 'Finalist');
+    engine.startGame(host.roomCode, host.hostToken);
+    engine.removePlayer(host.roomCode, host.hostToken, early.playerId);
+    finishBoardWithoutScoring(engine, host.roomCode, host.hostToken);
+    engine.beginFinalWagers(host.roomCode, host.hostToken);
+    engine.submitFinalWager(host.roomCode, finalist.playerId, finalist.reconnectToken, 0);
+    engine.openFinalQuestion(host.roomCode, host.hostToken);
+    engine.submitFinalAnswer(host.roomCode, finalist.playerId, finalist.reconnectToken, 'answer');
+    engine.beginFinalReview(host.roomCode, host.hostToken);
+
+    const beforeJoin = engine.snapshot(host.roomCode);
+    expect(beforeJoin.finalRound?.reviewPlayerId).toBe(finalist.playerId);
+    expect(beforeJoin.finalRound?.rosterIds).toEqual([finalist.playerId]);
+
+    const late = addPlayer(engine, host.roomCode, 'Late');
+    const afterJoin = engine.snapshot(host.roomCode);
+    const lateState = afterJoin.players.find((player) => player.id === late.playerId)!;
+    expect(lateState.seat).toBe(1);
+    expect(lateState.finalWagerSubmitted).toBe(true);
+    expect(lateState.finalAnswerSubmitted).toBe(true);
+    expect(lateState.finalResolved).toBe(true);
+    expect(afterJoin.finalRound?.participantIds).toEqual([finalist.playerId]);
+    expect(afterJoin.finalRound?.reviewPlayerId).toBe(finalist.playerId);
+
+    engine.resolveFinalAnswer(host.roomCode, host.hostToken, finalist.playerId, false);
+    const recap = engine.snapshot(host.roomCode);
+    expect(recap.phase).toBe('recap');
+    expect(recap.resultPlayerIds).toEqual([finalist.playerId]);
+  });
+
+  it('freezes recap results before players join after a non-Final game ends', () => {
+    const { engine, host } = setup({ gameLength: 'quick', dailyDoublesEnabled: false, finalRoundEnabled: false });
+    const original = addPlayer(engine, host.roomCode, 'Original');
+    engine.startGame(host.roomCode, host.hostToken);
+    finishBoardWithoutScoring(engine, host.roomCode, host.hostToken);
+    expect(engine.snapshot(host.roomCode).phase).toBe('recap');
+
+    const late = addPlayer(engine, host.roomCode, 'Late');
+    const recap = engine.snapshot(host.roomCode);
+    expect(recap.players.some((player) => player.id === late.playerId)).toBe(true);
+    expect(recap.resultPlayerIds).toEqual([original.playerId]);
   });
 
   it('locks Final answers at timeout without revealing until the host starts review', () => {

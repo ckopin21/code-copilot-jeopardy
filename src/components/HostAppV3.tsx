@@ -397,15 +397,22 @@ export function HostAppV3() {
   const spokenPlayer = buzzWinner ?? dailyPlayer ?? null;
   const currentHistory = current ? historyEntries.find((entry) => entry.questionId === current.questionId) : undefined;
   const judgedAttempt = spokenPlayer ? currentHistory?.attempts.find((attempt) => attempt.playerId === spokenPlayer.id) : undefined;
-  const reviewPlayer = room.phase === 'final-review' && room.finalRound ? room.players[room.finalRound.reviewPlayerIndex] : null;
+  const reviewPlayerId = room.phase === 'final-review' && room.finalRound
+    ? room.finalRound.reviewPlayerId ?? room.finalRound.participantIds[room.finalRound.reviewPlayerIndex]
+    : null;
+  const reviewPlayer = reviewPlayerId ? room.players.find((player) => player.id === reviewPlayerId) ?? null : null;
   const settings = room.settings;
   const updateSettings = (updates: Partial<GameSettings>) => perform('host:update-settings', { updates });
-  const showJoinControl = room.phase === 'lobby';
   const textResponses = current?.textResponses ?? {};
   const textResponseCount = connectedPlayers.filter((player) => Boolean(textResponses[player.id])).length;
   const unresolvedTextCount = Object.values(textResponses).filter((response) => response.resolvedCorrect === null).length;
   const questionMultiplier = current ? Math.max(1, Math.round(current.effectiveValue / Math.max(1, current.baseValue))) : 1;
-  const pendingFinalWagers = connectedPlayers.filter((player) => !player.finalWagerSubmitted).length;
+  const finalParticipants = room.finalRound
+    ? connectedPlayers.filter((player) => room.finalRound!.participantIds.includes(player.id))
+    : connectedPlayers;
+  const pendingFinalWagers = finalParticipants.filter((player) => !player.finalWagerSubmitted).length;
+  const resultIds = room.resultPlayerIds?.length ? new Set(room.resultPlayerIds) : null;
+  const recapPlayers = resultIds ? room.players.filter((player) => resultIds.has(player.id)) : room.players;
   const pointsAtStake = current ? current.dailyDouble
     ? (current.wager ?? 0) * (settings.dailyDoubleStacksWithMultiplier ? questionMultiplier : 1)
     : current.effectiveValue : 0;
@@ -499,7 +506,7 @@ export function HostAppV3() {
         <div className="mini-brand"><span>BLUE STAGE</span><strong>TRIVIA</strong></div>
         <div className="room-code">ROOM <strong>{room.code}</strong></div>
         <div className={`connection-pill ${socket.connected ? 'online' : ''}`}>{socket.connected ? 'LIVE' : 'RECONNECTING'}</div>
-        {showJoinControl && <button className="nav-button" onClick={() => setShowJoin(true)}>Join QR</button>}
+        <button className="nav-button" onClick={() => setShowJoin(true)}>Join QR</button>
         <button className="nav-button danger-ghost" onClick={() => void resetGame()}>Reset Game</button>
         <button className="nav-button danger-ghost" onClick={hardReset}>Reset Instance</button>
         <AudioMixer />
@@ -617,11 +624,11 @@ export function HostAppV3() {
       </section>}
 
       {room.phase === 'final-category' && room.finalRound && <section className="question-stage final-stage"><article className="question-card-v2"><div className="section-kicker gold">FINAL ROUND</div><h1>{room.finalRound.category}</h1><button className="primary-button giant" onClick={() => void perform('host:begin-final-wagers')}>Open Secret Wagers</button></article></section>}
-      {room.phase === 'final-wager' && <section className="question-stage final-stage"><article className="question-card-v2"><div className="section-kicker gold">FINAL ROUND</div><h1>Lock in your wagers</h1><SubmissionStatus players={connectedPlayers} field="finalWagerSubmitted" />{pendingFinalWagers > 0 && <p className="helper-copy">{pendingFinalWagers} connected player{pendingFinalWagers === 1 ? '' : 's'} still waiting. You can start anyway; missing wagers become 0.</p>}<button className="primary-button giant" disabled={busy} onClick={() => void perform('host:open-final-question')}>Start Final Question</button></article></section>}
-      {room.phase === 'final-question' && room.finalRound && <section className="question-stage final-stage"><article className="question-card-v2"><div className="section-kicker gold">FINAL QUESTION · {room.finalRound.category}</div><h1>{room.finalRound.question}</h1><Timer timer={room.timer} serverNow={room.serverNow}/><SubmissionStatus players={connectedPlayers} field="finalAnswerSubmitted"/><p className="helper-copy">When you are ready, start the reveal. The answer stays hidden until the host triggers it.</p><button className="secondary-button final-reveal-trigger" disabled={busy || revealBeat > 0} onClick={() => void beginFinalReview()}>Build Tension & Reveal</button></article></section>}
+      {room.phase === 'final-wager' && <section className="question-stage final-stage"><article className="question-card-v2"><div className="section-kicker gold">FINAL ROUND</div><h1>Lock in your wagers</h1><SubmissionStatus players={finalParticipants} field="finalWagerSubmitted" />{pendingFinalWagers > 0 && <p className="helper-copy">{pendingFinalWagers} connected player{pendingFinalWagers === 1 ? '' : 's'} still waiting. You can start anyway; missing wagers become 0.</p>}<button className="primary-button giant" disabled={busy} onClick={() => void perform('host:open-final-question')}>Start Final Question</button></article></section>}
+      {room.phase === 'final-question' && room.finalRound && <section className="question-stage final-stage"><article className="question-card-v2"><div className="section-kicker gold">FINAL QUESTION · {room.finalRound.category}</div><h1>{room.finalRound.question}</h1><Timer timer={room.timer} serverNow={room.serverNow}/><SubmissionStatus players={finalParticipants} field="finalAnswerSubmitted"/><p className="helper-copy">When you are ready, start the reveal. The answer stays hidden until the host triggers it.</p><button className="secondary-button final-reveal-trigger" disabled={busy || revealBeat > 0} onClick={() => void beginFinalReview()}>Build Tension & Reveal</button></article></section>}
       {room.phase === 'final-review' && reviewPlayer && room.finalRound && <section className="question-stage final-stage"><article className="question-card-v2"><div className="section-kicker gold">FINAL REVIEW {room.finalRound.participantIds.findIndex((playerId) => playerId === reviewPlayer.id) + 1}/{room.finalRound.participantIds.length}</div><div className="answer-reveal-v2"><small>CORRECT ANSWER</small><strong>{room.finalRound.acceptedAnswers.join(' / ')}</strong></div><h1 className="review-player-title">{reviewPlayer.avatar} {reviewPlayer.name}</h1><div className="final-response-v2"><span><small>WAGER</small><strong>{reviewPlayer.finalWager ?? 0}</strong></span><span><small>RESPONSE</small><strong>{reviewPlayer.finalAnswer || '(No answer)'}</strong></span></div>{(() => { const suggestion = autoGradeAnswer(reviewPlayer.finalAnswer ?? '', room.finalRound!.acceptedAnswers); return <div className={`auto-grade ${suggestion.correct ? 'suggest-correct' : 'suggest-wrong'}`}>Auto grade: {suggestion.correct ? 'likely correct' : 'likely incorrect'} · {suggestion.confidence} confidence</div>; })()}<p className="helper-copy">Auto grade is a suggestion. The host has final scoring authority.</p><div className="control-row-v2"><button className="correct-button" onClick={()=>void perform('host:resolve-final',{playerId:reviewPlayer.id,correct:true})}>Award</button><button className="wrong-button" onClick={()=>void perform('host:resolve-final',{playerId:reviewPlayer.id,correct:false})}>Reject</button></div></article></section>}
 
-      {room.phase === 'recap' && <EndgameRecap players={room.players} onReset={() => void resetGame()} onMenu={goMenu} />}
+      {room.phase === 'recap' && <EndgameRecap players={recapPlayers} onReset={() => void resetGame()} onMenu={goMenu} />}
 
       {showJoin && <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Join game" onClick={() => setShowJoin(false)}><section className="modal-card join-modal-v2 expanded-qr-modal" onClick={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setShowJoin(false)} aria-label="Close">×</button><div className="section-kicker">JOIN GAME</div>{qr && <img src={qr} alt="QR code to join or reconnect to the game" />}<strong className="modal-room-code">{room.code}</strong><a href={credentials.joinUrl}>{credentials.joinUrl}</a><p>Returning players reconnect to the same reserved seat on the same phone and browser.</p></section></div>}
 

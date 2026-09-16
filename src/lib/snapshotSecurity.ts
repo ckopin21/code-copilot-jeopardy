@@ -15,7 +15,10 @@ function hiddenResponse(response: TextResponseState, keepAnswer = false): TextRe
 export function sanitizeRoomSnapshot(snapshot: RoomSnapshot, role: SnapshotRole, playerId?: string): RoomSnapshot {
   const copy = structuredClone(snapshot);
   const finalReviewPlayerId = copy.phase === 'final-review' && copy.finalRound
-    ? copy.players[copy.finalRound.reviewPlayerIndex]?.id ?? null
+    ? copy.finalRound.reviewPlayerId
+      ?? copy.finalRound.participantIds[copy.finalRound.reviewPlayerIndex]
+      ?? copy.players[copy.finalRound.reviewPlayerIndex]?.id
+      ?? null
     : null;
   const revealAllFinal = copy.phase === 'recap';
 

@@ -76,6 +76,7 @@ describe('sanitizeRoomSnapshot', () => {
     const state = snapshot();
     state.phase = 'final-review';
     state.finalRound!.reviewPlayerIndex = 1;
+    state.finalRound!.reviewPlayerId = 'two';
     state.players[0].finalResolved = true;
 
     const presentation = sanitizeRoomSnapshot(state, 'presentation');
@@ -92,6 +93,7 @@ describe('sanitizeRoomSnapshot', () => {
     const state = snapshot();
     state.phase = 'final-review';
     state.finalRound!.reviewPlayerIndex = 0;
+    state.finalRound!.reviewPlayerId = 'one';
 
     const firstReview = sanitizeRoomSnapshot(state, 'host');
     expect(firstReview.players[0].finalAnswer).toBe('One secret');
@@ -101,9 +103,22 @@ describe('sanitizeRoomSnapshot', () => {
 
     state.players[0].finalResolved = true;
     state.finalRound!.reviewPlayerIndex = 1;
+    state.finalRound!.reviewPlayerId = 'two';
     const secondReview = sanitizeRoomSnapshot(state, 'host');
     expect(secondReview.players[0].finalAnswer).toBe('One secret');
     expect(secondReview.players[1].finalAnswer).toBe('Two secret');
+  });
+
+  it('hides the Final question until the answer phase begins', () => {
+    const state = snapshot();
+    state.phase = 'final-wager';
+    const wagering = sanitizeRoomSnapshot(state, 'player', 'one');
+    expect(wagering.finalRound?.category).toBe('Final');
+    expect(wagering.finalRound?.question).toBe('');
+
+    state.phase = 'final-question';
+    const answering = sanitizeRoomSnapshot(state, 'player', 'one');
+    expect(answering.finalRound?.question).toBe('Question?');
   });
 
   it('hides answers, explanations, autogrades, and other typed responses before reveal', () => {
