@@ -73,6 +73,7 @@
   width: min(520px, calc(100vw - 36px));
   max-width: 100%;
   min-height: 54px;
+  flex: 0 0 auto;
   margin: 8px auto 2px;
   padding: 2px 8px 10px;
   box-sizing: border-box;
