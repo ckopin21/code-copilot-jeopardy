@@ -7,13 +7,18 @@
     "node": ">=22"
   },
   "scripts": {
+    "packs:sync": "node scripts/generate-pack-registry.mjs",
+    "predev": "npm run packs:sync",
     "dev": "concurrently -k -n server,client -c auto \"tsx watch server/index.ts\" \"vite --host 0.0.0.0\"",
-    "build": "npm run typecheck && vite build && tsc -p tsconfig.server.json && node scripts/postbuild.cjs",
-    "start": "NODE_ENV=production node dist-server/server/index.js",
+    "pretypecheck": "npm run packs:sync",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.server.json --noEmit",
+    "pretest": "npm run packs:sync",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint .",
-    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.server.json --noEmit"
+    "prebuild": "npm run packs:sync",
+    "build": "npm run typecheck && vite build && tsc -p tsconfig.server.json && node scripts/postbuild.cjs",
+    "start": "NODE_ENV=production node dist-server/server/index.js"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
