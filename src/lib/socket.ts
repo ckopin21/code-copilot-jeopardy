@@ -16,6 +16,13 @@ type EventMessage = { kind: 'event'; event: string; data: unknown };
 type WireMessage = RequestMessage | ResponseMessage | EventMessage;
 interface PendingRequest { resolve: (value: unknown) => void; reject: (reason: Error) => void; timeoutId: number; }
 
+export interface PlayerConnectionHealth {
+  playerId: string;
+  connected: boolean;
+  ageMs: number | null;
+  quality: 'good' | 'fair' | 'stale' | 'offline';
+}
+
 const engine = new BrowserGameEngine();
 const listeners = new Map<string, Set<Listener>>();
 const identities = new Map<DataConnection, Identity>();
@@ -97,6 +104,34 @@ function closePlayerConnection(playerId: string, event?: 'player:suspended' | 'p
   window.setTimeout(() => { try { connection.close(); } catch { /* ignore */ } }, event ? 60 : 0);
 }
 
+/** Host-only connection freshness. Phones refresh lastSeen on their regular reconnect heartbeat. */
+export function getPlayerConnectionHealth(roomCode: string): PlayerConnectionHealth[] {
+  let snapshot: RoomSnapshot;
+  try { snapshot = engine.snapshot(roomCode); } catch { return []; }
+  const now = Date.now();
+  return snapshot.players.map((player) => {
+    const seen = playerLastSeen.get(player.id);
+    const ageMs = seen == null ? null : Math.max(0, now - seen);
+    const connection = playerConnections.get(player.id);
+    const connected = Boolean(player.connected && connection?.open);
+    const quality: PlayerConnectionHealth['quality'] = !connected ? 'offline' : ageMs == null || ageMs > 7000 ? 'stale' : ageMs > 4000 ? 'fair' : 'good';
+    return { playerId: player.id, connected, ageMs, quality };
+  });
+}
+
+/** Sends an immediate controller-test event to every live phone. Returns the player ids reached. */
+export function testPlayerControllers(roomCode: string): string[] {
+  const reached: string[] = [];
+  const sentAt = Date.now();
+  for (const [playerId, connection] of playerConnections) {
+    const identity = identities.get(connection);
+    if (!identity || identity.roomCode !== roomCode.toUpperCase() || !connection.open) continue;
+    sendEvent(connection, 'preflight:test', { sentAt, playerId });
+    reached.push(playerId);
+  }
+  return reached;
+}
+
 async function dispatchHost(event: string, payload: Record<string, unknown>, connection?: DataConnection): Promise<unknown> {
   const roomCode = String(payload.roomCode ?? '').toUpperCase();
   const hostToken = String(payload.hostToken ?? '');
@@ -148,6 +183,8 @@ async function dispatchHost(event: string, payload: Record<string, unknown>, con
     case 'host:reveal-answer': return engine.revealAnswer(roomCode, hostToken);
     case 'host:advance-board': return engine.advanceToBoard(roomCode, hostToken);
     case 'host:adjust-score': return engine.adjustScore(roomCode, hostToken, String(payload.playerId ?? ''), Number(payload.delta));
+    case 'host:undo-last-score': return engine.undoLastScoreAction(roomCode, hostToken);
+    case 'host:rename-player': return engine.renamePlayer(roomCode, hostToken, String(payload.playerId ?? ''), String(payload.name ?? ''));
     case 'host:suspend-player': {
       const playerId = String(payload.playerId ?? '');
       engine.suspendPlayer(roomCode, hostToken, playerId);
