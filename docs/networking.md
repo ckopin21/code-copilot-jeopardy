@@ -1,10 +1,10 @@
 # Networking and reconnect behavior
 
-## Primary Pages transport
+## Transport
 
-The GitHub Pages version uses PeerJS/WebRTC. The host browser creates a deterministic PeerJS ID from the room code. Player phones create their own PeerJS peers and open reliable data connections to the host peer.
+Blue Stage uses PeerJS/WebRTC. The host browser creates a deterministic PeerJS ID from the room code. Player phones and remote presentation screens create their own PeerJS peers and open reliable data connections to the host peer.
 
-`src/lib/socket.ts` provides a Socket.IO-like request/event wrapper over PeerJS so the UI can call `emitAck(...)` without owning transport details.
+`src/lib/socket.ts` provides a request/event wrapper over PeerJS so the UI can call `emitAck(...)` without owning transport details. The browser host and `BrowserGameEngine` are the only gameplay authority path.
 
 ## Identity
 
@@ -15,6 +15,12 @@ A phone joins once and receives:
 - random `reconnectToken`
 
 The host engine stores the token for authorization. A display name is never used as identity. Reconnecting requires the matching player ID/token pair.
+
+## Snapshot privacy
+
+Every outgoing room snapshot is sanitized by `src/lib/snapshotSecurity.ts` according to the receiving role.
+
+Before reveal, accepted answers and explanations are withheld from player/presentation clients. Other players' typed answers and auto-grade information are hidden. Daily Double clue text is withheld during the wager phase. Final wagers/answers remain private until the appropriate Final review step.
 
 ## Connection state
 
@@ -65,40 +71,45 @@ The phone displays a paused-seat screen with a deliberate **Reconnect to Seat** 
 
 ## Reserved seats
 
-When a current player connection closes, the host marks that player `connected=false` but does not delete the player object, score, statistics, or token. The visible player strip hides disconnected players while preserving their seat position for reconnection. The lobby management list still shows the reserved seat so the host can distinguish it from a permanently removed player.
+When a current player connection closes, the host marks that player `connected=false` but does not delete the player object, score, statistics, or token. The visible player strip hides disconnected players while preserving their seat for reconnection. The lobby management list still shows the reserved seat so the host can distinguish it from a permanently removed player.
 
 A stale older connection closing after a newer connection has already replaced it must not mark the restored player offline. `playerConnections` tracks the current data connection per player ID to prevent this race.
 
 ## Game flow during disconnects
 
-Disconnected seats should not block live progression:
+Disconnected seats do not block live progression:
 
 - buzzer eligibility is removed
 - typed-response completion waits only on connected players
-- Final participation/status uses connected players
-- Daily Double selection prefers a connected active/controller player
-- reserved players remain part of persistent game state until explicitly removed/reset
+- Daily Double ownership prefers connected players and degrades to a normal clue in zero-player practice mode
+- Final participants are snapshotted from connected players when Final begins
+- if a Final participant disconnects after that, active completion waits only on the remaining connected Final participants
+- reserved players remain part of persistent room state until explicitly removed/reset
 
-## Final answer privacy
+## Final response lock and privacy
 
-Final answers and the accepted answer remain hidden until the host explicitly starts Final review. Even if every connected phone submits or the Final timer expires, the transport holds the room in the Final-question state so the host can run the reveal sequence first.
+Final answer collection has a separate authoritative lock state. When every active Final participant submits or the Final timer expires, `responsesClosed` becomes true and the timer stops while the room remains in `final-question`. Any later answer attempt is rejected.
+
+The host then explicitly transitions to `final-review`. Player/presentation snapshots reveal only the currently reviewed player and already resolved players; future Final answers remain hidden. Recap may expose all Final results.
 
 ## Host lifecycle
 
 The host peer attempts to reconnect to PeerJS signaling if signaling drops while the page remains open. The primary room authority still lives in the host browser. Closing the host page removes the live WebRTC endpoint until the host page is reopened and its saved room is restored.
 
+Active timer `endsAt` values are persisted with the room. On host engine reconstruction, the timer is restored from that absolute end time and expired timers are reconciled immediately instead of restarting or disappearing silently.
+
 ## NAT/firewall behavior
 
 Default ICE configuration uses public STUN servers. WebRTC can fail on restrictive networks/NAT combinations that require TURN. The app supports an optional `window.BLUE_STAGE_ICE_SERVERS` override for deployments that provide their own ICE/TURN configuration.
 
-For the intended same-device-host + phone-controller setup, keeping devices on normal internet/Wi-Fi with WebRTC allowed is the expected path.
+For the intended host-computer + phone-controller setup, keeping devices on normal internet/Wi-Fi with WebRTC allowed is the expected path.
+
+## Local preview networking
+
+The Windows and Mac launchers serve the built static app on all interfaces and attempt to open the host through its LAN IPv4 address. This matters because the join QR is generated from the host page URL; opening the host through `localhost` would produce a phone link that points back to the phone itself.
 
 ## QR join
 
 Phones can scan the room QR through `BarcodeDetector` plus `getUserMedia` where the browser supports those APIs. Unsupported browsers keep manual room-code entry as the fallback. Camera streams are stopped on successful scan, close, and component unmount.
 
 The host lobby QR can also be clicked to open a larger QR modal for easier scanning at a distance.
-
-## Alternate Node transport
-
-The Node runtime under `server/` uses Socket.IO and is architecturally separate from the PeerJS transport. Do not debug Pages reconnect problems in Socket.IO code or assume a PeerJS fix changed Node behavior. Cross-runtime changes require explicit parity work.
