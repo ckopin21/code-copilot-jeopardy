@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { HostAppV3 } from './components/HostAppV3';
+import { HostEnhancements } from './components/HostEnhancements';
 import { PlayerApp } from './components/PlayerApp';
+import { PlayerEnhancements } from './components/PlayerEnhancements';
 import { PresentationApp } from './components/PresentationApp';
 import { audio } from './lib/audio';
+import { applySavedAccessibility } from './lib/accessibility';
 import { hostPhaseLabel, readHostPreview } from './lib/hostPreview';
 import { menuUrl, resetInstance } from './lib/resetInstance';
 import './lib/clientLifecycle';
@@ -12,6 +15,7 @@ import './stage-polish.css';
 import './interaction-polish.css';
 import './bugfix-polish.css';
 import './menu-polish.css';
+import './enhancement-polish.css';
 
 const HOST_KEY = 'blue-stage-host-room';
 const AUDIO_75_MIGRATION_KEY = 'blue-stage-audio-default-75-v1';
@@ -32,6 +36,7 @@ function applyAudioDefaults(): void {
 }
 
 applyAudioDefaults();
+applySavedAccessibility();
 
 function modeUrl(mode: AppMode, fresh = false): URL {
   const url = new URL('./', location.href);
@@ -113,8 +118,8 @@ export default function App() {
 
   const params = useMemo(() => new URL(routeHref).searchParams, [routeHref]);
   const mode = params.get('mode');
-  if (mode === 'host') return <HostAppV3/>;
-  if (mode === 'player') return <PlayerApp/>;
+  if (mode === 'host') return <><HostAppV3/><HostEnhancements/></>;
+  if (mode === 'player') return <><PlayerApp/><PlayerEnhancements/></>;
   if (mode === 'presentation') return <PresentationApp/>;
   return <Menu onNavigate={navigate}/>;
 }
