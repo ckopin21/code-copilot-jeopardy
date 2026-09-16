@@ -25,8 +25,59 @@ export const DEFAULT_SETTINGS: GameSettings = {
   controllerBuzzersEnabled: true
 };
 
+export interface GamePreset {
+  id: 'casual' | 'fast' | 'competitive' | 'party';
+  name: string;
+  description: string;
+  settings: Partial<GameSettings>;
+}
+
+/** Curated one-click setups. Pack selection is intentionally left unchanged. */
+export const GAME_PRESETS: GamePreset[] = [
+  {
+    id: 'casual',
+    name: 'Casual',
+    description: 'Relaxed timing, standard board, streaks and Final enabled.',
+    settings: {
+      gameLength: 'standard', timerSeconds: 30, dailyDoublesEnabled: true, dailyDoubleCount: 2,
+      lateGameModifiers: true, streaksEnabled: true, finalRoundEnabled: true, allowNegativeScores: false,
+      dailyDoubleStacksWithMultiplier: false
+    }
+  },
+  {
+    id: 'fast',
+    name: 'Fast',
+    description: 'Short board, tight timer, one Daily Double, quick finish.',
+    settings: {
+      gameLength: 'quick', timerSeconds: 10, dailyDoublesEnabled: true, dailyDoubleCount: 1,
+      lateGameModifiers: true, streaksEnabled: true, finalRoundEnabled: true, allowNegativeScores: true,
+      dailyDoubleStacksWithMultiplier: true
+    }
+  },
+  {
+    id: 'competitive',
+    name: 'Competitive',
+    description: 'Standard board, strict timing, negative scores and full modifiers.',
+    settings: {
+      gameLength: 'standard', timerSeconds: 15, dailyDoublesEnabled: true, dailyDoubleCount: 3,
+      lateGameModifiers: true, streaksEnabled: true, finalRoundEnabled: true, allowNegativeScores: true,
+      dailyDoubleStacksWithMultiplier: true
+    }
+  },
+  {
+    id: 'party',
+    name: 'Party',
+    description: 'Long game with more specials, streak drama and forgiving scoring.',
+    settings: {
+      gameLength: 'marathon', timerSeconds: 20, dailyDoublesEnabled: true, dailyDoubleCount: 4,
+      lateGameModifiers: true, streaksEnabled: true, finalRoundEnabled: true, allowNegativeScores: false,
+      dailyDoubleStacksWithMultiplier: true
+    }
+  }
+];
+
 // Game length changes both category count and board depth so the modes are visibly different.
-// Quick: 16 clues. Standard: 25 clues. Marathon: 36 clues and includes the $1000 row.
+// Quick: 16 questions. Standard: 25 questions. Marathon: 36 questions and includes the $1000 row.
 export const GAME_LENGTH_CONFIG = {
   quick: { categories: 4, rows: 4 },
   standard: { categories: 5, rows: 5 },
