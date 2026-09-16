@@ -73,6 +73,194 @@
   font-size: .8rem;
 }
 
+/* Fullscreen is a distinct responsive layout. It scales from both viewport width and height. */
+.showcase-menu.menu-fullscreen {
+  width: 100dvw;
+  height: 100dvh;
+  min-height: 100dvh;
+  overflow: hidden;
+  place-items: center;
+  padding: clamp(10px,1.5vh,24px) clamp(10px,1.25vw,28px) clamp(34px,4.5vh,64px);
+}
+
+.showcase-menu.menu-fullscreen .menu-card-v2 {
+  width: calc(100dvw - clamp(20px,2.5vw,56px)) !important;
+  max-width: none !important;
+  max-height: calc(100dvh - clamp(72px,8.5vh,118px));
+  padding: clamp(16px,2.6vh,46px) clamp(18px,2.7vw,64px) !important;
+  gap: clamp(8px,1.45vh,24px) !important;
+}
+
+.showcase-menu.menu-fullscreen .menu-logo-v2 strong {
+  font-size: clamp(3.4rem,min(7vw,11vh),8.2rem) !important;
+}
+
+.showcase-menu.menu-fullscreen .menu-logo-v2 span {
+  font-size: clamp(.66rem,min(.85vw,1.5vh),1.15rem) !important;
+}
+
+.showcase-menu.menu-fullscreen .menu-subtitle-v2 {
+  max-width: min(900px,68vw);
+  margin-block: clamp(1px,.5vh,8px);
+  font-size: clamp(.86rem,min(1.12vw,1.85vh),1.4rem);
+  line-height: 1.35;
+}
+
+.showcase-menu.menu-fullscreen .menu-mode-grid {
+  grid-template-columns: minmax(0,1.7fr) minmax(clamp(280px,24vw,520px),.78fr);
+  gap: clamp(10px,1.5vw,28px);
+  min-height: 0;
+}
+
+.showcase-menu.menu-fullscreen .menu-mode-section {
+  padding: clamp(12px,min(1.7vw,2.3vh),30px);
+  gap: clamp(8px,1.2vh,16px);
+}
+
+.showcase-menu.menu-fullscreen .menu-mode-section > header span {
+  font-size: clamp(.72rem,min(.9vw,1.55vh),1.05rem);
+}
+
+.showcase-menu.menu-fullscreen .menu-mode-section > header small {
+  font-size: clamp(.62rem,min(.74vw,1.25vh),.9rem);
+}
+
+.showcase-menu.menu-fullscreen .host-menu-actions {
+  gap: clamp(8px,1.15vh,16px);
+}
+
+.showcase-menu.menu-fullscreen .host-menu-actions .menu-new-game,
+.showcase-menu.menu-fullscreen .saved-game-inline {
+  min-height: clamp(62px,10.5vh,118px);
+}
+
+.showcase-menu.menu-fullscreen .host-menu-actions .menu-new-game span,
+.showcase-menu.menu-fullscreen .join-game-button span {
+  font-size: clamp(1rem,min(1.45vw,2.35vh),1.7rem);
+}
+
+.showcase-menu.menu-fullscreen .host-menu-actions .menu-new-game small,
+.showcase-menu.menu-fullscreen .join-game-button small {
+  font-size: clamp(.7rem,min(.82vw,1.45vh),1rem);
+}
+
+.showcase-menu.menu-fullscreen .saved-game-inline {
+  grid-template-columns: auto minmax(0,1fr) auto;
+  padding: clamp(9px,1.35vh,18px) clamp(11px,1.2vw,20px);
+}
+
+.showcase-menu.menu-fullscreen .saved-game-icon {
+  width: clamp(36px,min(3.4vw,5.6vh),58px);
+  height: clamp(36px,min(3.4vw,5.6vh),58px);
+}
+
+.showcase-menu.menu-fullscreen .saved-game-inline .saved-game-main strong {
+  font-size: clamp(1.15rem,min(1.65vw,2.8vh),2.1rem);
+}
+
+.showcase-menu.menu-fullscreen .saved-game-inline .saved-game-main small,
+.showcase-menu.menu-fullscreen .saved-game-inline .saved-game-main span,
+.showcase-menu.menu-fullscreen .saved-game-inline .saved-game-meta b,
+.showcase-menu.menu-fullscreen .saved-game-inline .saved-game-meta span,
+.showcase-menu.menu-fullscreen .saved-game-inline .saved-game-meta small {
+  font-size: clamp(.62rem,min(.75vw,1.28vh),.95rem);
+}
+
+.showcase-menu.menu-fullscreen .join-game-button {
+  min-height: clamp(136px,24vh,280px) !important;
+}
+
+.showcase-menu.menu-fullscreen .menu-tool-row {
+  gap: clamp(6px,.8vw,12px);
+  padding-top: clamp(0px,.45vh,6px);
+}
+
+.showcase-menu.menu-fullscreen .menu-tool-button {
+  min-height: clamp(34px,5vh,52px);
+  padding-inline: clamp(11px,1.15vw,20px);
+  font-size: clamp(.68rem,min(.78vw,1.3vh),.92rem);
+}
+
+.showcase-menu.menu-fullscreen .menu-footer {
+  bottom: clamp(10px,1.8vh,28px);
+  font-size: clamp(.54rem,min(.65vw,1.05vh),.78rem);
+}
+
+/* Short 720p-class fullscreen displays prioritize fitting everything without scrolling. */
+@media (max-height: 800px) and (min-width: 721px) {
+  .showcase-menu.menu-fullscreen {
+    padding-top: 8px;
+    padding-bottom: 30px;
+  }
+
+  .showcase-menu.menu-fullscreen .menu-card-v2 {
+    max-height: calc(100dvh - 48px);
+    padding-block: 12px !important;
+    gap: 7px !important;
+  }
+
+  .showcase-menu.menu-fullscreen .menu-logo-v2 strong {
+    font-size: clamp(3rem,9vh,4.7rem) !important;
+  }
+
+  .showcase-menu.menu-fullscreen .menu-subtitle-v2 {
+    font-size: .78rem;
+    margin: 0 auto;
+  }
+
+  .showcase-menu.menu-fullscreen .menu-mode-section {
+    padding-block: 9px;
+    gap: 6px;
+  }
+
+  .showcase-menu.menu-fullscreen .host-menu-actions .menu-new-game,
+  .showcase-menu.menu-fullscreen .saved-game-inline {
+    min-height: 58px;
+  }
+
+  .showcase-menu.menu-fullscreen .join-game-button {
+    min-height: 118px !important;
+  }
+
+  .showcase-menu.menu-fullscreen .menu-tool-button {
+    min-height: 32px;
+    padding-block: 4px;
+  }
+}
+
+/* Large 1440p/4K monitors can breathe without becoming comically oversized. */
+@media (min-width: 2400px) and (min-height: 1200px) {
+  .showcase-menu.menu-fullscreen .menu-card-v2 {
+    width: calc(100dvw - clamp(48px,3vw,96px)) !important;
+    max-height: calc(100dvh - 110px);
+  }
+
+  .showcase-menu.menu-fullscreen .menu-mode-grid {
+    grid-template-columns: minmax(0,1.78fr) minmax(460px,.72fr);
+  }
+}
+
+/* Portrait/rotated monitors switch to a single-column layout while still fitting fullscreen. */
+@media (orientation: portrait) and (min-width: 721px) {
+  .showcase-menu.menu-fullscreen {
+    overflow: auto;
+    place-items: start center;
+  }
+
+  .showcase-menu.menu-fullscreen .menu-card-v2 {
+    width: calc(100dvw - 28px) !important;
+    max-height: none;
+  }
+
+  .showcase-menu.menu-fullscreen .menu-mode-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .showcase-menu.menu-fullscreen .join-game-button {
+    min-height: clamp(76px,10vh,120px) !important;
+  }
+}
+
 @media (min-width: 1600px) {
   .showcase-menu .menu-card-v2 {
     width: min(1380px, 82vw) !important;
