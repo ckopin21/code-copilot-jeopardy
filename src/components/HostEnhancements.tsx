@@ -84,7 +84,7 @@ export function HostEnhancements() {
     if (room.phase === 'board' && room.board && (previous === 'lobby' || gameChanged)) {
       next = { key: `categories-${room.gameStartedAt}`, eyebrow: 'ROUND START', title: 'Tonight’s Categories', categories: room.board.categories };
       duration = 2900;
-      audio.cue('phase');
+      audio.cue('category');
     } else if (room.phase === 'daily-double-wager' && previous !== 'daily-double-wager') {
       next = { key: `dd-${room.currentQuestion?.questionId}`, eyebrow: 'SPECIAL QUESTION', title: 'DAILY DOUBLE', detail: 'One player. One locked wager.' };
       duration = 1500;
@@ -92,11 +92,11 @@ export function HostEnhancements() {
     } else if (room.phase === 'final-category' && previous !== 'final-category') {
       next = { key: `final-${room.gameStartedAt}`, eyebrow: 'THE BOARD IS COMPLETE', title: 'FINAL ROUND', detail: room.finalRound?.category };
       duration = 1900;
-      audio.cue('phase');
+      audio.cue('round');
     } else if (room.phase === 'recap' && previous !== 'recap') {
       next = { key: `finish-${room.gameEndedAt}`, eyebrow: 'GAME COMPLETE', title: 'FINAL RESULTS', detail: 'The podium is ready.' };
       duration = 1200;
-      audio.cue('reveal');
+      audio.cue('winner');
     }
 
     if (!next) return;
@@ -191,6 +191,7 @@ export function HostEnhancements() {
         <label className="drawer-toggle"><input type="checkbox" checked={accessibility.largeText} onChange={(event) => updateAccessibility({ largeText: event.target.checked })}/><span>Large text</span></label>
         <label className="drawer-toggle"><input type="checkbox" checked={accessibility.highContrast} onChange={(event) => updateAccessibility({ highContrast: event.target.checked })}/><span>High contrast</span></label>
         <label className="drawer-toggle"><input type="checkbox" checked={accessibility.reduceMotion} onChange={(event) => updateAccessibility({ reduceMotion: event.target.checked })}/><span>Reduce motion</span></label>
+        <label className="drawer-toggle"><input type="checkbox" checked={accessibility.soundCaptions} onChange={(event) => updateAccessibility({ soundCaptions: event.target.checked })}/><span>Sound captions</span></label>
       </section>
 
       {actionMessage && <p className="drawer-message">{actionMessage}</p>}
