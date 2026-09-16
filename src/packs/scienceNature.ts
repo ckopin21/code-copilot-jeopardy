@@ -15,7 +15,7 @@ const categories: CategoryData[] = [
     ['Which element has atomic number 6?', 'carbon'],
     ['What type of bond involves the sharing of electron pairs between atoms?', 'covalent bond'],
     ['What is the most abundant gas in Earth’s atmosphere?', 'nitrogen'],
-    ['What is Avogadro’s constant to three significant figures?', ['6.02 x 10^23', '6.02×10^23', '6.02e23']]
+    ['What common name is given to Group 18 elements such as helium, neon, and argon?', ['noble gases', 'noble gas']]
   ]},
   { name: 'Physics', questions: [
     ['What force pulls objects toward Earth?', 'gravity'],
@@ -47,7 +47,7 @@ const categories: CategoryData[] = [
     ['What is a group of lions called?', 'pride'],
     ['Which mammal is capable of true sustained flight?', ['bat', 'bats']],
     ['What is the fastest land animal?', 'cheetah'],
-    ['Which living bird lays the largest eggs?', 'ostrich']
+    ['What mammal is covered in large protective keratin scales?', ['pangolin', 'pangolins']]
   ]},
   { name: 'Weather', questions: [
     ['What instrument measures air pressure?', 'barometer'],
@@ -63,7 +63,7 @@ const categories: CategoryData[] = [
     ['Which organ produces insulin?', 'pancreas'],
     ['What is the largest organ of the human body?', 'skin'],
     ['What part of the brain is strongly involved in balance and coordination?', 'cerebellum'],
-    ['What is the name of the valve between the left atrium and left ventricle?', ['mitral valve', 'bicuspid valve']]
+    ['Which blood type is commonly called the universal donor for red blood cells?', ['O negative', 'O-', 'O minus']]
   ]},
   { name: 'Ecology', questions: [
     ['What term describes all the organisms and physical environment interacting in an area?', 'ecosystem'],
@@ -87,7 +87,7 @@ export const scienceNaturePack = buildPack({
   id: 'science-nature',
   title: 'Science & Nature',
   theme: 'Biology, chemistry, physics, space, Earth, and life',
-  description: 'A mixed-difficulty science pack covering foundational concepts and tougher specialist facts.',
+  description: 'A mixed-difficulty science pack covering foundational concepts and tougher general-knowledge facts.',
   difficulty: 'mixed',
   approximateMinutes: 35
 }, categories);
