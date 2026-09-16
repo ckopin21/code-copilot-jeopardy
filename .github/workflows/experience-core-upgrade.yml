@@ -1,0 +1,338 @@
+name: Experience core upgrade
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/experience-core-upgrade.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  upgrade:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Apply core gameplay upgrades
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def patch(path, old, new, count=1):
+              p = Path(path)
+              text = p.read_text()
+              found = text.count(old)
+              if found != count:
+                  raise SystemExit(f'{path}: expected {count} matches, found {found} for {old[:80]!r}')
+              p.write_text(text.replace(old, new, count))
+
+          # Shared types: permanent seats, diagnostics, pack presentation metadata,
+          # accessibility options, and host undo visibility.
+          patch('src/shared/types.ts',
+          "export interface QuestionPack {\n  id: string;\n  title: string;\n  theme: string;\n  description: string;\n  difficulty: Difficulty;\n  approximateMinutes: number;\n  questions: Question[];\n}",
+          "export interface QuestionPack {\n  id: string;\n  title: string;\n  theme: string;\n  description: string;\n  difficulty: Difficulty;\n  approximateMinutes: number;\n  accentColor?: string;\n  titleArt?: string;\n  categoryOrder?: string[];\n  finalQuestionId?: string;\n  questions: Question[];\n}")
+
+          patch('src/shared/types.ts',
+          "  controllerBuzzersEnabled: boolean;\n}\n\nexport interface PlayerStats",
+          "  controllerBuzzersEnabled: boolean;\n  largeTextMode: boolean;\n  highContrastMode: boolean;\n  reducedMotionMode: boolean;\n  soundCaptions: boolean;\n}\n\nexport interface PlayerDiagnostics {\n  latencyMs: number | null;\n  haptics: boolean;\n  inputTested: boolean;\n  checkedAt: number;\n}\n\nexport interface PlayerStats")
+
+          patch('src/shared/types.ts',
+          "export interface Player {\n  id: string;\n  name: string;\n  avatar: string;",
+          "export interface Player {\n  id: string;\n  name: string;\n  avatar: string;\n  seat?: number;\n  diagnostics?: PlayerDiagnostics | null;")
+
+          patch('src/shared/types.ts',
+          "  gameEndedAt: number | null;\n}",
+          "  gameEndedAt: number | null;\n  undoLabel?: string | null;\n}")
+
+          patch('src/shared/types.ts',
+          "export interface PackSummary {\n  id: string;\n  title: string;\n  theme: string;\n  description: string;\n  questionCount: number;\n  difficulty: Difficulty;\n  approximateMinutes: number;\n}",
+          "export interface PackSummary {\n  id: string;\n  title: string;\n  theme: string;\n  description: string;\n  questionCount: number;\n  difficulty: Difficulty;\n  approximateMinutes: number;\n  accentColor?: string;\n  titleArt?: string;\n  categoryOrder?: string[];\n  finalQuestionId?: string;\n}")
+
+          # Defaults and one-click game presets.
+          patch('src/shared/config.ts',
+          "  controllerBuzzersEnabled: true\n};",
+          "  controllerBuzzersEnabled: true,\n  largeTextMode: false,\n  highContrastMode: false,\n  reducedMotionMode: false,\n  soundCaptions: false\n};")
+
+          patch('src/shared/config.ts',
+          "export const AVATARS =",
+          "export type GamePresetId = 'casual' | 'fast' | 'competitive' | 'party';\n\nexport const GAME_PRESETS: Record<GamePresetId, { label: string; description: string; settings: Partial<GameSettings> }> = {\n  casual: { label: 'Casual', description: 'Relaxed timing, gentler scoring, fewer surprises.', settings: { gameLength: 'standard', timerSeconds: null, dailyDoublesEnabled: true, dailyDoubleCount: 2, allowNegativeScores: false, lateGameModifiers: false, streaksEnabled: true, finalRoundEnabled: true } },\n  fast: { label: 'Fast', description: 'Short board and quick timers for a rapid game.', settings: { gameLength: 'quick', timerSeconds: 10, dailyDoublesEnabled: true, dailyDoubleCount: 1, allowNegativeScores: true, lateGameModifiers: true, streaksEnabled: true, finalRoundEnabled: true } },\n  competitive: { label: 'Competitive', description: 'Full scoring pressure with the standard board.', settings: { gameLength: 'standard', timerSeconds: 15, dailyDoublesEnabled: true, dailyDoubleCount: 3, allowNegativeScores: true, lateGameModifiers: true, dailyDoubleStacksWithMultiplier: true, streaksEnabled: true, coldStreakThreshold: 3, finalRoundEnabled: true } },\n  party: { label: 'Party', description: 'Longer game, more Daily Doubles, and louder momentum swings.', settings: { gameLength: 'marathon', timerSeconds: 20, dailyDoublesEnabled: true, dailyDoubleCount: 4, allowNegativeScores: true, lateGameModifiers: true, dailyDoubleStacksWithMultiplier: true, streaksEnabled: true, coldStreakThreshold: 2, finalRoundEnabled: true } }\n};\n\nexport const AVATARS =")
+
+          # Difficulty helper keeps low-value questions easier and high-value questions harder,
+          # even when future packs contain multiple variants at one value.
+          Path('src/lib/boardBalance.ts').write_text("""import type { Question } from '../shared/types';
+
+export function preferredDifficultyForRow(rowIndex: number, rowCount: number): Question['difficulty'] {
+  if (rowCount <= 1) return 'medium';
+  const ratio = rowIndex / Math.max(1, rowCount - 1);
+  if (ratio < 0.34) return 'easy';
+  if (ratio < 0.67) return 'medium';
+  return 'hard';
+}
+""")
+
+          # Post-game awards are deterministic and reusable by host and phones.
+          Path('src/lib/awards.ts').write_text("""import type { Player } from '../shared/types';
+
+export interface GameAward {
+  key: string;
+  title: string;
+  detail: string;
+  playerIds: string[];
+}
+
+function topBy(players: Player[], value: (player: Player) => number | null, requirePositive = true): Player[] {
+  const scored = players.map((player) => ({ player, value: value(player) })).filter((entry): entry is { player: Player; value: number } => entry.value !== null && Number.isFinite(entry.value));
+  if (!scored.length) return [];
+  const best = Math.max(...scored.map((entry) => entry.value));
+  if (requirePositive && best <= 0) return [];
+  return scored.filter((entry) => entry.value === best).map((entry) => entry.player);
+}
+
+function lowBy(players: Player[], value: (player: Player) => number | null): Player[] {
+  const scored = players.map((player) => ({ player, value: value(player) })).filter((entry): entry is { player: Player; value: number } => entry.value !== null && Number.isFinite(entry.value));
+  if (!scored.length) return [];
+  const best = Math.min(...scored.map((entry) => entry.value));
+  return scored.filter((entry) => entry.value === best).map((entry) => entry.player);
+}
+
+export function gameAwards(players: Player[]): GameAward[] {
+  if (!players.length) return [];
+  const awards: GameAward[] = [];
+  const add = (key: string, title: string, detail: string, winners: Player[]) => { if (winners.length) awards.push({ key, title, detail, playerIds: winners.map((player) => player.id) }); };
+  add('points', 'Point Machine', 'Most total points gained', topBy(players, (player) => player.stats.pointsGained));
+  add('streak', 'Hot Hand', 'Longest correct-answer streak', topBy(players, (player) => player.stats.longestStreak));
+  add('wager', 'High Roller', 'Largest wager of the game', topBy(players, (player) => player.stats.biggestWager));
+  add('daily-double', 'Daily Double Hunter', 'Most Daily Doubles found', topBy(players, (player) => player.stats.dailyDoublesFound));
+  const attempted = players.filter((player) => player.stats.correct + player.stats.incorrect >= 2);
+  add('accuracy', 'Sharp Shooter', 'Best accuracy with at least two rulings', topBy(attempted, (player) => player.stats.correct / Math.max(1, player.stats.correct + player.stats.incorrect), false));
+  add('buzz', 'Fastest Finger', 'Fastest registered buzz', lowBy(players, (player) => player.stats.fastestBuzzMs));
+  return awards;
+}
+
+export function awardsForPlayer(players: Player[], playerId: string): GameAward[] {
+  return gameAwards(players).filter((award) => award.playerIds.includes(playerId));
+}
+""")
+
+          # Pack metadata is passed through summaries and validated at pack construction time.
+          patch('src/packs/index.ts',
+          "  return builtInPacks.map(({ id, title, theme, description, questions, difficulty, approximateMinutes }) => ({\n    id,\n    title,\n    theme,\n    description,\n    questionCount: questions.length,\n    difficulty,\n    approximateMinutes\n  }));",
+          "  return builtInPacks.map(({ id, title, theme, description, questions, difficulty, approximateMinutes, accentColor, titleArt, categoryOrder, finalQuestionId }) => ({\n    id,\n    title,\n    theme,\n    description,\n    questionCount: questions.length,\n    difficulty,\n    approximateMinutes,\n    accentColor,\n    titleArt,\n    categoryOrder,\n    finalQuestionId\n  }));")
+
+          patch('src/packs/buildPack.ts',
+          "  if (!categories.length) throw new Error(`${meta.id} must contain at least one category`);",
+          "  if (!categories.length) throw new Error(`${meta.id} must contain at least one category`);\n  if (meta.accentColor && !/^#[0-9a-f]{6}$/i.test(meta.accentColor)) throw new Error(`${meta.id} accentColor must be a six-digit hex color`);")
+
+          patch('src/packs/buildPack.ts',
+          "  return { ...meta, questions };",
+          "  if (meta.categoryOrder) {\n    const known = new Set(categories.map((item) => item.name));\n    const unknown = meta.categoryOrder.filter((name) => !known.has(name));\n    if (unknown.length) throw new Error(`${meta.id} categoryOrder contains unknown categories: ${unknown.join(', ')}`);\n  }\n  if (meta.finalQuestionId && !questions.some((item) => item.id === meta.finalQuestionId)) throw new Error(`${meta.id} finalQuestionId does not match a question in the pack`);\n\n  return { ...meta, questions };")
+
+          # Audio emits captions and adds distinct stingers for category, round, diagnostics,
+          # score impact, and winner moments.
+          patch('src/lib/audio.ts',
+          "type Cue = 'click' | 'open' | 'buzz' | 'locked' | 'correct' | 'wrong' | 'daily-double' | 'fire' | 'cold' | 'phase' | 'reveal';",
+          "export type Cue = 'click' | 'open' | 'buzz' | 'locked' | 'correct' | 'wrong' | 'daily-double' | 'fire' | 'cold' | 'phase' | 'reveal' | 'category' | 'round' | 'diagnostic' | 'score' | 'winner';")
+
+          patch('src/lib/audio.ts',
+          "  cue(name: Cue): void {\n    if (!this.context || !this.effects || this.settings.muted) return;",
+          "  cue(name: Cue): void {\n    if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('blue-stage:audio-cue', { detail: name }));\n    if (!this.context || !this.effects || this.settings.muted) return;")
+
+          patch('src/lib/audio.ts',
+          "      phase: [[330, 0, .06], [494, .06, .08], [659, .13, .14]],\n      reveal: [[523, 0, .06], [659, .055, .07], [784, .11, .09], [1047, .19, .18]]",
+          "      phase: [[330, 0, .06], [494, .06, .08], [659, .13, .14]],\n      reveal: [[523, 0, .06], [659, .055, .07], [784, .11, .09], [1047, .19, .18]],\n      category: [[392, 0, .07], [523, .07, .08], [659, .14, .1], [784, .23, .18]],\n      round: [[196, 0, .12], [392, .09, .12], [523, .2, .14], [784, .32, .24]],\n      diagnostic: [[523, 0, .06], [784, .08, .12]],\n      score: [[659, 0, .05], [880, .05, .1]],\n      winner: [[523, 0, .08], [659, .07, .08], [784, .14, .1], [1047, .23, .28]]")
+
+          # Engine persistence, permanent seats, diagnostics, difficulty balancing,
+          # custom pack finals, and one-level authoritative undo.
+          patch('src/lib/browserGameEngine.ts',
+          "import { packMap } from '../packs';",
+          "import { packMap } from '../packs';\nimport { preferredDifficultyForRow } from './boardBalance';")
+
+          patch('src/lib/browserGameEngine.ts',
+          "  finalQuestionId: string | null;\n}",
+          "  finalQuestionId: string | null;\n  undoState?: RoomState | null;\n}")
+
+          patch('src/lib/browserGameEngine.ts',
+          "const STORAGE_KEY = 'blue-stage-p2p-engine-v2';\nconst ROOM_TTL_MS",
+          "const STORAGE_KEY = 'blue-stage-p2p-engine-v2';\nconst STORAGE_BACKUP_KEY = 'blue-stage-p2p-engine-v2-backup';\nconst ROOM_TTL_MS")
+
+          patch('src/lib/browserGameEngine.ts',
+          "function loadRooms(): RoomRecord[] {\n  try {\n    const raw = localStorage.getItem(STORAGE_KEY);\n    if (!raw) return [];\n    const parsed = JSON.parse(raw) as RoomRecord[];\n    return Array.isArray(parsed) ? parsed : [];\n  } catch { return []; }\n}",
+          "function loadRooms(): RoomRecord[] {\n  const parse = (raw: string | null): RoomRecord[] | null => {\n    if (!raw) return null;\n    try { const parsed = JSON.parse(raw) as RoomRecord[]; return Array.isArray(parsed) ? parsed : null; } catch { return null; }\n  };\n  return parse(localStorage.getItem(STORAGE_KEY)) ?? parse(localStorage.getItem(STORAGE_BACKUP_KEY)) ?? [];\n}")
+
+          patch('src/lib/browserGameEngine.ts',
+          "      const previouslyConnected = record.state.players.filter((player) => player.connected).map((player) => player.id);\n      record.state.hostConnected = false;\n      record.state.players.forEach((player) => { player.connected = false; });",
+          "      const previouslyConnected = record.state.players.filter((player) => player.connected).map((player) => player.id);\n      const usedSeats = new Set<number>();\n      record.state.players.forEach((player) => {\n        let seat = player.seat;\n        if (!seat || seat < 1 || seat > 5 || usedSeats.has(seat)) seat = [1, 2, 3, 4, 5].find((candidate) => !usedSeats.has(candidate)) ?? 5;\n        player.seat = seat;\n        player.diagnostics ??= null;\n        usedSeats.add(seat);\n      });\n      record.state.undoLabel ??= null;\n      record.undoState ??= null;\n      record.state.hostConnected = false;\n      record.state.players.forEach((player) => { player.connected = false; });")
+
+          patch('src/lib/browserGameEngine.ts',
+          "  private persist(): void {\n    try { localStorage.setItem(STORAGE_KEY, JSON.stringify([...this.rooms.values()])); }\n    catch { /* keep the in-memory game running */ }\n  }",
+          "  private persist(): void {\n    try {\n      const serialized = JSON.stringify([...this.rooms.values()]);\n      const previous = localStorage.getItem(STORAGE_KEY);\n      if (previous && previous !== serialized) localStorage.setItem(STORAGE_BACKUP_KEY, previous);\n      localStorage.setItem(STORAGE_KEY, serialized);\n    } catch { /* keep the in-memory game running */ }\n  }")
+
+          patch('src/lib/browserGameEngine.ts',
+          "      gameEndedAt: null\n    };\n    this.rooms.set(code, { state, hostToken, playerTokens: {}, questions: {}, finalQuestionId: null });",
+          "      gameEndedAt: null,\n      undoLabel: null\n    };\n    this.rooms.set(code, { state, hostToken, playerTokens: {}, questions: {}, finalQuestionId: null, undoState: null });")
+
+          patch('src/lib/browserGameEngine.ts',
+          "    const duplicateCount = room.state.players.filter((player) => player.name.toLowerCase() === input.name.toLowerCase()).length;\n    const name = duplicateCount ? `${input.name} ${duplicateCount + 1}` : input.name;\n    room.state.players.push({\n      id: playerId, name, avatar: input.avatar, accent: input.accent, score: 0, connected: true,",
+          "    const duplicateCount = room.state.players.filter((player) => player.name.toLowerCase() === input.name.toLowerCase()).length;\n    const name = duplicateCount ? `${input.name} ${duplicateCount + 1}` : input.name;\n    const usedSeats = new Set(room.state.players.map((player) => player.seat).filter((seat): seat is number => Boolean(seat)));\n    const seat = [1, 2, 3, 4, 5].find((candidate) => !usedSeats.has(candidate));\n    if (!seat) throw new Error('No player seats are available');\n    room.state.players.push({\n      id: playerId, name, avatar: input.avatar, accent: input.accent, seat, diagnostics: null, score: 0, connected: true,")
+
+          patch('src/lib/browserGameEngine.ts',
+          "  updateSettings(roomCode: string, hostToken: string, updates: Partial<GameSettings>): RoomSnapshot {",
+          "  renamePlayer(roomCode: string, hostToken: string, playerId: string, nextName: string): RoomSnapshot {\n    const room = this.hostRoom(roomCode, hostToken);\n    const player = room.state.players.find((item) => item.id === playerId);\n    if (!player) throw new Error('Player not found');\n    const name = nextName.trim().slice(0, 24);\n    if (!name) throw new Error('Player name cannot be empty');\n    const duplicate = room.state.players.some((item) => item.id !== playerId && item.name.toLowerCase() === name.toLowerCase());\n    if (duplicate) throw new Error('Another player already uses that name');\n    player.name = name;\n    this.persist();\n    return this.snapshot(roomCode);\n  }\n\n  requestDiagnostics(roomCode: string, hostToken: string): RoomSnapshot {\n    const room = this.hostRoom(roomCode, hostToken);\n    room.state.players.filter((player) => player.connected).forEach((player) => { player.diagnostics = null; });\n    this.persist();\n    return this.snapshot(roomCode);\n  }\n\n  pingPlayer(roomCode: string, playerId: string, reconnectToken: string): { serverNow: number } {\n    this.playerRoom(roomCode, playerId, reconnectToken);\n    return { serverNow: Date.now() };\n  }\n\n  updatePlayerDiagnostics(roomCode: string, playerId: string, reconnectToken: string, input: { latencyMs: number; haptics: boolean; inputTested: boolean }): RoomSnapshot {\n    const [room, player] = this.playerRoom(roomCode, playerId, reconnectToken);\n    const latencyMs = Number.isFinite(input.latencyMs) ? Math.max(0, Math.min(5000, Math.round(input.latencyMs))) : 5000;\n    player.diagnostics = { latencyMs, haptics: Boolean(input.haptics), inputTested: Boolean(input.inputTested), checkedAt: Date.now() };\n    this.persist();\n    return this.snapshot(roomCode);\n  }\n\n  updateSettings(roomCode: string, hostToken: string, updates: Partial<GameSettings>): RoomSnapshot {")
+
+          patch('src/lib/browserGameEngine.ts',
+          "    const selectedPacks = settings.selectedPackIds.map((packId) => this.getPack(packId)).filter((pack): pack is QuestionPack => Boolean(pack));\n    const pool = selectedPacks.flatMap((pack) => pack.questions);",
+          "    const selectedPacks = settings.selectedPackIds.map((packId) => this.getPack(packId)).filter((pack): pack is QuestionPack => Boolean(pack));\n    const pool = selectedPacks.flatMap((pack) => pack.questions.filter((question) => question.id !== pack.finalQuestionId));")
+
+          patch('src/lib/browserGameEngine.ts',
+          "    usable.sort((a, b) => b[1].filter((question) => !this.seenQuestionIds.has(question.id)).length - a[1].filter((question) => !this.seenQuestionIds.has(question.id)).length);\n    if (settings.randomizeCategories) usable = this.shuffle(usable);",
+          "    usable.sort((a, b) => b[1].filter((question) => !this.seenQuestionIds.has(question.id)).length - a[1].filter((question) => !this.seenQuestionIds.has(question.id)).length);\n    if (settings.randomizeCategories) usable = this.shuffle(usable);\n    else if (selectedPacks.length === 1 && selectedPacks[0].categoryOrder?.length) {\n      const order = new Map(selectedPacks[0].categoryOrder.map((name, index) => [name, index]));\n      usable.sort((a, b) => (order.get(a[0]) ?? 999) - (order.get(b[0]) ?? 999));\n    }")
+
+          patch('src/lib/browserGameEngine.ts',
+          "      for (const value of QUESTION_VALUES.slice(0, config.rows)) {\n        const candidates = sourceQuestions.filter((question) => question.value === value);\n        const unseen = candidates.filter((question) => !this.seenQuestionIds.has(question.id));\n        const chosenQuestion = this.shuffle(unseen.length ? unseen : candidates)[0];",
+          "      for (const [rowIndex, value] of QUESTION_VALUES.slice(0, config.rows).entries()) {\n        const candidates = sourceQuestions.filter((question) => question.value === value);\n        const preferredDifficulty = preferredDifficultyForRow(rowIndex, config.rows);\n        const preferred = candidates.filter((question) => question.difficulty === preferredDifficulty);\n        const unseenPreferred = preferred.filter((question) => !this.seenQuestionIds.has(question.id));\n        const unseen = candidates.filter((question) => !this.seenQuestionIds.has(question.id));\n        const chosenQuestion = this.shuffle(unseenPreferred.length ? unseenPreferred : preferred.length ? preferred : unseen.length ? unseen : candidates)[0];")
+
+          patch('src/lib/browserGameEngine.ts',
+          "    room.state.gameEndedAt = null;\n    room.state.players.forEach((player) => this.resetPlayerForGame(player));",
+          "    room.state.gameEndedAt = null;\n    room.state.undoLabel = null;\n    room.undoState = null;\n    room.state.players.forEach((player) => this.resetPlayerForGame(player));", count=2)
+
+          patch('src/lib/browserGameEngine.ts',
+          "    const room = this.hostRoom(roomCode, hostToken);\n    if (room.state.phase !== 'board' || !room.state.board) throw new Error('Board is not ready');",
+          "    const room = this.hostRoom(roomCode, hostToken);\n    if (room.state.phase !== 'board' || !room.state.board) throw new Error('Board is not ready');\n    room.undoState = null;\n    room.state.undoLabel = null;")
+
+          patch('src/lib/browserGameEngine.ts',
+          "  private addScore(player: Player, delta: number, settings: GameSettings): void {",
+          "  private recordUndo(room: RoomRecord, label: string): void {\n    room.undoState = structuredClone(room.state);\n    room.state.undoLabel = label;\n  }\n\n  undoLast(roomCode: string, hostToken: string): RoomSnapshot {\n    const room = this.hostRoom(roomCode, hostToken);\n    if (!room.undoState) throw new Error('There is nothing to undo');\n    room.state = structuredClone(room.undoState);\n    room.undoState = null;\n    room.state.undoLabel = null;\n    this.touch(room);\n    this.persist();\n    return this.snapshot(roomCode);\n  }\n\n  private addScore(player: Player, delta: number, settings: GameSettings): void {")
+
+          patch('src/lib/browserGameEngine.ts',
+          "    if (!current.dailyDouble && current.buzzWinnerId !== playerId) throw new Error('Only the buzz winner can be resolved');\n    let points = current.effectiveValue;",
+          "    if (!current.dailyDouble && current.buzzWinnerId !== playerId) throw new Error('Only the buzz winner can be resolved');\n    this.recordUndo(room, `Ruling: ${player.name} ${correct ? 'correct' : 'incorrect'}`);\n    let points = current.effectiveValue;")
+
+          patch('src/lib/browserGameEngine.ts',
+          "    if (!response || !player) throw new Error('Response not found');\n    if (response.resolvedCorrect !== null) throw new Error('Response is already graded');\n    response.resolvedCorrect = correct;",
+          "    if (!response || !player) throw new Error('Response not found');\n    if (response.resolvedCorrect !== null) throw new Error('Response is already graded');\n    this.recordUndo(room, `Free response: ${player.name} ${correct ? 'correct' : 'incorrect'}`);\n    response.resolvedCorrect = correct;")
+
+          patch('src/lib/browserGameEngine.ts',
+          "    if (!player || !Number.isFinite(delta) || Math.abs(delta) > 100_000) throw new Error('Invalid score adjustment');\n    this.addScore(player, Math.round(delta), room.state.settings);",
+          "    if (!player || !Number.isFinite(delta) || Math.abs(delta) > 100_000) throw new Error('Invalid score adjustment');\n    this.recordUndo(room, `Score: ${player.name} ${delta >= 0 ? '+' : ''}${Math.round(delta)}`);\n    this.addScore(player, Math.round(delta), room.state.settings);")
+
+          patch('src/lib/browserGameEngine.ts',
+          "    const selected = room.state.selectedPackIds.flatMap((packId) => this.getPack(packId)?.questions ?? []);\n    const candidates = selected.filter((question) => !room.questions[question.id] && !this.seenQuestionIds.has(question.id));\n    const fallback = selected.filter((question) => !room.questions[question.id]);\n    const question = this.shuffle(candidates.length ? candidates : fallback)[0];",
+          "    const selectedPacks = room.state.selectedPackIds.map((packId) => this.getPack(packId)).filter((pack): pack is QuestionPack => Boolean(pack));\n    const selected = selectedPacks.flatMap((pack) => pack.questions);\n    const preferredFinal = selectedPacks.map((pack) => pack.finalQuestionId ? pack.questions.find((question) => question.id === pack.finalQuestionId) : undefined).find((question): question is Question => Boolean(question && !room.questions[question.id]));\n    const candidates = selected.filter((question) => !room.questions[question.id] && !this.seenQuestionIds.has(question.id));\n    const fallback = selected.filter((question) => !room.questions[question.id]);\n    const question = preferredFinal ?? this.shuffle(candidates.length ? candidates : fallback)[0];")
+
+          patch('src/lib/browserGameEngine.ts',
+          "    const suggestion = autoGradeAnswer(player.finalAnswer ?? '', room.state.finalRound.acceptedAnswers);\n    const isCorrect = correct ?? suggestion.correct;",
+          "    const suggestion = autoGradeAnswer(player.finalAnswer ?? '', room.state.finalRound.acceptedAnswers);\n    const isCorrect = correct ?? suggestion.correct;\n    this.recordUndo(room, `Final: ${player.name} ${isCorrect ? 'correct' : 'incorrect'}`);")
+
+          # Peer event surface for diagnostics, rename, and undo.
+          patch('src/lib/socket.ts',
+          "    case 'host:update-settings': {",
+          "    case 'host:rename-player': return engine.renamePlayer(roomCode, hostToken, String(payload.playerId ?? ''), String(payload.name ?? ''));\n    case 'host:undo': return engine.undoLast(roomCode, hostToken);\n    case 'host:request-diagnostics': {\n      engine.requestDiagnostics(roomCode, hostToken);\n      for (const target of connections) {\n        const identity = identities.get(target);\n        if (identity?.role === 'player' && identity.roomCode === roomCode) sendEvent(target, 'diagnostics:request', { startedAt: Date.now() });\n      }\n      return null;\n    }\n    case 'host:update-settings': {")
+
+          patch('src/lib/socket.ts',
+          "    case 'player:buzz': {",
+          "    case 'player:ping': return engine.pingPlayer(roomCode, String(payload.playerId ?? ''), String(payload.reconnectToken ?? ''));\n    case 'player:diagnostic': return engine.updatePlayerDiagnostics(roomCode, String(payload.playerId ?? ''), String(payload.reconnectToken ?? ''), { latencyMs: Number(payload.latencyMs), haptics: Boolean(payload.haptics), inputTested: Boolean(payload.inputTested) });\n    case 'player:buzz': {")
+
+          # Tests for the newly authoritative production behavior.
+          Path('tests/experienceFeatures.test.ts').write_text("""import { beforeEach, describe, expect, it } from 'vitest';
+import { BrowserGameEngine, type RandomSource } from '../src/lib/browserGameEngine';
+import { preferredDifficultyForRow } from '../src/lib/boardBalance';
+import { gameAwards } from '../src/lib/awards';
+import { GAME_PRESETS } from '../src/shared/config';
+import type { Player } from '../src/shared/types';
+
+class MemoryStorage implements Storage {
+  private values = new Map<string, string>();
+  get length() { return this.values.size; }
+  clear() { this.values.clear(); }
+  getItem(key: string) { return this.values.get(key) ?? null; }
+  key(index: number) { return [...this.values.keys()][index] ?? null; }
+  removeItem(key: string) { this.values.delete(key); }
+  setItem(key: string, value: string) { this.values.set(key, String(value)); }
+}
+class FixedRandom implements RandomSource { next() { return 0.23; } }
+
+beforeEach(() => Object.defineProperty(globalThis, 'localStorage', { value: new MemoryStorage(), configurable: true }));
+
+describe('experience systems', () => {
+  it('assigns permanent seats and reuses only freed seats', () => {
+    const engine = new BrowserGameEngine(new FixedRandom(), 60_000);
+    const host = engine.createRoom('https://example.test');
+    const one = engine.joinPlayer(host.roomCode, { name: 'One', avatar: '1', accent: '#ffffff' });
+    const two = engine.joinPlayer(host.roomCode, { name: 'Two', avatar: '2', accent: '#ffffff' });
+    expect(engine.snapshot(host.roomCode).players.map((player) => player.seat)).toEqual([1, 2]);
+    engine.setPlayerConnected(host.roomCode, one.playerId, false);
+    engine.reconnectPlayer(host.roomCode, one.playerId, one.reconnectToken);
+    expect(engine.snapshot(host.roomCode).players.find((player) => player.id === one.playerId)?.seat).toBe(1);
+    engine.removePlayer(host.roomCode, host.hostToken, one.playerId);
+    engine.joinPlayer(host.roomCode, { name: 'Three', avatar: '3', accent: '#ffffff' });
+    expect(engine.snapshot(host.roomCode).players.map((player) => player.seat).sort()).toEqual([1, 2]);
+    expect(two.playerId).toBeTruthy();
+  });
+
+  it('stores controller diagnostics and allows a host undo of manual scoring', () => {
+    const engine = new BrowserGameEngine(new FixedRandom(), 60_000);
+    const host = engine.createRoom('https://example.test');
+    const player = engine.joinPlayer(host.roomCode, { name: 'Alex', avatar: 'A', accent: '#ffffff' });
+    engine.updatePlayerDiagnostics(host.roomCode, player.playerId, player.reconnectToken, { latencyMs: 42, haptics: true, inputTested: true });
+    expect(engine.snapshot(host.roomCode).players[0].diagnostics?.latencyMs).toBe(42);
+    engine.adjustScore(host.roomCode, host.hostToken, player.playerId, 500);
+    expect(engine.snapshot(host.roomCode).players[0].score).toBe(500);
+    expect(engine.snapshot(host.roomCode).undoLabel).toMatch(/Score/);
+    engine.undoLast(host.roomCode, host.hostToken);
+    expect(engine.snapshot(host.roomCode).players[0].score).toBe(0);
+    expect(engine.snapshot(host.roomCode).undoLabel).toBeNull();
+  });
+
+  it('renames players without allowing duplicate names', () => {
+    const engine = new BrowserGameEngine(new FixedRandom(), 60_000);
+    const host = engine.createRoom('https://example.test');
+    const one = engine.joinPlayer(host.roomCode, { name: 'One', avatar: '1', accent: '#ffffff' });
+    engine.joinPlayer(host.roomCode, { name: 'Two', avatar: '2', accent: '#ffffff' });
+    engine.renamePlayer(host.roomCode, host.hostToken, one.playerId, 'Renamed');
+    expect(engine.snapshot(host.roomCode).players[0].name).toBe('Renamed');
+    expect(() => engine.renamePlayer(host.roomCode, host.hostToken, one.playerId, 'Two')).toThrow(/already uses/i);
+  });
+
+  it('maps board rows to progressively harder preferred difficulty', () => {
+    expect(preferredDifficultyForRow(0, 6)).toBe('easy');
+    expect(preferredDifficultyForRow(2, 6)).toBe('medium');
+    expect(preferredDifficultyForRow(5, 6)).toBe('hard');
+  });
+
+  it('ships four complete game presets', () => {
+    expect(Object.keys(GAME_PRESETS)).toEqual(['casual', 'fast', 'competitive', 'party']);
+    expect(GAME_PRESETS.fast.settings.gameLength).toBe('quick');
+    expect(GAME_PRESETS.party.settings.gameLength).toBe('marathon');
+  });
+
+  it('produces useful endgame awards', () => {
+    const base = { connected: true, positiveStreak: 0, coldStreak: 0, onFire: false, isCold: false, buzzEligible: false, hasBuzzedThisQuestion: false, finalWager: null, finalWagerSubmitted: false, finalAnswer: null, finalAnswerSubmitted: false, finalResolved: false };
+    const stats = (pointsGained: number, fastestBuzzMs: number) => ({ correct: 4, incorrect: 1, longestStreak: 3, longestColdStreak: 1, dailyDoublesFound: 1, biggestWager: 500, fastestBuzzMs, pointsGained, pointsLost: 100 });
+    const players = [
+      { ...base, id: 'a', name: 'A', avatar: 'A', accent: '#fff', score: 1000, stats: stats(1200, 310) },
+      { ...base, id: 'b', name: 'B', avatar: 'B', accent: '#fff', score: 900, stats: stats(900, 250) }
+    ] as Player[];
+    const awards = gameAwards(players);
+    expect(awards.find((award) => award.key === 'points')?.playerIds).toEqual(['a']);
+    expect(awards.find((award) => award.key === 'buzz')?.playerIds).toEqual(['b']);
+  });
+});
+""")
+
+      - run: npm ci --no-audit --no-fund
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+      - name: Commit core upgrade
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src tests
+          git commit -m "feat: add robust game experience systems"
+          git push
