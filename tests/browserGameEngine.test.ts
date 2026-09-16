@@ -45,15 +45,67 @@ beforeEach(() => {
 });
 
 describe('BrowserGameEngine production state', () => {
-  it('reconnects a reserved seat without changing player identity', () => {
+  it('reconnects a reserved seat without changing player identity or seat', () => {
     const { engine, host } = setup();
     const player = addPlayer(engine, host.roomCode);
+    const originalSeat = engine.snapshot(host.roomCode).players[0].seat;
     engine.setPlayerConnected(host.roomCode, player.playerId, false);
     expect(engine.snapshot(host.roomCode).players[0].connected).toBe(false);
 
     const reconnected = engine.reconnectPlayer(host.roomCode, player.playerId, player.reconnectToken);
     expect(reconnected.playerId).toBe(player.playerId);
     expect(engine.snapshot(host.roomCode).players[0].connected).toBe(true);
+    expect(engine.snapshot(host.roomCode).players[0].seat).toBe(originalSeat);
+  });
+
+  it('reuses only a permanently freed seat and keeps other seat numbers stable', () => {
+    const { engine, host } = setup();
+    const one = addPlayer(engine, host.roomCode, 'One');
+    const two = addPlayer(engine, host.roomCode, 'Two');
+    const three = addPlayer(engine, host.roomCode, 'Three');
+    expect(engine.snapshot(host.roomCode).players.map((player) => player.seat)).toEqual([1, 2, 3]);
+
+    engine.removePlayer(host.roomCode, host.hostToken, two.playerId);
+    const four = addPlayer(engine, host.roomCode, 'Four');
+    const state = engine.snapshot(host.roomCode);
+    expect(state.players.find((player) => player.id === one.playerId)?.seat).toBe(1);
+    expect(state.players.find((player) => player.id === three.playerId)?.seat).toBe(3);
+    expect(state.players.find((player) => player.id === four.playerId)?.seat).toBe(2);
+    expect(state.players.map((player) => player.seat)).toEqual([1, 2, 3]);
+  });
+
+  it('renames a player without changing identity or seat', () => {
+    const { engine, host } = setup();
+    const player = addPlayer(engine, host.roomCode, 'Before');
+    const seat = engine.snapshot(host.roomCode).players[0].seat;
+    engine.renamePlayer(host.roomCode, host.hostToken, player.playerId, 'After');
+    const renamed = engine.snapshot(host.roomCode).players[0];
+    expect(renamed.id).toBe(player.playerId);
+    expect(renamed.seat).toBe(seat);
+    expect(renamed.name).toBe('After');
+  });
+
+  it('undoes the latest ruling including score, stats, streak and question state', () => {
+    const { engine, host } = setup({ dailyDoublesEnabled: false, finalRoundEnabled: false });
+    const credentials = addPlayer(engine, host.roomCode, 'Undo');
+    engine.startGame(host.roomCode, host.hostToken);
+    const tile = firstUnused(engine, host.roomCode);
+    engine.selectQuestion(host.roomCode, host.hostToken, tile.questionId);
+    engine.openBuzzers(host.roomCode, host.hostToken);
+    engine.localBuzz(host.roomCode, host.hostToken, credentials.playerId);
+    engine.revealAnswer(host.roomCode, host.hostToken);
+    engine.resolveAnswer(host.roomCode, host.hostToken, credentials.playerId, true);
+    engine.advanceToBoard(host.roomCode, host.hostToken);
+    expect(engine.snapshot(host.roomCode).players[0].score).toBeGreaterThan(0);
+
+    const restored = engine.undoLastScoreAction(host.roomCode, host.hostToken);
+    expect(restored.phase).toBe('question');
+    expect(restored.currentQuestion?.questionId).toBe(tile.questionId);
+    expect(restored.currentQuestion?.answerRevealed).toBe(true);
+    expect(restored.players[0].score).toBe(0);
+    expect(restored.players[0].stats.correct).toBe(0);
+    expect(restored.players[0].positiveStreak).toBe(0);
+    expect(() => engine.undoLastScoreAction(host.roomCode, host.hostToken)).toThrow(/no scoring action/i);
   });
 
   it('restores an active timer instead of erasing it on host reload', () => {
@@ -74,7 +126,7 @@ describe('BrowserGameEngine production state', () => {
     expect(after.remainingMs).toBeGreaterThan(0);
   });
 
-  it('turns an unowned Daily Double into a normal practice clue', () => {
+  it('turns an unowned Daily Double into a normal practice question', () => {
     const { engine, host } = setup({ gameLength: 'quick', dailyDoublesEnabled: true, dailyDoubleCount: 16 });
     engine.startGame(host.roomCode, host.hostToken);
     const daily = engine.snapshot(host.roomCode).board!.questions.find((question) => question.dailyDouble)!;
