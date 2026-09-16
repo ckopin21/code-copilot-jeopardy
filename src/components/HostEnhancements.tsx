@@ -4,15 +4,12 @@ import type { HostRoomCredentials, RoomSnapshot } from '../shared/types';
 import { emitAck, getPlayerConnectionHealth, socket, testPlayerControllers, type PlayerConnectionHealth } from '../lib/socket';
 import { audio } from '../lib/audio';
 import { readAccessibility, saveAccessibility, type AccessibilityPreferences } from '../lib/accessibility';
-
-const HOST_KEY = 'blue-stage-host-room';
+import { readActiveHostCredentials } from '../lib/hostCredentials';
 type TransitionCard = { key: string; eyebrow: string; title: string; detail?: string; categories?: string[] };
 
 function readCredentials(): HostRoomCredentials | null {
-  try {
-    const raw = localStorage.getItem(HOST_KEY);
-    return raw ? JSON.parse(raw) as HostRoomCredentials : null;
-  } catch { return null; }
+  try { return readActiveHostCredentials(); }
+  catch { return null; }
 }
 
 function healthLabel(item?: PlayerConnectionHealth): string {

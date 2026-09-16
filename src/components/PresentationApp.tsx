@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { RoomSnapshot } from '../shared/types';
-import { emitAck, socket } from '../lib/socket';
+import { emitAck, resumeClientSession, socket, suspendClientSession } from '../lib/socket';
 import { Board } from './Board';
 import { PlayerStrip } from './PlayerStrip';
 import { Timer } from './Timer';
 import { audio } from '../lib/audio';
 import { scoreboardWagersVisible, turnIndicatorLabel, turnIndicatorVisible } from '../lib/gameUiRules';
 import { ScoreFlight, type ScoreFlightState } from './ScoreFlight';
+import { randomId } from '../lib/ids';
 
 function musicFor(room: RoomSnapshot) {
   if (room.phase.startsWith('final')) return 'final' as const;
@@ -37,7 +38,7 @@ export function PresentationApp() {
         if (!before || before.score === player.score) continue;
         nextOverrides[player.id] = before.score;
         nextFlights.push({
-          id: crypto.randomUUID(),
+          id: randomId('presentation-score'),
           questionId: snapshot.currentQuestion?.questionId ?? previous.currentQuestion?.questionId ?? 'presentation-score-change',
           playerId: player.id,
           delta: player.score - before.score,
@@ -63,10 +64,15 @@ export function PresentationApp() {
   const handleScoreComplete = useCallback((flightId: string) => setScoreFlights((current) => current.filter((flight) => flight.id !== flightId)), []);
 
   useEffect(() => {
+    resumeClientSession();
     const onState = (snapshot: RoomSnapshot) => applySnapshot(snapshot);
     socket.on('room:state', onState);
     void emitAck<RoomSnapshot>('presentation:join', { roomCode }).then(applySnapshot).catch((err) => setError(err instanceof Error ? err.message : 'Could not join game'));
-    return () => { socket.off('room:state', onState); audio.stop(); };
+    return () => {
+      socket.off('room:state', onState);
+      suspendClientSession();
+      audio.stop();
+    };
   }, [roomCode, applySnapshot]);
 
   const musicState = room ? musicFor(room) : null;

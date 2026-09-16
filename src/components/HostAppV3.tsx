@@ -14,8 +14,9 @@ import { AudioMixer } from './AudioMixer';
 import { BoardPresentation } from './BoardPresentation';
 import { EndgameRecap } from './EndgameRecap';
 import { ScoreFlight, type ScoreFlightState } from './ScoreFlight';
-
-const HOST_KEY = 'blue-stage-host-room';
+import { clearHostCredentials, readActiveHostCredentials, writeHostCredentials } from '../lib/hostCredentials';
+import { stripFreshHostFlag } from '../lib/hostSession';
+import { randomId } from '../lib/ids';
 type HostStored = HostRoomCredentials;
 type HistoryAttempt = { playerId: string; playerName: string; playerAvatar: string; correct: boolean };
 type QuestionHistoryEntry = {
@@ -94,30 +95,39 @@ export function HostAppV3() {
       const createFreshRoom = async () => {
         const network = await fetch('/api/network').then((response) => response.json()) as { baseUrl: string };
         const created = await emitAck<HostRoomCredentials>('room:create', { settings: DEFAULT_SETTINGS, baseUrl: network.baseUrl });
-        localStorage.setItem(HOST_KEY, JSON.stringify(created));
+        writeHostCredentials(created);
         setCredentials(created);
+        if (new URLSearchParams(location.search).get('fresh') === '1') {
+          history.replaceState(null, '', stripFreshHostFlag(location.href));
+        }
       };
       try {
         const forceFresh = new URLSearchParams(location.search).get('fresh') === '1';
         if (!forceFresh) {
-          const saved = localStorage.getItem(HOST_KEY);
-          if (saved) {
+          const parsed = readActiveHostCredentials();
+          if (parsed) {
             try {
-              const parsed = JSON.parse(saved) as HostStored;
               const snapshot = await emitAck<RoomSnapshot>('host:reconnect', { roomCode: parsed.roomCode, hostToken: parsed.hostToken });
+              writeHostCredentials(parsed);
               setCredentials(parsed);
               setRoom(snapshot);
               return;
-            } catch {
-              localStorage.removeItem(HOST_KEY);
+            } catch (reconnectError) {
+              const message = reconnectError instanceof Error ? reconnectError.message : 'Could not restore saved room';
+              const terminal = /authorization|not found|expired/i.test(message);
+              if (!terminal) {
+                // Preserve the saved room on signaling/network failures. A transient outage must
+                // never destroy the only reconnect credentials for an otherwise valid game.
+                setCredentials(parsed);
+                setError(`${message}. Saved room ${parsed.roomCode} was preserved; retry when the connection is available.`);
+                return;
+              }
+              clearHostCredentials(parsed);
             }
           }
-        } else {
-          localStorage.removeItem(HOST_KEY);
         }
         await createFreshRoom();
       } catch (err) {
-        localStorage.removeItem(HOST_KEY);
         setError(err instanceof Error ? err.message : 'Could not create room');
       } finally {
         setBusy(false);
@@ -333,7 +343,7 @@ export function HostAppV3() {
     if (!before || !after || before.score === after.score) return;
     setScoreOverrides((currentOverrides) => ({ ...currentOverrides, [ownerId]: before.score }));
     setScoreFlights((currentFlights) => [...currentFlights, {
-      id: crypto.randomUUID(),
+      id: randomId('score-flight'),
       questionId: question.questionId,
       playerId: ownerId,
       delta: after.score - before.score,
@@ -450,7 +460,7 @@ export function HostAppV3() {
     const signedDelta = correct ? awardedPoints : settings.allowNegativeScores ? -pointsAtStake : -Math.min(Math.max(0, player.score), pointsAtStake);
     setScoreOverrides((previous) => ({ ...previous, [player.id]: player.score }));
     return {
-      id: crypto.randomUUID(),
+      id: randomId('score-flight'),
       questionId: current.questionId,
       playerId: player.id,
       delta: signedDelta,

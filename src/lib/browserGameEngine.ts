@@ -4,6 +4,7 @@ import { QUESTION_VALUES } from '../shared/types';
 import { autoGradeAnswer } from '../shared/validation';
 import { packMap } from '../packs';
 import { calculateComebackAward } from './comebackScoring';
+import { randomId } from './ids';
 
 export interface RoomRecord {
   state: RoomState;
@@ -30,7 +31,7 @@ function randomToken(bytes = 24): string {
   for (const value of buffer) binary += String.fromCharCode(value);
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
 }
-function id(prefix: string): string { return `${prefix}_${crypto.randomUUID()}`; }
+function id(prefix: string): string { return randomId(prefix); }
 function secureEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
   let difference = 0;
@@ -311,16 +312,9 @@ export class BrowserGameEngine {
     if (!player) return;
     player.connected = connected;
     if (!connected) {
+      // A transient disconnect must not permanently close a typed/Final response window.
+      // Timers or the host still close those phases; reconnecting players can continue if time remains.
       player.buzzEligible = false;
-      const current = room.state.currentQuestion;
-      if (room.state.phase === 'question' && current?.responseMode === 'text' && !current.answerRevealed) {
-        const active = this.currentQuestionParticipants(room);
-        if (active.length === 0 || active.every((candidate) => Boolean(current.textResponses?.[candidate.id]))) this.closeTextResponsesInternal(room);
-      }
-      if (room.state.phase === 'final-question' && room.state.finalRound && !room.state.finalRound.responsesClosed) {
-        const active = this.activeFinalParticipants(room);
-        if (active.length === 0 || active.every((candidate) => candidate.finalAnswerSubmitted)) this.closeFinalResponsesInternal(room);
-      }
     } else {
       const current = room.state.currentQuestion;
       if (current?.buzzOpen && !current.buzzWinnerId && current.responseMode !== 'text') {
@@ -869,7 +863,9 @@ export class BrowserGameEngine {
     room.state.currentQuestion = null;
     this.stopTimerInternal(room);
     if (room.state.remainingQuestions === 0) {
-      if (room.state.settings.finalRoundEnabled && this.connectedPlayers(room).length > 0) this.prepareFinalRound(room);
+      const finalEligibleIds = current.participantIds ?? [];
+      const hasFinalist = this.connectedPlayers(room).length > 0 || finalEligibleIds.some((playerId) => room.state.players.some((player) => player.id === playerId));
+      if (room.state.settings.finalRoundEnabled && hasFinalist) this.prepareFinalRound(room, finalEligibleIds);
       else this.finishGame(room);
     } else {
       room.state.multiplier = this.multiplierForRemaining(room.state.remainingQuestions, room.state.settings.lateGameModifiers);
@@ -968,8 +964,14 @@ export class BrowserGameEngine {
     return changed;
   }
 
-  private prepareFinalRound(room: RoomRecord): void {
-    const participantIds = this.connectedPlayers(room).map((player) => player.id);
+  private prepareFinalRound(room: RoomRecord, recentlyEligibleIds: string[] = []): void {
+    // Preserve normal connected-only Final eligibility, but rescue a controller that
+    // dropped during the final clue after already being part of that clue's roster.
+    const recentlyEligible = new Set(recentlyEligibleIds);
+    const participantIds = room.state.players
+      .filter((player) => player.connected || recentlyEligible.has(player.id))
+      .sort((a, b) => a.seat - b.seat)
+      .map((player) => player.id);
     if (!participantIds.length) { this.finishGame(room); return; }
     const selectedPacks = room.state.selectedPackIds.map((packId) => this.getPack(packId)).filter((pack): pack is QuestionPack => Boolean(pack));
     const selected = selectedPacks.flatMap((pack) => pack.questions);

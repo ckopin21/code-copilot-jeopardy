@@ -133,9 +133,7 @@ export function PlayerApp() {
       if (syncing) return;
       syncing = true;
       try {
-        const result = await emitAck<PlayerJoinCredentials>('player:reconnect', credentials);
-        localStorage.setItem(PLAYER_KEY, JSON.stringify(result));
-        setCredentials(result);
+        await emitAck('player:heartbeat', credentials);
         syncFailuresRef.current = 0;
         setRecovering(false);
       } catch {

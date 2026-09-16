@@ -551,4 +551,56 @@ describe('BrowserGameEngine production state', () => {
     expect(engine.multiplierForRemaining(3)).toBe(3);
     expect(engine.multiplierForRemaining(1)).toBe(3);
   });
+
+  it('keeps typed and Final response windows open through a transient disconnect', () => {
+    const { engine, host } = setup({ gameLength: 'quick', dailyDoublesEnabled: false, finalRoundEnabled: true, timerSeconds: 15 });
+    const player = addPlayer(engine, host.roomCode, 'Reconnect Me');
+    engine.startGame(host.roomCode, host.hostToken);
+
+    const rooms = (engine as unknown as { rooms: Map<string, { questions: Record<string, { responseMode?: 'buzz' | 'text' }> }> }).rooms;
+    const record = rooms.get(host.roomCode)!;
+    const typed = engine.snapshot(host.roomCode).board!.questions.find((candidate) => !candidate.used && (record.questions[candidate.questionId].responseMode ?? 'buzz') === 'text');
+    if (typed) {
+      engine.selectQuestion(host.roomCode, host.hostToken, typed.questionId);
+      engine.setPlayerConnected(host.roomCode, player.playerId, false);
+      expect(engine.snapshot(host.roomCode).currentQuestion?.responsesClosed).toBe(false);
+      engine.reconnectPlayer(host.roomCode, player.playerId, player.reconnectToken);
+      engine.submitTextResponse(host.roomCode, player.playerId, player.reconnectToken, 'answer');
+      expect(engine.snapshot(host.roomCode).currentQuestion?.textResponses?.[player.playerId]).toBeTruthy();
+      engine.revealAnswer(host.roomCode, host.hostToken);
+      engine.resolveTextResponse(host.roomCode, host.hostToken, player.playerId, false);
+      engine.advanceToBoard(host.roomCode, host.hostToken);
+    }
+
+    finishBoardWithoutScoring(engine, host.roomCode, host.hostToken);
+    const finalState = engine.snapshot(host.roomCode);
+    expect(finalState.phase).toBe('final-category');
+    expect(finalState.finalRound?.participantIds).toContain(player.playerId);
+    engine.beginFinalWagers(host.roomCode, host.hostToken);
+    engine.submitFinalWager(host.roomCode, player.playerId, player.reconnectToken, 0);
+    engine.openFinalQuestion(host.roomCode, host.hostToken);
+    engine.setPlayerConnected(host.roomCode, player.playerId, false);
+    expect(engine.snapshot(host.roomCode).finalRound?.responsesClosed).toBe(false);
+  });
+
+  it('still starts Final when the reserved player is disconnected at the last board clue', () => {
+    const { engine, host } = setup({ gameLength: 'quick', dailyDoublesEnabled: false, finalRoundEnabled: true });
+    const player = addPlayer(engine, host.roomCode, 'Reserved');
+    engine.startGame(host.roomCode, host.hostToken);
+    while (engine.snapshot(host.roomCode).remainingQuestions > 1) {
+      const tile = firstUnused(engine, host.roomCode);
+      engine.selectQuestion(host.roomCode, host.hostToken, tile.questionId);
+      engine.revealAnswer(host.roomCode, host.hostToken);
+      engine.advanceToBoard(host.roomCode, host.hostToken);
+    }
+    const last = firstUnused(engine, host.roomCode);
+    engine.selectQuestion(host.roomCode, host.hostToken, last.questionId);
+    engine.setPlayerConnected(host.roomCode, player.playerId, false);
+    engine.revealAnswer(host.roomCode, host.hostToken);
+    engine.advanceToBoard(host.roomCode, host.hostToken);
+    const state = engine.snapshot(host.roomCode);
+    expect(state.phase).toBe('final-category');
+    expect(state.finalRound?.participantIds).toContain(player.playerId);
+  });
+
 });
