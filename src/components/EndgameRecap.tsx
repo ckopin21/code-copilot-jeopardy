@@ -54,9 +54,16 @@ export function EndgameRecap({ players, onReset, onMenu }: { players: Player[]; 
     for (let index = 0; index < playerCount; index += 1) {
       timers.push(window.setTimeout(() => setRevealed(index + 1), 420 + index * 620));
     }
-    timers.push(window.setTimeout(() => setShowStats(true), 420 + playerCount * 620 + 1700));
+    if (playerCount > 0) timers.push(window.setTimeout(() => setShowStats(true), 420 + playerCount * 620 + 1700));
     return () => timers.forEach((timer) => window.clearTimeout(timer));
   }, [resultKey, playerCount]);
+
+  if (playerCount === 0) return <section className="recap-scene-v2 stats-after-podium recap-count-0">
+    <div className="section-kicker gold">PRACTICE COMPLETE</div>
+    <h1>Board complete</h1>
+    <p className="helper-copy">Practice mode has no player standings. Reset for another board or return to the menu.</p>
+    <div className="control-row-v2"><button className="primary-button" onClick={onReset}>Reset Game</button><button className="secondary-button" onClick={onMenu}>Back to Menu</button></div>
+  </section>;
 
   if (showStats) return <section className={`recap-scene-v2 stats-after-podium recap-count-${playerCount}`}>
     <div className="section-kicker gold">GAME STATS</div>
