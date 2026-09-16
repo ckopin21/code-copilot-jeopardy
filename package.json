@@ -19,6 +19,7 @@
     "@vitejs/plugin-react": "latest",
     "cors": "latest",
     "express": "latest",
+    "peerjs": "latest",
     "qrcode": "latest",
     "react": "latest",
     "react-dom": "latest",
