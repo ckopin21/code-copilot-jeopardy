@@ -26,9 +26,9 @@ export const DEFAULT_SETTINGS: GameSettings = {
 };
 
 export const GAME_LENGTH_CONFIG = {
-  quick: { categories: 4, rows: 4 },
-  standard: { categories: 5, rows: 6 },
-  marathon: { categories: 6, rows: 6 }
+  quick: { categories: 4, rows: 5 },
+  standard: { categories: 5, rows: 5 },
+  marathon: { categories: 6, rows: 5 }
 } as const;
 
 export const AVATARS = ['🎬', '🚀', '🐭', '🦊', '🧠', '⭐', '🎮', '🧪', '🌙', '🏆'];

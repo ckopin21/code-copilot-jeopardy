@@ -4,14 +4,21 @@ type Cue = 'open' | 'buzz' | 'locked' | 'correct' | 'wrong' | 'daily-double' | '
 const KEY = 'blue-stage-audio';
 interface AudioSettings { master: number; music: number; effects: number; muted: boolean }
 
+const NOTES: Record<string, number> = {
+  C3: 130.81, D3: 146.83, E3: 164.81, F3: 174.61, G3: 196, A3: 220, B3: 246.94,
+  C4: 261.63, D4: 293.66, E4: 329.63, F4: 349.23, G4: 392, A4: 440, B4: 493.88,
+  C5: 523.25, D5: 587.33, E5: 659.25, G5: 783.99
+};
+
 class AudioEngine {
   private context: AudioContext | null = null;
   private master: GainNode | null = null;
   private music: GainNode | null = null;
   private effects: GainNode | null = null;
-  private ambient: OscillatorNode[] = [];
-  settings: AudioSettings = { master: 0.7, music: 0.32, effects: 0.75, muted: false };
   private musicState: MusicState | null = null;
+  private musicTimer: number | null = null;
+  private generation = 0;
+  settings: AudioSettings = { master: 0.7, music: 0.34, effects: 0.75, muted: false };
 
   constructor() {
     try {
@@ -48,6 +55,19 @@ class AudioEngine {
     this.effects.gain.setTargetAtTime(this.settings.effects, now, 0.03);
   }
 
+  private tone(frequency: number, at: number, duration: number, volume: number, type: OscillatorType, destination: AudioNode): void {
+    if (!this.context) return;
+    const osc = this.context.createOscillator();
+    const gain = this.context.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(frequency, at);
+    gain.gain.setValueAtTime(0.0001, at);
+    gain.gain.exponentialRampToValueAtTime(volume, at + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.0001, at + duration);
+    osc.connect(gain); gain.connect(destination);
+    osc.start(at); osc.stop(at + duration + 0.03);
+  }
+
   cue(name: Cue): void {
     if (!this.context || !this.effects || this.settings.muted) return;
     const patterns: Record<Cue, [number, number, number][]> = {
@@ -57,39 +77,45 @@ class AudioEngine {
       cold: [[380, 0, .12], [290, .1, .25]], phase: [[300, 0, .08], [600, .06, .1], [900, .12, .18]]
     };
     const start = this.context.currentTime;
-    for (const [frequency, offset, duration] of patterns[name]) {
-      const osc = this.context.createOscillator();
-      const gain = this.context.createGain();
-      osc.type = name === 'wrong' || name === 'locked' ? 'sawtooth' : 'sine';
-      osc.frequency.value = frequency;
-      gain.gain.setValueAtTime(0.0001, start + offset);
-      gain.gain.exponentialRampToValueAtTime(0.18, start + offset + 0.015);
-      gain.gain.exponentialRampToValueAtTime(0.0001, start + offset + duration);
-      osc.connect(gain); gain.connect(this.effects);
-      osc.start(start + offset); osc.stop(start + offset + duration + .02);
-    }
+    for (const [frequency, offset, duration] of patterns[name]) this.tone(frequency, start + offset, duration, 0.18, name === 'wrong' || name === 'locked' ? 'sawtooth' : 'sine', this.effects);
+  }
+
+  private scheduleTheme(state: MusicState, generation: number): void {
+    if (!this.context || !this.music || generation !== this.generation) return;
+    const tempo = state === 'thinking' || state === 'final' ? 126 : state === 'triple' ? 156 : state === 'double' ? 148 : 140;
+    const beat = 60 / tempo;
+    const start = this.context.currentTime + 0.06;
+    const melodies: Record<MusicState, string[]> = {
+      lobby: ['C4','E4','G4','E4','D4','F4','A4','G4','E4','G4','C5','B4','A4','G4','E4','D4'],
+      board: ['E4','G4','B4','G4','A4','C5','B4','G4','D4','F4','A4','F4','G4','B4','A4','E4'],
+      thinking: ['C4','E4','G4','E4','D4','F4','A4','F4','E4','G4','B4','G4','D4','F4','G4','E4'],
+      'daily-double': ['G4','C5','E5','D5','B4','G4','A4','C5','B4','G4','E4','G4','C5','B4','G4','E4'],
+      double: ['A4','C5','E5','C5','B4','D5','E5','B4','G4','B4','D5','B4','A4','C5','B4','G4'],
+      triple: ['C5','E5','G5','E5','D5','B4','C5','A4','B4','D5','E5','D5','C5','B4','G4','E4'],
+      final: ['A3','E4','A4','E4','G4','D4','G4','D4','F4','C4','F4','C4','E4','B3','E4','B3'],
+      winner: ['C4','E4','G4','C5','E5','G5','E5','C5','G4','B4','D5','G5','E5','D5','C5','G4']
+    };
+    const bass: Record<MusicState, string[]> = {
+      lobby: ['C3','F3','A3','G3'], board: ['E3','A3','D3','G3'], thinking: ['C3','D3','E3','G3'], 'daily-double': ['C3','G3','A3','E3'],
+      double: ['A3','G3','E3','D3'], triple: ['C3','A3','G3','E3'], final: ['A3','G3','F3','E3'], winner: ['C3','G3','A3','F3']
+    };
+    melodies[state].forEach((note, index) => {
+      const at = start + index * beat * 0.5;
+      this.tone(NOTES[note], at, beat * 0.42, state === 'thinking' ? 0.038 : 0.05, index % 4 === 0 ? 'square' : 'triangle', this.music!);
+    });
+    bass[state].forEach((note, index) => this.tone(NOTES[note], start + index * beat * 2, beat * 1.45, 0.035, 'sine', this.music!));
+    const cycleMs = Math.round(beat * 8 * 1000);
+    this.musicTimer = window.setTimeout(() => this.scheduleTheme(state, generation), Math.max(500, cycleMs - 80));
   }
 
   async setMusic(state: MusicState): Promise<void> {
-    if (this.musicState === state) return;
+    if (this.musicState === state && this.musicTimer !== null) return;
     this.musicState = state;
     await this.unlock();
-    if (!this.context || !this.music) return;
-    const now = this.context.currentTime;
-    for (const osc of this.ambient) { try { osc.stop(now + .35); } catch { /* already stopped */ } }
-    this.ambient = [];
-    const root: Record<MusicState, number> = { lobby: 110, board: 123.47, thinking: 98, 'daily-double': 146.83, double: 138.59, triple: 155.56, final: 92.5, winner: 164.81 };
-    const ratios = state === 'final' ? [1, 1.5] : state === 'triple' ? [1, 1.25, 1.5] : [1, 1.5, 2];
-    ratios.forEach((ratio, index) => {
-      const osc = this.context!.createOscillator();
-      const gain = this.context!.createGain();
-      osc.type = index === 0 ? 'sine' : 'triangle';
-      osc.frequency.value = root[state] * ratio;
-      gain.gain.setValueAtTime(0.0001, now);
-      gain.gain.exponentialRampToValueAtTime(index === 0 ? 0.055 : 0.025, now + .5);
-      osc.connect(gain); gain.connect(this.music!); osc.start();
-      this.ambient.push(osc);
-    });
+    this.generation += 1;
+    if (this.musicTimer !== null) window.clearTimeout(this.musicTimer);
+    this.musicTimer = null;
+    this.scheduleTheme(state, this.generation);
   }
 }
 

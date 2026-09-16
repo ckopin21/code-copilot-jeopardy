@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ACCENT_COLORS, AVATARS, QUESTION_VALUES } from '../shared/config';
 import type { PlayerJoinCredentials, RoomSnapshot } from '../shared/types';
 import { emitAck, socket } from '../lib/socket';
@@ -19,24 +19,84 @@ export function PlayerApp() {
   const [buzzMessage, setBuzzMessage] = useState('');
   const [finalWager, setFinalWager] = useState('');
   const [finalAnswer, setFinalAnswer] = useState('');
+  const [recovering, setRecovering] = useState(false);
+  const syncFailuresRef = useRef(0);
 
   useEffect(() => {
-    const onState = (snapshot: RoomSnapshot) => setRoom(snapshot);
+    const onState = (snapshot: RoomSnapshot) => {
+      setRoom(snapshot);
+      setRecovering(false);
+      syncFailuresRef.current = 0;
+      setError('');
+    };
+    const onDisconnect = () => setRecovering(true);
     socket.on('room:state', onState);
-    return () => { socket.off('room:state', onState); };
+    socket.on('disconnect', onDisconnect);
+    return () => {
+      socket.off('room:state', onState);
+      socket.off('disconnect', onDisconnect);
+    };
   }, []);
 
   useEffect(() => {
     const saved = localStorage.getItem(PLAYER_KEY);
     if (!saved) return;
-    try {
-      const parsed = JSON.parse(saved) as PlayerJoinCredentials;
-      if (roomCode && parsed.roomCode !== roomCode) return;
-      void emitAck<PlayerJoinCredentials>('player:reconnect', parsed).then((result) => {
-        setCredentials(result); setRoomCode(result.roomCode);
-      }).catch(() => localStorage.removeItem(PLAYER_KEY));
-    } catch { localStorage.removeItem(PLAYER_KEY); }
+    let parsed: PlayerJoinCredentials;
+    try { parsed = JSON.parse(saved) as PlayerJoinCredentials; }
+    catch { localStorage.removeItem(PLAYER_KEY); return; }
+    if (roomCode && parsed.roomCode !== roomCode) return;
+
+    setCredentials(parsed);
+    setRoomCode(parsed.roomCode);
+    setRecovering(true);
+    let cancelled = false;
+    let retryTimer = 0;
+
+    const reconnect = async () => {
+      try {
+        const result = await emitAck<PlayerJoinCredentials>('player:reconnect', parsed);
+        if (cancelled) return;
+        localStorage.setItem(PLAYER_KEY, JSON.stringify(result));
+        setCredentials(result);
+        setRoomCode(result.roomCode);
+        setRecovering(false);
+        setError('');
+      } catch {
+        if (cancelled) return;
+        setRecovering(true);
+        setError('Reconnecting to your saved seat…');
+        retryTimer = window.setTimeout(reconnect, 1500);
+      }
+    };
+
+    void reconnect();
+    return () => { cancelled = true; window.clearTimeout(retryTimer); };
   }, [roomCode]);
+
+  useEffect(() => {
+    if (!credentials) return;
+    let syncing = false;
+    const sync = async () => {
+      if (syncing) return;
+      syncing = true;
+      try {
+        await emitAck<PlayerJoinCredentials>('player:reconnect', credentials);
+        syncFailuresRef.current = 0;
+      } catch {
+        syncFailuresRef.current += 1;
+        setRecovering(true);
+        if (syncFailuresRef.current >= 2 && navigator.onLine) {
+          const lastReload = Number(sessionStorage.getItem('blue-stage-player-reload') ?? 0);
+          if (Date.now() - lastReload > 15000) {
+            sessionStorage.setItem('blue-stage-player-reload', String(Date.now()));
+            location.reload();
+          }
+        }
+      } finally { syncing = false; }
+    };
+    const timer = window.setInterval(() => { void sync(); }, 4000);
+    return () => window.clearInterval(timer);
+  }, [credentials]);
 
   const me = useMemo(() => room?.players.find((player) => player.id === credentials?.playerId) ?? null, [room, credentials]);
 
@@ -47,7 +107,10 @@ export function PlayerApp() {
       const result = await emitAck<PlayerJoinCredentials>('player:join', { roomCode, name, avatar, accent });
       localStorage.setItem(PLAYER_KEY, JSON.stringify(result));
       setCredentials(result);
-      history.replaceState(null, '', `/?mode=player&room=${result.roomCode}`);
+      setRecovering(false);
+      const url = new URL(location.href);
+      url.search = `?mode=player&room=${result.roomCode}`;
+      history.replaceState(null, '', url);
     } catch (err) { setError(err instanceof Error ? err.message : 'Could not join room'); }
   };
 
@@ -62,7 +125,10 @@ export function PlayerApp() {
     } catch (err) { setBuzzMessage(err instanceof Error ? err.message : 'Buzz failed'); }
   };
 
-  if (!credentials || !room || !me) {
+  if (!room || !me) {
+    if (credentials && recovering) {
+      return <main className="player-join-screen"><div className="mini-logo big">BLUE STAGE <strong>TRIVIA</strong></div><section className="join-form panel reconnect-card"><div className="pulse-orb"/><h1>Reconnecting…</h1><p>Restoring your seat in room <strong>{credentials.roomCode}</strong>.</p><p className="muted">Your player ID and score are saved on this device.</p><button className="secondary-button" onClick={() => { localStorage.removeItem(PLAYER_KEY); setCredentials(null); setRecovering(false); setRoom(null); setError(''); }}>Forget saved seat</button></section></main>;
+    }
     return <main className="player-join-screen"><div className="mini-logo big">BLUE STAGE <strong>TRIVIA</strong></div><section className="join-form panel">
       <label>Room code<input value={roomCode} maxLength={8} autoCapitalize="characters" onChange={(event)=>setRoomCode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g,''))} placeholder="ABCDE" /></label>
       <label>Your name<input value={name} maxLength={24} onChange={(event)=>setName(event.target.value)} placeholder="Player name" /></label>
@@ -78,15 +144,15 @@ export function PlayerApp() {
   const winner = current?.buzzWinnerId === me.id;
 
   return <main className={`player-phone ${me.onFire?'phone-fire':''} ${me.isCold?'phone-cold':''}`} style={{'--accent':me.accent} as React.CSSProperties}>
-    <header className="phone-header"><span>{me.avatar}</span><div><strong>{me.name}</strong><small>{socket.connected ? 'Connected' : 'Reconnecting…'}</small></div><b>{me.score.toLocaleString()}</b></header>
+    <header className="phone-header"><span>{me.avatar}</span><div><strong>{me.name}</strong><small>{socket.connected && !recovering ? 'Connected' : 'Reconnecting…'}</small></div><b>{me.score.toLocaleString()}</b></header>
     {room.phase === 'lobby' && <section className="phone-state"><div className="pulse-orb"/><h1>You’re in</h1><p>Waiting for the host to start.</p><strong>Room {room.code}</strong></section>}
     {room.phase === 'paused' && <section className="phone-state"><h1>Paused</h1><p>The host paused the game.</p></section>}
-    {room.phase === 'board' && <section className="phone-state"><h1>Choose a question</h1><p>Watch the main board.</p>{me.onFire&&<div className="status-badge fire">ON FIRE · {me.positiveStreak}</div>}{me.isCold&&<div className="status-badge cold">COLD STREAK · {me.coldStreak}</div>}</section>}
-    {room.phase === 'daily-double-wager' && current?.dailyDoublePlayerId === me.id && <section className="phone-state"><div className="eyebrow">DAILY DOUBLE</div><h1>Choose your wager on the host screen</h1></section>}
+    {room.phase === 'board' && <section className="phone-state"><h1>Ready</h1><p>Watch the main board for the next question.</p>{me.onFire&&<div className="status-badge fire">ON FIRE · {me.positiveStreak}</div>}{me.isCold&&<div className="status-badge cold">COLD STREAK · {me.coldStreak}</div>}</section>}
+    {room.phase === 'daily-double-wager' && current?.dailyDoublePlayerId === me.id && <section className="phone-state"><div className="eyebrow">DAILY DOUBLE</div><h1>Your wager</h1><p>Choose it on the host screen.</p></section>}
     {room.phase === 'daily-double-wager' && current?.dailyDoublePlayerId !== me.id && <section className="phone-state"><h1>Daily Double</h1><p>{room.players.find((player)=>player.id===current?.dailyDoublePlayerId)?.name} is wagering.</p></section>}
     {(room.phase === 'question' || room.phase === 'daily-double-question') && current && <section className="buzzer-stage">
       <div className="phone-question"><small>{current.category}</small><h2>{current.text || 'Wager in progress…'}</h2><Timer timer={room.timer}/></div>
-      {current.dailyDouble ? (current.dailyDoublePlayerId === me.id ? <div className="phone-state compact"><h1>Your answer</h1><p>Answer aloud to the host.</p></div> : <div className="phone-state compact"><h1>Locked</h1><p>Daily Double belongs to {room.players.find((player)=>player.id===current.dailyDoublePlayerId)?.name}.</p></div>) : <button type="button" className={`buzzer-button ${buzzerOpen?'open':''} ${winner?'winner':''}`} disabled={!buzzerOpen} onPointerDown={buzz}>{winner ? 'YOU’RE IN!' : buzzerOpen ? 'BUZZ' : current.buzzWinnerId ? 'LOCKED' : 'WAIT'}</button>}
+      {current.dailyDouble ? (current.dailyDoublePlayerId === me.id ? <div className="phone-state compact"><h1>Your answer</h1><p>Say it aloud. The host will mark it correct or incorrect.</p></div> : <div className="phone-state compact"><h1>Locked</h1><p>Daily Double belongs to {room.players.find((player)=>player.id===current.dailyDoublePlayerId)?.name}.</p></div>) : <button type="button" className={`buzzer-button ${buzzerOpen?'open':''} ${winner?'winner':''}`} disabled={!buzzerOpen} onPointerDown={buzz}>{winner ? 'YOU’RE IN!' : buzzerOpen ? 'BUZZ' : current.buzzWinnerId ? 'LOCKED' : 'GET READY'}</button>}
       {buzzMessage && <div className="buzz-message">{buzzMessage}</div>}
       {current.answerRevealed && <div className="phone-answer">Answer: <strong>{current.acceptedAnswers?.[0]}</strong></div>}
     </section>}
