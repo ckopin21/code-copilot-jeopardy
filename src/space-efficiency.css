@@ -96,6 +96,54 @@
   .showcase-host .showcase-player-card.player-card.is-cold::after {
     display: none !important;
   }
+
+  /* Manual score adjustments must never consume a board-sized row. */
+  .showcase-host .score-controls-v2 {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    justify-content: center !important;
+    align-self: center !important;
+    justify-self: center !important;
+    width: auto !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    gap: 5px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .showcase-host .score-controls-v2 > div {
+    display: inline-flex !important;
+    flex: 0 0 auto !important;
+    align-items: center !important;
+    align-self: center !important;
+    width: auto !important;
+    height: 28px !important;
+    min-height: 28px !important;
+    max-height: 28px !important;
+    gap: 4px !important;
+    padding: 2px 5px !important;
+    border-radius: 7px !important;
+    font-size: .58rem !important;
+    line-height: 1 !important;
+  }
+
+  .showcase-host .score-controls-v2 > div > span {
+    white-space: nowrap;
+    line-height: 1 !important;
+  }
+
+  .showcase-host .score-controls-v2 button {
+    min-width: 0 !important;
+    min-height: 0 !important;
+    height: 22px !important;
+    padding: 1px 5px !important;
+    border-radius: 5px !important;
+    font-size: .56rem !important;
+    line-height: 1 !important;
+  }
 }
 
 @media (max-height: 720px) and (min-width: 760px) {
@@ -110,5 +158,15 @@
     width: 30px !important;
     height: 30px !important;
     font-size: 1rem !important;
+  }
+
+  .showcase-host .score-controls-v2 > div {
+    height: 25px !important;
+    min-height: 25px !important;
+    max-height: 25px !important;
+  }
+  .showcase-host .score-controls-v2 button {
+    height: 19px !important;
+    padding-inline: 4px !important;
   }
 }
