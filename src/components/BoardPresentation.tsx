@@ -7,10 +7,21 @@ export function BoardPresentation({ room, onBack, onSelect, onReview, results = 
   return <section className="board-presentation-mode" role="dialog" aria-modal="true" aria-label="Board presentation">
     <header className="board-presentation-header">
       <button className="presentation-back" onClick={onBack}>← Back</button>
-      <div className="presentation-name-strip" aria-label="Player scores">
-        {players.length ? players.map((player) => <div className="presentation-name-card" key={player.id} style={{ '--accent': player.accent } as React.CSSProperties}>
-          <span>{player.avatar}</span><strong>{player.name}</strong><b>{player.score.toLocaleString()}</b>
-        </div>) : <div className="presentation-name-card practice"><strong>PRACTICE MODE</strong></div>}
+      <div className="presentation-name-strip" data-player-count={players.length} aria-label="Player scores">
+        {players.length ? players.map((player) => {
+          const status = player.onFire
+            ? `🔥 ON FIRE · ${player.positiveStreak}`
+            : player.isCold
+              ? `❄ COLD STREAK · ${player.coldStreak}`
+              : player.positiveStreak > 0
+                ? `STREAK ${player.positiveStreak}`
+                : 'READY';
+          return <div className={`presentation-name-card ${player.onFire ? 'is-fire' : ''} ${player.isCold ? 'is-cold' : ''}`} key={player.id} style={{ '--accent': player.accent } as React.CSSProperties}>
+            <span className="presentation-player-avatar">{player.avatar}</span>
+            <div className="presentation-player-main"><strong>{player.name}</strong><small>{status}</small></div>
+            <b>{player.score.toLocaleString()}</b>
+          </div>;
+        }) : <div className="presentation-name-card practice"><strong>PRACTICE MODE</strong></div>}
       </div>
     </header>
     {room.multiplier > 1 && <div className={`presentation-modifier x${room.multiplier}`}>{room.multiplier === 2 ? '2× DOUBLE POINTS' : '3× TRIPLE POINTS'}</div>}
