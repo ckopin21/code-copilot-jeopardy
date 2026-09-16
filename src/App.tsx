@@ -4,6 +4,7 @@ import { PlayerApp } from './components/PlayerApp';
 import { PresentationApp } from './components/PresentationApp';
 import { audio } from './lib/audio';
 import { menuUrl, resetInstance } from './lib/resetInstance';
+import './lib/clientLifecycle';
 import './styles.css';
 import './showcase.css';
 import './stage-polish.css';
