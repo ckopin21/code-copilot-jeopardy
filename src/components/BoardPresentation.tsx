@@ -1,7 +1,7 @@
 import type { RoomSnapshot } from '../shared/types';
-import { Board } from './Board';
+import { Board, type BoardResultMap } from './Board';
 
-export function BoardPresentation({ room, onBack }: { room: RoomSnapshot; onBack: () => void }) {
+export function BoardPresentation({ room, onBack, onSelect, onReview, results = {} }: { room: RoomSnapshot; onBack: () => void; onSelect: (id: string) => void; onReview?: (id: string) => void; results?: BoardResultMap }) {
   if (!room.board) return null;
   const players = room.players.filter((player) => player.connected);
   return <section className="board-presentation-mode" role="dialog" aria-modal="true" aria-label="Board presentation">
@@ -14,6 +14,6 @@ export function BoardPresentation({ room, onBack }: { room: RoomSnapshot; onBack
       </div>
     </header>
     {room.multiplier > 1 && <div className={`presentation-modifier x${room.multiplier}`}>{room.multiplier === 2 ? '2× DOUBLE POINTS' : '3× TRIPLE POINTS'}</div>}
-    <div className="presentation-board-fill"><Board board={room.board} multiplier={room.multiplier} disabled /></div>
+    <div className="presentation-board-fill"><Board board={room.board} multiplier={room.multiplier} onSelect={onSelect} onReview={onReview} results={results} /></div>
   </section>;
 }
