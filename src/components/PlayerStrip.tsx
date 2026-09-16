@@ -10,8 +10,8 @@ export function PlayerStrip({ players, activeId }: { players: Player[]; activeId
           {player.onFire && <div className="streak-ribbon fire"><span>🔥</span><b>ON FIRE</b><em>{player.positiveStreak} straight</em></div>}
           {player.isCold && <div className="streak-ribbon cold"><span>❄</span><b>COLD STREAK</b><em>{player.coldStreak} misses</em></div>}
           <div className="player-avatar-large">{player.avatar}</div>
-          <div className="player-card-main"><div className="player-name"><strong>{player.name}</strong></div><div className="score">{player.score.toLocaleString()}</div></div>
-          {!player.onFire && !player.isCold && <div className="streak neutral">{player.positiveStreak > 0 ? `STREAK ${player.positiveStreak}` : 'READY'}</div>}
+          <div className="player-card-main"><div className="player-name"><strong>{player.name}</strong></div><div className="score">{player.score.toLocaleString()}</div>{player.finalWagerSubmitted && player.finalWager !== null && <div className="player-wager-pill">WAGER {player.finalWager.toLocaleString()}</div>}</div>
+          {!player.onFire && !player.isCold && !player.finalWagerSubmitted && <div className="streak neutral">{player.positiveStreak > 0 ? `STREAK ${player.positiveStreak}` : 'READY'}</div>}
         </section>
       ))}
     </div>
