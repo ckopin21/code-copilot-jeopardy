@@ -201,22 +201,27 @@ function createHostPeerOnce(roomCode: string): Promise<void> {
       reject(error instanceof Error ? error : new Error('Could not start host connection'));
     };
     peer.on('open', () => {
-      if (settled) return;
+      socket.connected = true;
+      emitLocal('connect');
+      if (settled) {
+        if (hostRoomCode === roomCode) emitRoom(roomCode);
+        return;
+      }
       settled = true;
       if (hostPeer && hostPeer !== peer) { try { hostPeer.destroy(); } catch { /* ignore */ } }
       hostPeer = peer;
       hostRoomCode = roomCode;
-      socket.connected = true;
       peer.on('connection', attachHostConnection);
       peer.on('disconnected', () => {
         socket.connected = false;
+        emitLocal('disconnect');
         const reconnect = () => {
           if (!hostPeer || hostPeer.destroyed || !hostPeer.disconnected) return;
           try { hostPeer.reconnect(); } catch { window.setTimeout(reconnect, 1000); }
         };
         window.setTimeout(reconnect, 500);
       });
-      peer.on('close', () => { socket.connected = false; });
+      peer.on('close', () => { socket.connected = false; emitLocal('disconnect'); });
       peer.on('error', () => { if (peer.disconnected && !peer.destroyed) { try { peer.reconnect(); } catch { /* next event retries */ } } });
       resolve();
     });
@@ -278,10 +283,22 @@ function createClientPeer(): Promise<Peer> {
     const peer = new Peer(peerOptions());
     clientPeer = peer;
     let settled = false;
-    peer.on('open', () => { if (!settled) { settled = true; resolve(peer); } });
-    peer.on('disconnected', () => { socket.connected = false; try { peer.reconnect(); } catch { scheduleClientReconnect(); } });
-    peer.on('error', (error) => { if (!settled) { settled = true; reject(error instanceof Error ? error : new Error('Could not connect to signaling')); } else if (clientRoomCode) scheduleClientReconnect(); });
-    peer.on('close', () => { socket.connected = false; if (clientRoomCode) scheduleClientReconnect(); });
+    peer.on('open', () => {
+      if (clientConnection?.open) socket.connected = true;
+      if (!settled) { settled = true; resolve(peer); }
+    });
+    peer.on('disconnected', () => {
+      if (!clientConnection?.open) socket.connected = false;
+      try { peer.reconnect(); } catch { if (!clientConnection?.open) scheduleClientReconnect(); }
+    });
+    peer.on('error', (error) => {
+      if (!settled) { settled = true; reject(error instanceof Error ? error : new Error('Could not connect to signaling')); }
+      else if (clientRoomCode && !clientConnection?.open) scheduleClientReconnect();
+    });
+    peer.on('close', () => {
+      if (!clientConnection?.open) socket.connected = false;
+      if (clientRoomCode && !clientConnection?.open) scheduleClientReconnect();
+    });
     window.setTimeout(() => { if (!settled) { settled = true; reject(new Error('Timed out connecting to signaling')); } }, 8000);
   });
 }
@@ -317,7 +334,14 @@ async function connectToHost(roomCode: string): Promise<DataConnection> {
       emitLocal('connect');
       const finish = async () => {
         if (authReplay) {
-          try { await sendRequestOn(connection, authReplay.event, authReplay.payload, 6000); } catch { /* explicit action can surface auth failure */ }
+          try {
+            await sendRequestOn(connection, authReplay.event, authReplay.payload, 6000);
+          } catch (error) {
+            socket.connected = false;
+            try { connection.close(); } catch { /* retry loop will recover */ }
+            reject(error instanceof Error ? error : new Error('Could not restore session'));
+            return;
+          }
         }
         resolve(connection);
       };
@@ -333,7 +357,7 @@ async function connectToHost(roomCode: string): Promise<DataConnection> {
   });
 }
 function scheduleClientReconnect(): void {
-  if (!clientRoomCode || reconnectTimer !== null) return;
+  if (!clientRoomCode || reconnectTimer !== null || clientConnection?.open) return;
   reconnectTimer = window.setTimeout(() => {
     reconnectTimer = null;
     void connectToHost(clientRoomCode).catch(() => {
