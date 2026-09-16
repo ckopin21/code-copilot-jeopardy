@@ -17,6 +17,7 @@ export interface RandomSource { next(): number }
 class MathRandomSource implements RandomSource { next(): number { return Math.random(); } }
 
 const STORAGE_KEY = 'blue-stage-p2p-engine-v2';
+const STORAGE_BACKUP_KEY = 'blue-stage-p2p-engine-v2-backup';
 const ROOM_TTL_MS = 24 * 60 * 60 * 1000;
 const emptyTimer = () => ({ running: false, durationMs: null, endsAt: null, remainingMs: null });
 const roomCodeAlphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -39,12 +40,16 @@ function defaultStats() {
   return { correct: 0, incorrect: 0, longestStreak: 0, longestColdStreak: 0, dailyDoublesFound: 0, biggestWager: 0, fastestBuzzMs: null, pointsGained: 0, pointsLost: 0 };
 }
 function loadRooms(): RoomRecord[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as RoomRecord[];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch { return []; }
+  const parse = (raw: string | null): RoomRecord[] | null => {
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw) as RoomRecord[];
+      return Array.isArray(parsed) ? parsed : null;
+    } catch {
+      return null;
+    }
+  };
+  return parse(localStorage.getItem(STORAGE_KEY)) ?? parse(localStorage.getItem(STORAGE_BACKUP_KEY)) ?? [];
 }
 function preferredDifficulty(value: number): Question['difficulty'] {
   if (value <= 200) return 'easy';
@@ -91,8 +96,12 @@ export class BrowserGameEngine {
   }
 
   private persist(): void {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify([...this.rooms.values()])); }
-    catch { /* keep the in-memory game running */ }
+    try {
+      const serialized = JSON.stringify([...this.rooms.values()]);
+      const previous = localStorage.getItem(STORAGE_KEY);
+      if (previous && previous !== serialized) localStorage.setItem(STORAGE_BACKUP_KEY, previous);
+      localStorage.setItem(STORAGE_KEY, serialized);
+    } catch { /* keep the in-memory game running */ }
   }
   private touch(room: RoomRecord): void { room.state.expiresAt = Date.now() + this.roomTtlMs; }
   private clearUndo(room: RoomRecord): void { room.undoState = null; }
@@ -306,7 +315,7 @@ export class BrowserGameEngine {
   private generateBoard(settings: GameSettings): { board: RoomState['board']; questions: Record<string, Question> } {
     const config = GAME_LENGTH_CONFIG[settings.gameLength];
     const selectedPacks = settings.selectedPackIds.map((packId) => this.getPack(packId)).filter((pack): pack is QuestionPack => Boolean(pack));
-    const pool = selectedPacks.flatMap((pack) => pack.questions);
+    const pool = selectedPacks.flatMap((pack) => pack.questions.filter((question) => question.id !== pack.finalQuestionId));
     if (!pool.length) throw new Error('No questions available');
     const categoryGroups = new Map<string, Question[]>();
     for (const question of pool) {

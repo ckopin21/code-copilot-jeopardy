@@ -1,5 +1,5 @@
 type MusicState = 'lobby' | 'board' | 'thinking' | 'daily-double' | 'double' | 'triple' | 'final' | 'winner';
-type Cue = 'click' | 'open' | 'buzz' | 'locked' | 'correct' | 'wrong' | 'daily-double' | 'fire' | 'cold' | 'phase' | 'reveal';
+export type Cue = 'click' | 'open' | 'buzz' | 'locked' | 'correct' | 'wrong' | 'daily-double' | 'fire' | 'cold' | 'phase' | 'reveal' | 'category' | 'round' | 'score' | 'winner' | 'diagnostic';
 
 const KEY = 'blue-stage-audio';
 interface AudioSettings { master: number; music: number; effects: number; muted: boolean }
@@ -129,6 +129,7 @@ class AudioEngine {
   }
 
   cue(name: Cue): void {
+    if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('blue-stage:audio-cue', { detail: name }));
     if (!this.context || !this.effects || this.settings.muted) return;
     const patterns: Record<Cue, [number, number, number][]> = {
       click: [[440, 0, .035], [660, .025, .045]],
@@ -141,7 +142,12 @@ class AudioEngine {
       fire: [[440, 0, .07], [659, .05, .08], [880, .11, .16]],
       cold: [[330, 0, .12], [247, .1, .2]],
       phase: [[330, 0, .06], [494, .06, .08], [659, .13, .14]],
-      reveal: [[523, 0, .06], [659, .055, .07], [784, .11, .09], [1047, .19, .18]]
+      reveal: [[523, 0, .06], [659, .055, .07], [784, .11, .09], [1047, .19, .18]],
+      category: [[392, 0, .07], [523, .07, .08], [659, .14, .1], [784, .23, .18]],
+      round: [[196, 0, .12], [392, .09, .12], [523, .2, .14], [784, .32, .24]],
+      score: [[659, 0, .05], [880, .05, .12]],
+      winner: [[523, 0, .08], [659, .07, .08], [784, .14, .1], [1047, .23, .28]],
+      diagnostic: [[523, 0, .06], [784, .08, .12]]
     };
     const start = this.context.currentTime;
     for (const [frequency, offset, duration] of patterns[name]) {

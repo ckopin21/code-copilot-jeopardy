@@ -282,9 +282,9 @@ export function HostAppV3() {
     if (!room || !room.settings.localBuzzersEnabled) return;
     const onKey = (event: KeyboardEvent) => {
       if (event.repeat || !room.currentQuestion?.buzzOpen) return;
-      const activePlayers = room.players.filter((player) => player.connected);
-      const index = Number(event.key) - 1;
-      if (index >= 0 && index < activePlayers.length) void perform('host:local-buzz', { playerId: activePlayers[index].id });
+      const seat = Number(event.key);
+      const player = room.players.find((candidate) => candidate.connected && candidate.seat === seat);
+      if (player) void perform('host:local-buzz', { playerId: player.id });
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -294,14 +294,14 @@ export function HostAppV3() {
     if (!room?.settings.controllerBuzzersEnabled || !room.currentQuestion?.buzzOpen) return;
     let frame = 0;
     const previous = new Map<number, boolean[]>();
-    const activePlayers = room.players.filter((player) => player.connected);
     const poll = () => {
       navigator.getGamepads?.().forEach((pad, index) => {
-        if (!pad || !activePlayers[index]) return;
+        const player = room.players.find((candidate) => candidate.connected && candidate.seat === index + 1);
+        if (!pad || !player) return;
         const prev = previous.get(index) ?? [];
         const pressed = pad.buttons.some((button, buttonIndex) => button.pressed && !prev[buttonIndex]);
         previous.set(index, pad.buttons.map((button) => button.pressed));
-        if (pressed) void perform('host:local-buzz', { playerId: activePlayers[index].id });
+        if (pressed) void perform('host:local-buzz', { playerId: player.id });
       });
       frame = requestAnimationFrame(poll);
     };
@@ -385,7 +385,7 @@ export function HostAppV3() {
   const reviewPlayer = room.phase === 'final-review' && room.finalRound ? room.players[room.finalRound.reviewPlayerIndex] : null;
   const settings = room.settings;
   const updateSettings = (updates: Partial<GameSettings>) => perform('host:update-settings', { updates });
-  const showJoinControl = room.phase === 'lobby' || room.phase === 'board';
+  const showJoinControl = room.phase === 'lobby';
   const textResponses = current?.textResponses ?? {};
   const textResponseCount = connectedPlayers.filter((player) => Boolean(textResponses[player.id])).length;
   const unresolvedTextCount = Object.values(textResponses).filter((response) => response.resolvedCorrect === null).length;
@@ -508,8 +508,7 @@ export function HostAppV3() {
           <div className="player-roster-title"><span>Players</span><b>{connectedPlayers.length}/5 connected</b></div>
           <div className="lobby-players-v2">
             {room.players.length ? room.players.map((player) => {
-              const keyIndex = connectedPlayers.findIndex((candidate) => candidate.id === player.id);
-              return <div className={`roster-row ${player.connected ? '' : 'reserved'}`} key={player.id}><span className="roster-avatar">{player.avatar}</span><div><strong>{player.name}</strong><small>{player.connected ? `Connected · key ${keyIndex + 1}` : 'Disconnected · seat reserved'}</small></div><div className="roster-actions">{player.connected && <button className="seat-pause-button" onClick={() => void perform('host:suspend-player', { playerId: player.id })} title="Temporarily disconnect this controller but keep its seat, score, and reconnect token">Pause seat</button>}<button className="seat-remove-button" onClick={() => permanentlyRemovePlayer(player.id, player.name)} title="Permanently erase this player and reconnect seat">Remove</button></div></div>;
+              return <div className={`roster-row ${player.connected ? '' : 'reserved'}`} key={player.id}><span className="roster-avatar">{player.avatar}</span><div><strong>{player.name}</strong><small>{player.connected ? `Seat ${player.seat} · key ${player.seat}` : `Seat ${player.seat} · disconnected · reserved`}</small></div><div className="roster-actions">{player.connected && <button className="seat-pause-button" onClick={() => void perform('host:suspend-player', { playerId: player.id })} title="Temporarily disconnect this controller but keep its seat, score, and reconnect token">Pause seat</button>}<button className="seat-remove-button" onClick={() => permanentlyRemovePlayer(player.id, player.name)} title="Permanently erase this player and reconnect seat">Remove</button></div></div>;
             }) : <div className="empty-roster">No phone players connected. Practice mode still works.</div>}
             {reservedSeatCount > 0 && <div className="reserved-seat-note">{reservedSeatCount} seat{reservedSeatCount === 1 ? '' : 's'} reserved for reconnect.</div>}
           </div>

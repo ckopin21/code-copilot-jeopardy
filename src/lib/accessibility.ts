@@ -2,13 +2,15 @@ export interface AccessibilityPreferences {
   largeText: boolean;
   highContrast: boolean;
   reduceMotion: boolean;
+  soundCaptions: boolean;
 }
 
 const KEY = 'blue-stage-accessibility-v1';
 export const DEFAULT_ACCESSIBILITY: AccessibilityPreferences = {
   largeText: false,
   highContrast: false,
-  reduceMotion: false
+  reduceMotion: false,
+  soundCaptions: false
 };
 
 export function readAccessibility(): AccessibilityPreferences {
@@ -26,6 +28,7 @@ export function applyAccessibility(preferences: AccessibilityPreferences): void 
   root.dataset.largeText = preferences.largeText ? 'true' : 'false';
   root.dataset.highContrast = preferences.highContrast ? 'true' : 'false';
   root.dataset.reduceMotion = preferences.reduceMotion ? 'true' : 'false';
+  root.dataset.soundCaptions = preferences.soundCaptions ? 'true' : 'false';
 }
 
 export function saveAccessibility(preferences: AccessibilityPreferences): void {

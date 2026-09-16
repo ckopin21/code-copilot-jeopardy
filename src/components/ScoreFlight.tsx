@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { audio } from '../lib/audio';
 
 export type ScoreFlightState = {
   id: string;
@@ -57,6 +58,7 @@ export function ScoreFlight({ flight, onImpact, onComplete }: { flight: ScoreFli
       const impact = () => {
         if (cancelled) return;
         onImpact(flight);
+        audio.cue('score');
         scoreTarget.classList.remove('score-impact-pulse-correct', 'score-impact-pulse-wrong');
         void scoreTarget.offsetWidth;
         scoreTarget.classList.add(flight.correct ? 'score-impact-pulse-correct' : 'score-impact-pulse-wrong');

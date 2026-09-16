@@ -108,6 +108,19 @@ describe('BrowserGameEngine production state', () => {
     expect(() => engine.undoLastScoreAction(host.roomCode, host.hostToken)).toThrow(/no scoring action/i);
   });
 
+
+  it('falls back to the recovery snapshot when the primary room snapshot is corrupt', () => {
+    const { engine, host } = setup();
+    addPlayer(engine, host.roomCode, 'Recovery');
+    engine.startGame(host.roomCode, host.hostToken);
+    const expected = engine.snapshot(host.roomCode);
+    engine.pause(host.roomCode, host.hostToken);
+    localStorage.setItem('blue-stage-p2p-engine-v2', '{broken');
+    const recovered = new BrowserGameEngine(new FixedRandom(), 60_000).snapshot(host.roomCode);
+    expect(recovered.code).toBe(expected.code);
+    expect(recovered.board?.questions.length).toBe(expected.board?.questions.length);
+  });
+
   it('restores an active timer instead of erasing it on host reload', () => {
     const { engine, host } = setup({ dailyDoublesEnabled: false, timerSeconds: 30 });
     addPlayer(engine, host.roomCode);
