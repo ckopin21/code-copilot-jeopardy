@@ -239,16 +239,17 @@ export function HostAppV3() {
       lastMultiplierRef.current = room.multiplier;
       return;
     }
-    if (room.multiplier > previous && room.multiplier > 1) {
+    const nextMultiplier = room.multiplier;
+    if ((nextMultiplier === 2 || nextMultiplier === 3) && nextMultiplier > previous) {
       if (modifierTimerRef.current !== null) window.clearTimeout(modifierTimerRef.current);
-      setModifierReveal(room.multiplier);
+      setModifierReveal(nextMultiplier);
       audio.cue('phase');
       modifierTimerRef.current = window.setTimeout(() => {
         setModifierReveal(null);
         modifierTimerRef.current = null;
       }, 1900);
     }
-    lastMultiplierRef.current = room.multiplier;
+    lastMultiplierRef.current = nextMultiplier;
   }, [room?.multiplier, room?.phase]);
 
   useEffect(() => () => {
