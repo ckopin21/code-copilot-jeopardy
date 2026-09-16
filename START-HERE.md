@@ -1,15 +1,24 @@
-# Start the game locally
+# Start here
 
-## Windows
+## Fastest way to play
+
+Open the deployed game:
+
+```text
+https://ckopin21.github.io/code-copilot-jeopardy/
+```
+
+Choose **Start New Game** on the host computer. Players join from phones using the QR code or room code. The live Pages version uses direct browser-to-browser PeerJS/WebRTC connections, so the host page must remain open.
+
+## Run locally on Windows
 
 1. Click **Code** → **Download ZIP**.
 2. Extract the ZIP.
 3. Double-click **START-WINDOWS.bat**.
-4. The game will install/build itself, start the local server, and open `http://localhost:3000`.
+4. The launcher installs/builds the app, starts the local Node runtime, and opens `http://localhost:3000`.
+5. Keep the server window open while using this local mode.
 
-Keep the server window open while playing.
-
-## Mac
+## Run locally on Mac
 
 1. Click **Code** → **Download ZIP**.
 2. Extract the ZIP.
@@ -17,8 +26,10 @@ Keep the server window open while playing.
 4. Run `chmod +x START-MAC.command` once.
 5. Double-click **START-MAC.command** afterward.
 
-## Phones
+## Local phones
 
-Once the host is running, use the room QR code or LAN join link shown by the game. Phones must be on the same Wi-Fi/LAN as the host computer.
+For the local Node runtime, use the room QR code/LAN link shown by the host and keep phones on a network that can reach the host computer. Firewall/client-isolation settings can block local access.
 
-Node.js 22+ is required. If Node.js is missing, the launcher will tell you to install it from https://nodejs.org/.
+Node.js 22+ is required for local development/server use. It is not required just to use the deployed GitHub Pages game.
+
+For architecture, networking, question packs, and development details, see [`docs/README.md`](docs/README.md).
