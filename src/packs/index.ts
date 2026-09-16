@@ -1,12 +1,51 @@
-import type { PackSummary, QuestionPack } from '../shared/types';
+import type { PackSummary, Question, QuestionPack } from '../shared/types';
 import { normalizeQuestionIdentity } from './buildPack';
 import { generatedBuiltInPacks } from './generatedRegistry';
 
-function validatePackCatalog(packs: QuestionPack[]): QuestionPack[] {
+const DUPLICATE_STOPWORDS = new Set([
+  'a', 'an', 'and', 'are', 'as', 'at', 'by', 'did', 'do', 'does', 'for', 'from', 'how', 'in', 'is', 'it',
+  'of', 'on', 'or', 'that', 'the', 'this', 'to', 'was', 'were', 'what', 'when', 'where', 'which', 'who', 'whom',
+  'whose', 'with'
+]);
+
+function contentTokens(text: string): Set<string> {
+  return new Set(
+    normalizeQuestionIdentity(text)
+      .split(' ')
+      .filter((token) => token.length > 1 && !DUPLICATE_STOPWORDS.has(token))
+  );
+}
+
+function answerKeys(question: Question): Set<string> {
+  return new Set(
+    [...question.acceptedAnswers, ...(question.alternateAnswers ?? [])]
+      .map(normalizeQuestionIdentity)
+      .filter(Boolean)
+  );
+}
+
+/** Conservative semantic duplicate guard for reworded clues that target the same answer and fact. */
+export function likelyRepeatedFact(left: Question, right: Question): boolean {
+  if (left.packId === right.packId) return false;
+  if (left.questionType !== right.questionType && left.questionType !== 'general' && right.questionType !== 'general') return false;
+
+  const leftAnswers = answerKeys(left);
+  if (![...answerKeys(right)].some((answer) => leftAnswers.has(answer))) return false;
+
+  const leftTokens = contentTokens(left.text);
+  const rightTokens = contentTokens(right.text);
+  if (!leftTokens.size || !rightTokens.size) return false;
+  const shared = [...leftTokens].filter((token) => rightTokens.has(token)).length;
+  if (shared < 2) return false;
+  return shared / Math.min(leftTokens.size, rightTokens.size) >= 0.6;
+}
+
+export function validatePackCatalog(packs: QuestionPack[]): QuestionPack[] {
   const packIds = new Set<string>();
   const questionIds = new Set<string>();
   const factOwners = new Map<string, string>();
   const promptOwners = new Map<string, string>();
+  const catalogQuestions: Question[] = [];
 
   for (const pack of packs) {
     if (packIds.has(pack.id)) throw new Error(`Duplicate question pack id: ${pack.id}`);
@@ -31,6 +70,16 @@ function validatePackCatalog(packs: QuestionPack[]): QuestionPack[] {
       const factOwner = factOwners.get(question.factKey);
       if (factOwner) throw new Error(`Repeated fact across packs: ${factOwner} and ${question.id}. Reworded versions of a fact must share a factKey.`);
       factOwners.set(question.factKey, question.id);
+      catalogQuestions.push(question);
+    }
+  }
+
+  for (let leftIndex = 0; leftIndex < catalogQuestions.length; leftIndex += 1) {
+    const left = catalogQuestions[leftIndex];
+    for (let rightIndex = leftIndex + 1; rightIndex < catalogQuestions.length; rightIndex += 1) {
+      const right = catalogQuestions[rightIndex];
+      if (!likelyRepeatedFact(left, right)) continue;
+      throw new Error(`Likely repeated fact across packs: ${left.id} and ${right.id}. Give rewordings the same factKey or replace one clue.`);
     }
   }
 
