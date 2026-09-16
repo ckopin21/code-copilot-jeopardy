@@ -37,7 +37,7 @@
     "eslint-plugin-react-refresh": "latest",
     "globals": "latest",
     "tsx": "latest",
-    "typescript": "latest",
+    "typescript": "5.9.2",
     "typescript-eslint": "latest",
     "vite": "latest",
     "vitest": "latest"
