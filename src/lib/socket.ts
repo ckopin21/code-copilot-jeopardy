@@ -25,6 +25,7 @@ let hostRoomCode = '';
 let clientPeer: Peer | null = null;
 let clientConnection: DataConnection | null = null;
 let clientRoomCode = '';
+let clientSuspended = false;
 let reconnectDelayMs = 400;
 let reconnectTimer: number | null = null;
 let authReplay: { event: 'player:reconnect' | 'presentation:join'; payload: Record<string, unknown> } | null = null;
@@ -116,6 +117,14 @@ function handleConnectionClosed(connection: DataConnection): void {
   playerConnections.delete(identity.playerId);
   try { engine.setPlayerConnected(identity.roomCode, identity.playerId, false); emitRoom(identity.roomCode); } catch { /* stale room */ }
 }
+function closePlayerConnection(playerId: string, event?: 'player:suspended' | 'player:removed'): void {
+  const connection = playerConnections.get(playerId);
+  if (!connection) return;
+  if (event) sendEvent(connection, event, { playerId });
+  playerConnections.delete(playerId);
+  identities.delete(connection);
+  window.setTimeout(() => { try { connection.close(); } catch { /* ignore */ } }, event ? 60 : 0);
+}
 
 async function dispatchHost(event: string, payload: Record<string, unknown>, connection?: DataConnection): Promise<unknown> {
   const roomCode = String(payload.roomCode ?? '').toUpperCase();
@@ -179,15 +188,16 @@ async function dispatchHost(event: string, payload: Record<string, unknown>, con
     case 'host:reveal-answer': return engine.revealAnswer(roomCode, hostToken);
     case 'host:advance-board': return engine.advanceToBoard(roomCode, hostToken);
     case 'host:adjust-score': return engine.adjustScore(roomCode, hostToken, String(payload.playerId ?? ''), Number(payload.delta));
+    case 'host:suspend-player': {
+      const playerId = String(payload.playerId ?? '');
+      engine.setPlayerConnected(roomCode, playerId, false);
+      closePlayerConnection(playerId, 'player:suspended');
+      return null;
+    }
     case 'host:remove-player': {
       const playerId = String(payload.playerId ?? '');
+      closePlayerConnection(playerId, 'player:removed');
       engine.removePlayer(roomCode, hostToken, playerId);
-      const playerConnection = playerConnections.get(playerId);
-      if (playerConnection) {
-        playerConnections.delete(playerId);
-        identities.delete(playerConnection);
-        try { playerConnection.close(); } catch { /* ignore */ }
-      }
       return null;
     }
     case 'host:pause': return engine.pause(roomCode, hostToken);
@@ -318,7 +328,12 @@ function attachClientConnection(connection: DataConnection): void {
       return;
     }
     if (message?.kind === 'event') {
-      socket.connected = true;
+      if (message.event === 'player:suspended') clientSuspended = true;
+      if (message.event === 'player:removed') {
+        clientSuspended = true;
+        authReplay = null;
+      }
+      socket.connected = message.event !== 'player:suspended' && message.event !== 'player:removed';
       emitLocal(message.event, message.data);
     }
   });
@@ -386,6 +401,7 @@ function sendRequestOn(connection: DataConnection, event: string, payload: Recor
   });
 }
 async function connectToHost(roomCode: string): Promise<DataConnection> {
+  if (clientSuspended) throw new Error('Connection is paused');
   const targetRoom = roomCode.toUpperCase();
   if (clientConnection?.open && clientRoomCode === targetRoom) return clientConnection;
   if (clientConnection?.open && clientRoomCode && clientRoomCode !== targetRoom) {
@@ -430,7 +446,7 @@ async function connectToHost(roomCode: string): Promise<DataConnection> {
   });
 }
 function scheduleClientReconnect(): void {
-  if (!clientRoomCode || reconnectTimer !== null || clientConnection?.open) return;
+  if (clientSuspended || !clientRoomCode || reconnectTimer !== null || clientConnection?.open) return;
   reconnectTimer = window.setTimeout(() => {
     reconnectTimer = null;
     void connectToHost(clientRoomCode).catch(() => {
@@ -451,6 +467,27 @@ async function clientRequest(event: string, payload: Record<string, unknown>): P
     authReplay = { event: 'presentation:join', payload: { roomCode } };
   }
   return result;
+}
+export function suspendClientSession(): void {
+  clientSuspended = true;
+  if (reconnectTimer !== null) {
+    window.clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+  const connection = clientConnection;
+  clientConnection = null;
+  socket.connected = false;
+  emitLocal('disconnect');
+  for (const [requestId, request] of pending) {
+    pending.delete(requestId);
+    window.clearTimeout(request.timeoutId);
+    request.reject(new Error('Connection closed'));
+  }
+  try { connection?.close(); } catch { /* already closed */ }
+}
+export function resumeClientSession(): void {
+  clientSuspended = false;
+  reconnectDelayMs = 400;
 }
 async function createHostRoom(payload: Record<string, unknown>): Promise<unknown> {
   for (let attempt = 0; attempt < 5; attempt += 1) {
