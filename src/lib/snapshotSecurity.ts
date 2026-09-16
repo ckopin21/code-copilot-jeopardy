@@ -21,7 +21,8 @@ export function sanitizeRoomSnapshot(snapshot: RoomSnapshot, role: SnapshotRole,
 
   copy.players = copy.players.map((player) => {
     if (role === 'host') {
-      return copy.phase === 'final-review' || revealAllFinal ? player : { ...player, finalAnswer: null };
+      const answerVisible = revealAllFinal || (copy.phase === 'final-review' && (player.finalResolved || player.id === finalReviewPlayerId));
+      return answerVisible ? player : { ...player, finalAnswer: null };
     }
 
     const own = role === 'player' && player.id === playerId;
