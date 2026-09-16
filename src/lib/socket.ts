@@ -5,7 +5,7 @@ import { playerJoinSchema } from '../shared/validation';
 import { packSummaries } from '../packs';
 import { BrowserGameEngine } from './browserGameEngine';
 
-type Listener = (...args: unknown[]) => void;
+type Listener = (data: any) => void;
 type Identity = { roomCode: string; role: 'host' | 'player' | 'presentation'; playerId?: string };
 type RequestMessage = { kind: 'request'; requestId: string; event: string; payload: Record<string, unknown> };
 type ResponseMessage = { kind: 'response'; requestId: string; ok: boolean; data?: unknown; error?: string };
@@ -139,7 +139,7 @@ function attachClientConnection(connection: DataConnection): void {
 function createClientPeer(): Promise<Peer> {
   if (clientPeer && !clientPeer.destroyed) { if (clientPeer.open || clientPeer.disconnected) return Promise.resolve(clientPeer); }
   return new Promise((resolve, reject) => {
-    const peer = new Peer(undefined, peerOptions()); clientPeer = peer; let settled = false;
+    const peer = new Peer(peerOptions()); clientPeer = peer; let settled = false;
     peer.on('open', () => { if (!settled) { settled = true; resolve(peer); } });
     peer.on('disconnected', () => { socket.connected = false; try { peer.reconnect(); } catch { scheduleClientReconnect(); } });
     peer.on('error', (error) => { if (!settled) { settled = true; reject(error instanceof Error ? error : new Error('Could not connect to signaling')); } else if (clientRoomCode) scheduleClientReconnect(); });
