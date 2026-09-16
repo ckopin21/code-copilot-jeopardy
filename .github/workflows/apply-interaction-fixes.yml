@@ -1,0 +1,160 @@
+name: Apply interaction fixes
+
+on:
+  push:
+    paths:
+      - '.github/workflows/apply-interaction-fixes.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply focused fixes
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected exactly one match, found {count}: {old[:100]!r}')
+              p.write_text(text.replace(old, new, 1))
+
+          host = 'src/components/HostAppV3.tsx'
+          replace_once(host,
+          """  const revealAnswer = async () => {
+              if (!current || revealRunningRef.current) return;
+              const lastBoardClue = room.remainingQuestions === 0;
+              if (lastBoardClue) await runRevealTension();
+              const ok = await perform('host:reveal-answer');
+              if (!ok) {
+                cancelRevealTension();
+                return;
+              }
+              if (lastBoardClue) finishRevealTension();
+              else audio.cue('reveal');
+            };""",
+          """  const revealAnswer = async () => {
+              if (!current || revealRunningRef.current) return;
+              const ok = await perform('host:reveal-answer');
+              if (!ok) return;
+              audio.cue('reveal');
+            };""")
+
+          replace_once(host,
+          """  const spectacleFinal = room.phase.startsWith('final');
+            const spectacleText = revealBeat === 1 ? 'LOCK IT IN' : revealBeat === 2 ? 'NO MORE CHANGES' : revealBeat === 3 ? 'THE ANSWER IS…' : 'REVEALED';""",
+          """  const spectacleText = revealBeat === 1 ? 'LOCK IT IN' : revealBeat === 2 ? 'NO MORE CHANGES' : revealBeat === 3 ? 'THE ANSWER IS…' : 'REVEALED';""")
+
+          replace_once(host,
+          """{modifierReveal === 2 ? 'Every clue is now worth 2×.' : 'Every remaining clue is now worth 3×.'}""",
+          """{modifierReveal === 2 ? 'Every question is now worth 2×.' : 'Every remaining question is now worth 3×.'}""")
+
+          replace_once(host,
+          """<small>{spectacleFinal ? 'FINAL ROUND' : 'FINAL BOARD QUESTION'}</small>""",
+          """<small>FINAL ROUND</small>""")
+
+          replace_once(host,
+          """data-tooltip=\"Quick uses 16 clues, Standard 25, and Marathon 36 including the $1000 row.\"""",
+          """data-tooltip=\"Quick uses 16 questions, Standard 25, and Marathon 36 including the $1000 row.\"""")
+
+          replace_once(host,
+          """data-tooltip=\"The last six board clues are worth 2× and the last three are worth 3×.\"""",
+          """data-tooltip=\"The last six board questions are worth 2× and the last three are worth 3×.\"""")
+
+          replace_once(host,
+          """{showJoin && <div className=\"modal-backdrop\" role=\"dialog\" aria-modal=\"true\" aria-label=\"Join game\"><section className=\"modal-card join-modal-v2 expanded-qr-modal\">""",
+          """{showJoin && <div className=\"modal-backdrop\" role=\"dialog\" aria-modal=\"true\" aria-label=\"Join game\" onClick={() => setShowJoin(false)}><section className=\"modal-card join-modal-v2 expanded-qr-modal\" onClick={(event) => event.stopPropagation()}>""")
+
+          replace_once(host,
+          """      {room.phase === 'board' && scoreFlights[0] && <ScoreFlight flight={scoreFlights[0]} onImpact={handleScoreImpact} onComplete={handleScoreComplete} />}""",
+          """      {scoreFlights[0] && <ScoreFlight flight={scoreFlights[0]} onImpact={handleScoreImpact} onComplete={handleScoreComplete} />}""")
+
+          player = 'src/components/PlayerApp.tsx'
+          replace_once(player,
+          """  const [showScanner, setShowScanner] = useState(false);
+            const [modifierReveal, setModifierReveal] = useState<2 | 3 | null>(null);""",
+          """  const [showScanner, setShowScanner] = useState(false);
+            const [joining, setJoining] = useState(false);
+            const [modifierReveal, setModifierReveal] = useState<2 | 3 | null>(null);""")
+
+          replace_once(player,
+          """  const join = async () => {
+              setError('');
+              try {
+                resumeClientSession();
+                await audio.unlock();
+                const result = await emitAck<PlayerJoinCredentials>('player:join', { roomCode, name, avatar, accent });
+                localStorage.setItem(PLAYER_KEY, JSON.stringify(result));
+                setCredentials(result);
+                setRecovering(false);
+                setHostSuspended(false);
+                const url = new URL(location.href);
+                url.search = `?mode=player&room=${result.roomCode}`;
+                history.replaceState(null, '', url);
+              } catch (err) {
+                setError(err instanceof Error ? err.message : 'Could not join room');
+              }
+            };""",
+          """  const join = async () => {
+              if (joining) return;
+              setJoining(true);
+              setError('');
+              try {
+                resumeClientSession();
+                await audio.unlock();
+                const result = await emitAck<PlayerJoinCredentials>('player:join', { roomCode, name, avatar, accent });
+                localStorage.setItem(PLAYER_KEY, JSON.stringify(result));
+                setCredentials(result);
+                setRecovering(false);
+                setHostSuspended(false);
+                const url = new URL(location.href);
+                url.search = `?mode=player&room=${result.roomCode}`;
+                history.replaceState(null, '', url);
+              } catch (err) {
+                setError(err instanceof Error ? err.message : 'Could not join room');
+              } finally {
+                setJoining(false);
+              }
+            };""")
+
+          replace_once(player,
+          """{modifierReveal === 2 ? 'Every clue is now worth 2×.' : 'Every remaining clue is now worth 3×.'}""",
+          """{modifierReveal === 2 ? 'Every question is now worth 2×.' : 'Every remaining question is now worth 3×.'}""")
+
+          replace_once(player,
+          """<button className=\"primary-button giant\" disabled={!roomCode || !name.trim() || Boolean(credentials)} onClick={join}>Join Game</button>""",
+          """<button className=\"primary-button giant\" disabled={!roomCode || !name.trim() || Boolean(credentials) || joining} aria-busy={joining} onClick={join}>{joining ? 'Joining…' : 'Join Game'}</button>""")
+
+          css = Path('src/bugfix-polish.css')
+          text = css.read_text()
+          marker = '/* Keep floating streak pills clear of Daily Double question content. */'
+          if marker not in text:
+              text += """
+
+          /* Keep floating streak pills clear of Daily Double question content. */
+          .player-phone-v2:is(.phone-fire,.phone-cold):has(.phone-public-wager) .phone-question-stage-v2 {
+            padding-top: 64px !important;
+          }
+
+          .player-phone-v2:is(.phone-fire,.phone-cold) > .final-phone-v2 {
+            padding-top: 68px !important;
+          }
+          """
+              css.write_text(text)
+          PY
+      - name: Commit fixes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/components/HostAppV3.tsx src/components/PlayerApp.tsx src/bugfix-polish.css
+          git diff --cached --check
+          git commit -m "fix: polish final reveal and phone interactions"
+          git push
