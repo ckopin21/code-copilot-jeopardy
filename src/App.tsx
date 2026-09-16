@@ -126,7 +126,7 @@ function Menu({ onNavigate }: { onNavigate: (mode: AppMode, fresh?: boolean) => 
   const [now, setNow] = useState(() => Date.now());
   const savedHost = useMemo(() => readSavedHost(), []);
   const preview = useMemo(() => savedHost ? readHostPreview(savedHost.roomCode) : null, [savedHost]);
-  const hasSavedHost = Boolean(savedHost);
+  const hasSavedHost = Boolean(savedHost && preview);
   const fullscreenSupported = Boolean(document.fullscreenEnabled || (document.documentElement as WebkitElement).webkitRequestFullscreen);
 
   useEffect(() => {
@@ -167,7 +167,7 @@ function Menu({ onNavigate }: { onNavigate: (mode: AppMode, fresh?: boolean) => 
   };
 
   const startNewGame = () => {
-    if (savedHost && !confirm(`Start a new game? Saved room ${savedHost.roomCode} will be replaced by the new host room.`)) return;
+    if (hasSavedHost && savedHost && !confirm(`Start a new game? Saved room ${savedHost.roomCode} will be replaced by the new host room.`)) return;
     void onNavigate('host', true);
   };
 
@@ -188,7 +188,7 @@ function Menu({ onNavigate }: { onNavigate: (mode: AppMode, fresh?: boolean) => 
       <div className="brand-mark hero-brand menu-logo-v2"><span>BLUE STAGE</span><strong>TRIVIA</strong></div>
       <p className="menu-subtitle menu-subtitle-v2">A shared-screen game show with phone buzzers, wagers, streaks, and a dramatic finish.</p>
 
-      {savedHost && <article className="saved-game-preview" aria-label="Saved game">
+      {hasSavedHost && savedHost && <article className="saved-game-preview" aria-label="Saved game">
         <div className="saved-game-icon" aria-hidden="true">▶</div>
         <div className="saved-game-main"><small>SAVED GAME</small><strong>Room {savedHost.roomCode}</strong><span>{savedPhase}</span></div>
         <div className="saved-game-meta"><b>{savedPlayers}</b>{preview && preview.phase !== 'lobby' && preview.phase !== 'recap' && <span>{preview.remainingQuestions} questions left</span>}<small>Last played {savedActivity}</small></div>
