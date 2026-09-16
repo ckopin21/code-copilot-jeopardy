@@ -20,12 +20,12 @@ export const DEFAULT_SETTINGS: GameSettings = {
   lockRoomOnStart: false,
   allowRepeatBuzzAfterMiss: false,
   allowWagerBeyondScore: true,
-  maxWager: 1000,
+  maxWager: 100000,
   localBuzzersEnabled: true,
   controllerBuzzersEnabled: true
 };
 
-// Normal boards use the first five values ($100-$500). $1000 remains available for wagers.
+// Normal boards use the first five values ($100-$500). $1000 remains a preset wager; Final also supports a player's positive-score All In value.
 export const GAME_LENGTH_CONFIG = {
   quick: { categories: 4, rows: 5 },
   standard: { categories: 5, rows: 5 },
