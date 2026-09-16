@@ -591,7 +591,7 @@ export function HostAppV3() {
         <div className="board-header-v2">
           <div><div className="section-kicker">ROUND IN PROGRESS</div><strong>{room.remainingQuestions} questions left</strong></div>
           <div className="board-actions">
-            {connectedPlayers.length > 0 && <label>Turn<select value={controllerId} onChange={(event) => { const playerId = event.target.value; setControllerId(playerId); void perform('host:set-turn-player', { playerId }); }}>{connectedPlayers.map((player) => <option key={player.id} value={player.id}>{player.avatar} {player.name}</option>)}</select></label>}
+            {connectedPlayers.length > 0 && <label className="turn-selector">Turn<select value={controllerId} onChange={(event) => { const playerId = event.target.value; setControllerId(playerId); void perform('host:set-turn-player', { playerId }); }}>{connectedPlayers.map((player) => <option key={player.id} value={player.id}>{player.avatar} {player.name}</option>)}</select></label>}
             <button className="nav-button" onClick={() => void perform('host:pause')}>Pause</button>
             <button className="nav-button" onClick={() => setPresentationMode(true)}>Presentation</button>
           </div>

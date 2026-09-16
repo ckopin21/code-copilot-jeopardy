@@ -768,7 +768,8 @@ export class BrowserGameEngine {
       current.buzzOpen = false;
     } else {
       current.buzzWinnerId = null;
-      room.state.players.forEach((candidate) => { candidate.buzzEligible = candidate.connected && (room.state.settings.allowRepeatBuzzAfterMiss || !current.attemptedPlayerIds.includes(candidate.id)); });
+      const participants = new Set(current.participantIds ?? room.state.players.map((candidate) => candidate.id));
+      room.state.players.forEach((candidate) => { candidate.buzzEligible = candidate.connected && participants.has(candidate.id) && (room.state.settings.allowRepeatBuzzAfterMiss || !current.attemptedPlayerIds.includes(candidate.id)); });
       const someoneEligible = room.state.players.some((candidate) => candidate.buzzEligible);
       current.buzzOpen = someoneEligible;
       current.buzzOpenedAt = someoneEligible ? Date.now() : null;

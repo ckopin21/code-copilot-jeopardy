@@ -468,6 +468,36 @@ describe('BrowserGameEngine production state', () => {
     expect(engine.buzz(host.roomCode, one.playerId, one.reconnectToken).accepted).toBe(true);
   });
 
+  it('lets the host explicitly move turn ownership on the board', () => {
+    const { engine, host } = setup({ dailyDoublesEnabled: false, finalRoundEnabled: false, turnOrderMode: 'manual' });
+    addPlayer(engine, host.roomCode, 'One');
+    const two = addPlayer(engine, host.roomCode, 'Two');
+    engine.startGame(host.roomCode, host.hostToken);
+    engine.setTurnPlayer(host.roomCode, host.hostToken, two.playerId);
+    expect(engine.snapshot(host.roomCode).turnPlayerId).toBe(two.playerId);
+    const tile = firstUnused(engine, host.roomCode);
+    engine.selectQuestion(host.roomCode, host.hostToken, tile.questionId);
+    expect(engine.snapshot(host.roomCode).currentQuestion?.turnPlayerId).toBe(two.playerId);
+  });
+
+  it('does not let a late joiner enter a reopened steal window', () => {
+    const { engine, host } = setup({ dailyDoublesEnabled: false, finalRoundEnabled: false, timerSeconds: null, stealsEnabled: true });
+    const one = addPlayer(engine, host.roomCode, 'One');
+    const two = addPlayer(engine, host.roomCode, 'Two');
+    engine.startGame(host.roomCode, host.hostToken);
+    const tile = firstUnused(engine, host.roomCode);
+    engine.selectQuestion(host.roomCode, host.hostToken, tile.questionId);
+    const late = addPlayer(engine, host.roomCode, 'Late');
+    engine.openBuzzers(host.roomCode, host.hostToken);
+    expect(engine.buzz(host.roomCode, one.playerId, one.reconnectToken).accepted).toBe(true);
+    engine.resolveAnswer(host.roomCode, host.hostToken, one.playerId, false);
+    const state = engine.snapshot(host.roomCode);
+    expect(state.currentQuestion?.buzzOpen).toBe(true);
+    expect(state.players.find((player) => player.id === two.playerId)?.buzzEligible).toBe(true);
+    expect(state.players.find((player) => player.id === late.playerId)?.buzzEligible).toBe(false);
+    expect(engine.buzz(host.roomCode, late.playerId, late.reconnectToken).accepted).toBe(false);
+  });
+
   it('keeps exact late-game multiplier windows', () => {
     const { engine } = setup();
     expect(engine.multiplierForRemaining(7)).toBe(1);
