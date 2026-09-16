@@ -135,7 +135,8 @@ export function HostAppV3() {
   useEffect(() => {
     if (!room) return;
     const connected = room.players.filter((player) => player.connected);
-    if (!connected.some((player) => player.id === controllerId)) setControllerId(connected[0]?.id ?? '');
+    const preferred = room.turnPlayerId && connected.some((player) => player.id === room.turnPlayerId) ? room.turnPlayerId : connected[0]?.id ?? '';
+    if (preferred !== controllerId) setControllerId(preferred);
   }, [room, controllerId]);
 
   const musicState = phaseMusic(room);
@@ -267,11 +268,7 @@ export function HostAppV3() {
       lastMultiplierRef.current = room.multiplier;
       return;
     }
-    if (room.phase !== 'board') {
-      setModifierReveal(null);
-      lastMultiplierRef.current = room.multiplier;
-      return;
-    }
+    if (room.phase !== 'board') return;
     const nextMultiplier = room.multiplier;
     if ((nextMultiplier === 2 || nextMultiplier === 3) && nextMultiplier > previous) {
       if (modifierTimerRef.current !== null) window.clearTimeout(modifierTimerRef.current);
@@ -447,7 +444,6 @@ export function HostAppV3() {
     }
     if (flight) setScoreFlights((previous) => [...previous, flight]);
     recordAttempt(spokenPlayer.id, correct);
-    setControllerId(spokenPlayer.id);
     audio.cue(correct ? 'correct' : 'wrong');
     await perform('host:advance-board');
   };
@@ -545,6 +541,7 @@ export function HostAppV3() {
           <div className="settings-grid-v2">
             <label data-tooltip="Quick uses 16 questions, Standard 25, and Marathon 36 including the $1000 row.">Game length<select value={settings.gameLength} onChange={(event) => void updateSettings({ gameLength: event.target.value as GameSettings['gameLength'] })}><option value="quick">Quick · 16 questions</option><option value="standard">Standard · 25 questions</option><option value="marathon">Marathon · 36 questions</option></select></label>
             <label data-tooltip="How long players have once answering or buzzing is active. Unlimited disables the countdown.">Answer timer<select value={settings.timerSeconds ?? 'none'} onChange={(event) => void updateSettings({ timerSeconds: event.target.value === 'none' ? null : Number(event.target.value) as GameSettings['timerSeconds'] })}>{[5,10,15,20,30].map((seconds)=><option key={seconds} value={seconds}>{seconds}s</option>)}<option value="none">Unlimited</option></select></label>
+            <label data-tooltip="By default, question selection rotates through players in join order. Manual keeps the selected picker until you change it.">Turn rotation<select value={settings.turnOrderMode} onChange={(event) => void updateSettings({ turnOrderMode: event.target.value as GameSettings['turnOrderMode'] })}><option value="join-order">Join order · rotate</option><option value="manual">Manual · host selects</option></select></label>
             <label data-tooltip="How many hidden Daily Doubles are placed on the board.">Daily Doubles<input type="number" min="0" max="6" value={settings.dailyDoubleCount} onChange={(event) => void updateSettings({ dailyDoubleCount: Number(event.target.value), dailyDoublesEnabled: Number(event.target.value) > 0 })} /></label>
             <label data-tooltip="Misses in a row before the Cold Streak effect appears.">Cold streak<input type="number" min="2" max="8" value={settings.coldStreakThreshold} onChange={(event) => void updateSettings({ coldStreakThreshold: Number(event.target.value) })} /></label>
           </div>
@@ -565,6 +562,7 @@ export function HostAppV3() {
         <div className="board-header-v2">
           <div><div className="section-kicker">ROUND IN PROGRESS</div><strong>{room.remainingQuestions} questions left</strong></div>
           <div className="board-actions">
+            {connectedPlayers.length > 0 && <label>Turn<select value={controllerId} onChange={(event) => setControllerId(event.target.value)}>{connectedPlayers.map((player) => <option key={player.id} value={player.id}>{player.avatar} {player.name}</option>)}</select></label>}
             <button className="nav-button" onClick={() => void perform('host:pause')}>Pause</button>
             <button className="nav-button" onClick={() => setPresentationMode(true)}>Presentation</button>
           </div>
@@ -607,12 +605,12 @@ export function HostAppV3() {
             })}
           </div>}
 
-          {current.responseMode !== 'text' && current.answerRevealed && spokenPlayer && !judgedAttempt && <div className="judge-after-reveal"><small>NOW JUDGE THE RESPONSE</small><strong>{spokenPlayer.avatar} {spokenPlayer.name}</strong><div><button className="correct-button judge-big" onClick={() => void resolveSpoken(true)}>Correct</button><button className="wrong-button judge-big" onClick={() => void resolveSpoken(false)}>Incorrect</button></div></div>}
+          {current.responseMode !== 'text' && current.answerRevealed && spokenPlayer && !current.timedOut && !judgedAttempt && <div className="judge-after-reveal"><small>NOW JUDGE THE RESPONSE</small><strong>{spokenPlayer.avatar} {spokenPlayer.name}</strong><div><button className="correct-button judge-big" onClick={() => void resolveSpoken(true)}>Correct</button><button className="wrong-button judge-big" onClick={() => void resolveSpoken(false)}>Incorrect</button></div></div>}
 
           <div className="control-row-v2">
             {current.responseMode !== 'text' && !current.dailyDouble && !current.buzzWinnerId && !current.answerRevealed && <button className="primary-button" onClick={() => { audio.cue('open'); void perform(current.buzzOpen ? 'host:close-buzzers' : 'host:open-buzzers'); }}>{current.buzzOpen ? 'Lock Buzzers' : 'Open Buzzers Now'}</button>}
             {current.responseMode !== 'text' && !current.answerRevealed && <button className="secondary-button reveal-button" disabled={revealBeat > 0} onClick={() => void revealAnswer()}>Reveal Answer</button>}
-            {current.answerRevealed && current.responseMode !== 'text' && !spokenPlayer && <button className="primary-button" onClick={() => void perform('host:advance-board')}>Continue to Board</button>}
+            {current.answerRevealed && current.responseMode !== 'text' && (!spokenPlayer || current.timedOut) && <button className="primary-button" onClick={() => void perform('host:advance-board')}>Continue to Board</button>}
             {current.answerRevealed && current.responseMode === 'text' && Object.keys(current.textResponses ?? {}).length === 0 && <button className="primary-button" onClick={() => void perform('host:advance-board')}>Continue to Board</button>}
             {!current.answerRevealed && current.attemptedPlayerIds.length === 0 && Object.keys(current.textResponses ?? {}).length === 0 && current.wager === null && <button className="secondary-button" onClick={() => { autoBuzzQuestionRef.current = ''; void perform('host:cancel-question'); }}>Exit Without Answering</button>}
           </div>

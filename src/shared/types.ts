@@ -80,6 +80,8 @@ export interface GameSettings {
   maxWager: number;
   localBuzzersEnabled: boolean;
   controllerBuzzersEnabled: boolean;
+  /** Join order rotates automatically; manual keeps the host-selected picker until changed. */
+  turnOrderMode: 'join-order' | 'manual';
 }
 
 export interface PlayerStats {
@@ -159,6 +161,10 @@ export interface CurrentQuestionState {
   responsesClosed?: boolean;
   dailyDouble: boolean;
   dailyDoublePlayerId: string | null;
+  /** Player whose turn selected this question. */
+  turnPlayerId: string | null;
+  /** True when the answer window expired with no response and the turn owner was penalized. */
+  timedOut?: boolean;
   wager: number | null;
   buzzOpen: boolean;
   buzzWinnerId: string | null;
@@ -195,6 +201,8 @@ export interface RoomState {
   currentQuestion: CurrentQuestionState | null;
   timer: TimerState;
   multiplier: 1 | 2 | 3;
+  /** Player currently entitled to choose the next question. */
+  turnPlayerId: string | null;
   remainingQuestions: number;
   selectedPackIds: string[];
   finalRound: FinalRoundState | null;

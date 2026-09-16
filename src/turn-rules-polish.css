@@ -1,0 +1,36 @@
+/* Turn ownership, mobile streak placement, and modifier announcement hardening. */
+.modifier-reveal-overlay {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 10000 !important;
+  display: grid !important;
+  place-items: center !important;
+  pointer-events: none !important;
+  background: rgba(1,10,18,.42) !important;
+}
+.modifier-reveal-card {
+  min-width: min(520px, calc(100vw - 32px));
+  padding: 28px 34px;
+  border: 3px solid #ffd166;
+  border-radius: 24px;
+  background: linear-gradient(180deg,#176b9e,#082943);
+  text-align: center;
+  box-shadow: 0 24px 80px rgba(0,0,0,.55),0 0 42px rgba(255,209,102,.26);
+  animation: modifierAnnouncement .32s cubic-bezier(.18,.9,.25,1.18) both;
+}
+.modifier-reveal-card span,.modifier-reveal-card strong,.modifier-reveal-card p { display:block; }
+.modifier-reveal-card span { color:#9cddff;font-weight:900;letter-spacing:.16em;font-size:.78rem; }
+.modifier-reveal-card strong { margin:8px 0;color:#ffd166;font-family:Oswald,sans-serif;font-size:clamp(2.4rem,6vw,5rem);line-height:1; }
+.modifier-reveal-card p { margin:0;color:#eef9ff;font-weight:800; }
+@keyframes modifierAnnouncement { from { opacity:0; transform:scale(.72); } to { opacity:1; transform:scale(1); } }
+
+/* The old floating streak pill collided with Daily Double/question UI. Keep status inside the header/card instead. */
+.player-phone-v2.phone-fire::before,.player-phone-v2.phone-fire::after,
+.player-phone-v2.phone-cold::before,.player-phone-v2.phone-cold::after { display:none !important; content:none !important; }
+.phone-header-streak { display:block; margin-top:2px; font-size:.48rem; line-height:1; font-weight:1000; letter-spacing:.06em; white-space:nowrap; }
+.phone-header-streak.fire { color:#ffb33f; }
+.phone-header-streak.cold { color:#8fe5ff; }
+@media (max-width: 520px) {
+  .modifier-reveal-card { min-width:calc(100vw - 28px); padding:22px 18px; }
+  .modifier-reveal-card strong { font-size:2.6rem; }
+}

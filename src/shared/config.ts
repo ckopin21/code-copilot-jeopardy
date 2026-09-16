@@ -22,7 +22,8 @@ export const DEFAULT_SETTINGS: GameSettings = {
   allowWagerBeyondScore: true,
   maxWager: 100000,
   localBuzzersEnabled: true,
-  controllerBuzzersEnabled: true
+  controllerBuzzersEnabled: true,
+  turnOrderMode: 'join-order'
 };
 
 export interface GamePreset {

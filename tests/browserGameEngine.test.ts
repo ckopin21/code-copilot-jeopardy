@@ -45,6 +45,39 @@ beforeEach(() => {
 });
 
 describe('BrowserGameEngine production state', () => {
+
+  it('rotates question ownership in join order and assigns Daily Double to the turn owner', () => {
+    const { engine, host } = setup({ gameLength: 'quick', dailyDoublesEnabled: true, dailyDoubleCount: 16, finalRoundEnabled: false });
+    const one = addPlayer(engine, host.roomCode, 'One');
+    const two = addPlayer(engine, host.roomCode, 'Two');
+    engine.startGame(host.roomCode, host.hostToken);
+    expect(engine.snapshot(host.roomCode).turnPlayerId).toBe(one.playerId);
+    const first = firstUnused(engine, host.roomCode);
+    engine.selectQuestion(host.roomCode, host.hostToken, first.questionId);
+    expect(engine.snapshot(host.roomCode).currentQuestion?.dailyDoublePlayerId).toBe(one.playerId);
+    engine.setDailyDoubleWager(host.roomCode, host.hostToken, 100);
+    engine.revealAnswer(host.roomCode, host.hostToken);
+    engine.resolveAnswer(host.roomCode, host.hostToken, one.playerId, true);
+    engine.advanceToBoard(host.roomCode, host.hostToken);
+    expect(engine.snapshot(host.roomCode).turnPlayerId).toBe(two.playerId);
+  });
+
+  it('penalizes the turn owner when a buzzer question expires unanswered', () => {
+    const { engine, host } = setup({ dailyDoublesEnabled: false, finalRoundEnabled: false, timerSeconds: 5, allowNegativeScores: true });
+    const one = addPlayer(engine, host.roomCode, 'One');
+    addPlayer(engine, host.roomCode, 'Two');
+    engine.startGame(host.roomCode, host.hostToken);
+    const tile = firstUnused(engine, host.roomCode);
+    engine.selectQuestion(host.roomCode, host.hostToken, tile.questionId);
+    const value = engine.snapshot(host.roomCode).currentQuestion!.effectiveValue;
+    engine.openBuzzers(host.roomCode, host.hostToken);
+    const endsAt = engine.snapshot(host.roomCode).timer.endsAt!;
+    engine.tick(endsAt + 1);
+    const state = engine.snapshot(host.roomCode);
+    expect(state.currentQuestion?.timedOut).toBe(true);
+    expect(state.currentQuestion?.answerRevealed).toBe(true);
+    expect(state.players.find((player) => player.id === one.playerId)?.score).toBe(-value);
+  });
   it('reconnects a reserved seat without changing player identity or seat', () => {
     const { engine, host } = setup();
     const player = addPlayer(engine, host.roomCode);

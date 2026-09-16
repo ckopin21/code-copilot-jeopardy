@@ -73,6 +73,8 @@ export class BrowserGameEngine {
       // Session locking was removed from the product. Normalize older persisted rooms so they remain joinable.
       record.state.locked = false;
       record.state.settings.lockRoomOnStart = false;
+      record.state.settings.turnOrderMode ??= 'join-order';
+      record.state.turnPlayerId ??= null;
       const claimedSeats = new Set<number>();
       for (const player of record.state.players) {
         const currentSeat = Number(player.seat);
@@ -163,6 +165,20 @@ export class BrowserGameEngine {
     return [room, player];
   }
   private connectedPlayers(room: RoomRecord): Player[] { return room.state.players.filter((player) => player.connected).sort((a, b) => a.seat - b.seat); }
+  private ensureTurnPlayer(room: RoomRecord): Player | null {
+    const connected = this.connectedPlayers(room);
+    if (!connected.length) { room.state.turnPlayerId = null; return null; }
+    const current = connected.find((player) => player.id === room.state.turnPlayerId) ?? connected[0];
+    room.state.turnPlayerId = current.id;
+    return current;
+  }
+  private advanceTurn(room: RoomRecord): void {
+    if (room.state.settings.turnOrderMode === 'manual') { this.ensureTurnPlayer(room); return; }
+    const connected = this.connectedPlayers(room);
+    if (!connected.length) { room.state.turnPlayerId = null; return; }
+    const index = connected.findIndex((player) => player.id === room.state.turnPlayerId);
+    room.state.turnPlayerId = connected[(index < 0 ? 0 : index + 1) % connected.length].id;
+  }
   private finalParticipants(room: RoomRecord): Player[] {
     const ids = new Set(room.state.finalRound?.participantIds ?? []);
     return room.state.players.filter((player) => ids.has(player.id)).sort((a, b) => a.seat - b.seat);
@@ -209,6 +225,7 @@ export class BrowserGameEngine {
       currentQuestion: null,
       timer: emptyTimer(),
       multiplier: 1,
+      turnPlayerId: null,
       remainingQuestions: 0,
       selectedPackIds,
       finalRound: null,
@@ -248,6 +265,7 @@ export class BrowserGameEngine {
       stats: defaultStats()
     });
     room.state.players.sort((a, b) => a.seat - b.seat);
+    if (!room.state.turnPlayerId) room.state.turnPlayerId = playerId;
     room.playerTokens[playerId] = reconnectToken;
     this.touch(room);
     this.persist();
@@ -472,6 +490,7 @@ export class BrowserGameEngine {
     room.state.gameStartedAt = null;
     room.state.gameEndedAt = null;
     room.state.players.forEach((player) => this.resetPlayerForGame(player));
+    room.state.turnPlayerId = this.connectedPlayers(room)[0]?.id ?? null;
     this.persist();
     return this.snapshot(roomCode);
   }
@@ -493,6 +512,7 @@ export class BrowserGameEngine {
     room.state.resultPlayerIds = [];
     room.finalQuestionId = null;
     room.state.players.forEach((player) => this.resetPlayerForGame(player));
+    room.state.turnPlayerId = this.connectedPlayers(room)[0]?.id ?? null;
     this.persist();
     return this.snapshot(roomCode);
   }
@@ -513,6 +533,9 @@ export class BrowserGameEngine {
     if (!tile || !question || tile.used) throw new Error('Question is unavailable');
     const multiplier = this.multiplierForRemaining(room.state.remainingQuestions, room.state.settings.lateGameModifiers);
     const connected = this.connectedPlayers(room);
+    const requestedTurnPlayer = dailyDoublePlayerId ? connected.find((player) => player.id === dailyDoublePlayerId) : null;
+    if (requestedTurnPlayer) room.state.turnPlayerId = requestedTurnPlayer.id;
+    const turnPlayer = this.ensureTurnPlayer(room);
     const isPlayableDailyDouble = tile.dailyDouble && connected.length > 0;
     const responseMode = isPlayableDailyDouble ? 'buzz' : (question.responseMode ?? 'buzz');
     tile.used = true;
@@ -531,6 +554,8 @@ export class BrowserGameEngine {
       responsesClosed: false,
       dailyDouble: isPlayableDailyDouble,
       dailyDoublePlayerId: null,
+      turnPlayerId: turnPlayer?.id ?? null,
+      timedOut: false,
       wager: null,
       buzzOpen: false,
       buzzWinnerId: null,
@@ -539,7 +564,7 @@ export class BrowserGameEngine {
     };
     room.state.players.forEach((player) => { player.buzzEligible = false; player.hasBuzzedThisQuestion = false; });
     if (isPlayableDailyDouble) {
-      const player = connected.find((item) => item.id === dailyDoublePlayerId) ?? connected[0];
+      const player = turnPlayer ?? connected[0];
       room.state.currentQuestion.dailyDoublePlayerId = player.id;
       player.stats.dailyDoublesFound += 1;
       room.state.phase = 'daily-double-wager';
@@ -769,6 +794,7 @@ export class BrowserGameEngine {
       const unresolved = Object.values(current.textResponses ?? {}).some((response) => response.resolvedCorrect === null);
       if (unresolved) throw new Error('Grade each submitted response before returning to the board');
     }
+    this.advanceTurn(room);
     room.state.currentQuestion = null;
     this.stopTimerInternal(room);
     if (room.state.remainingQuestions === 0) {
@@ -826,6 +852,28 @@ export class BrowserGameEngine {
   stopTimer(roomCode: string, hostToken: string): RoomSnapshot { const room = this.hostRoom(roomCode, hostToken); this.stopTimerInternal(room); this.persist(); return this.snapshot(roomCode); }
   private stopTimerInternal(room: RoomRecord): void { room.state.timer = emptyTimer(); }
 
+  private penalizeUnansweredTurn(room: RoomRecord): void {
+    const current = room.state.currentQuestion;
+    if (!current || current.answerRevealed || current.buzzWinnerId) return;
+    if (current.responseMode === 'text' && Object.keys(current.textResponses ?? {}).length > 0) return;
+    const player = room.state.players.find((candidate) => candidate.id === current.turnPlayerId);
+    if (!player) return;
+    this.checkpointScore(room);
+    let points = current.effectiveValue;
+    if (current.dailyDouble) {
+      const multiplier = room.state.settings.dailyDoubleStacksWithMultiplier ? this.multiplierForRemaining(room.state.remainingQuestions + 1, room.state.settings.lateGameModifiers) : 1;
+      points = (current.wager ?? 0) * multiplier;
+    }
+    this.addScore(player, -points, room.state.settings);
+    player.stats.incorrect += 1;
+    this.applyStreak(player, false, room.state.settings);
+    current.timedOut = true;
+    current.answerRevealed = true;
+    current.responsesClosed = true;
+    current.buzzOpen = false;
+    room.state.players.forEach((candidate) => { candidate.buzzEligible = false; });
+  }
+
   tick(now = Date.now()): string[] {
     const changed: string[] = [];
     for (const [code, room] of this.rooms) {
@@ -835,10 +883,12 @@ export class BrowserGameEngine {
       if (room.state.phase === 'final-question') {
         this.closeFinalResponsesInternal(room);
       } else if (room.state.currentQuestion?.responseMode === 'text' && !room.state.currentQuestion.answerRevealed) {
+        this.penalizeUnansweredTurn(room);
         this.closeTextResponsesInternal(room);
+      } else if (room.state.phase === 'daily-double-question' && room.state.currentQuestion && !room.state.currentQuestion.answerRevealed) {
+        this.penalizeUnansweredTurn(room);
       } else if (room.state.settings.autoCloseBuzzersAtZero && room.state.currentQuestion?.buzzOpen) {
-        room.state.currentQuestion.buzzOpen = false;
-        room.state.players.forEach((player) => { player.buzzEligible = false; });
+        this.penalizeUnansweredTurn(room);
       }
       changed.push(code);
     }
