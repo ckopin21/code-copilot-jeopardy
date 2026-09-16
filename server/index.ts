@@ -1,6 +1,5 @@
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import express from 'express';
 import cors from 'cors';
 import QRCode from 'qrcode';
@@ -10,12 +9,11 @@ import { z } from 'zod';
 import { GameEngine } from './gameEngine.js';
 import { PackRegistry } from './packRegistry.js';
 import { playerJoinSchema } from '../src/shared/validation.js';
-import type { RoomSnapshot } from '../src/shared/types.js';
+import type { GameSettings, RoomSnapshot } from '../src/shared/types.js';
 
 const PORT = Number(process.env.PORT ?? 3000);
 const HOST = process.env.HOST ?? '0.0.0.0';
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const clientDist = path.resolve(__dirname, '../../dist-client');
+const clientDist = path.resolve('dist-client');
 
 const app = express();
 app.use(cors());
@@ -52,7 +50,11 @@ function safeSnapshot(snapshot: RoomSnapshot, role: 'host' | 'player' | 'present
     const own = role === 'player' && player.id === playerId;
     if (role === 'host' && revealFinal) return player;
     if (own) return player;
-    return { ...player, finalWager: revealFinal ? player.finalWager : null, finalAnswer: revealFinal ? player.finalAnswer : null };
+    return {
+      ...player,
+      finalWager: revealFinal ? player.finalWager : null,
+      finalAnswer: revealFinal ? player.finalAnswer : null
+    };
   });
   if (copy.currentQuestion && role !== 'host' && !copy.currentQuestion.answerRevealed) copy.currentQuestion.acceptedAnswers = undefined;
   if (copy.phase === 'daily-double-wager' && role !== 'host' && copy.currentQuestion) copy.currentQuestion.text = '';
@@ -74,7 +76,8 @@ function emitRoom(roomCode: string): void {
 }
 
 function fail(error: unknown): { ok: false; error: string } {
-  return { ok: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  const message = error instanceof Error ? error.message : 'Unknown error';
+  return { ok: false, error: message };
 }
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
@@ -156,27 +159,27 @@ io.on('connection', (socket) => {
     });
   };
 
-  hostAction<{ updates: Partial<import('../src/shared/types.js').GameSettings> }>('host:update-settings', (payload) => engine.updateSettings(payload.roomCode, payload.hostToken, payload.updates));
-  hostAction('host:start-game', (payload) => engine.startGame(payload.roomCode, payload.hostToken));
-  hostAction<{ questionId: string; dailyDoublePlayerId?: string }>('host:select-question', (payload) => engine.selectQuestion(payload.roomCode, payload.hostToken, payload.questionId, payload.dailyDoublePlayerId));
-  hostAction<{ wager: number }>('host:daily-double-wager', (payload) => engine.setDailyDoubleWager(payload.roomCode, payload.hostToken, payload.wager));
-  hostAction('host:open-buzzers', (payload) => engine.openBuzzers(payload.roomCode, payload.hostToken));
-  hostAction('host:close-buzzers', (payload) => engine.closeBuzzers(payload.roomCode, payload.hostToken));
-  hostAction<{ playerId: string }>('host:local-buzz', (payload) => engine.localBuzz(payload.roomCode, payload.hostToken, payload.playerId));
-  hostAction<{ playerId: string; correct: boolean }>('host:resolve-answer', (payload) => engine.resolveAnswer(payload.roomCode, payload.hostToken, payload.playerId, payload.correct));
-  hostAction('host:reveal-answer', (payload) => engine.revealAnswer(payload.roomCode, payload.hostToken));
-  hostAction('host:advance-board', (payload) => engine.advanceToBoard(payload.roomCode, payload.hostToken));
-  hostAction<{ playerId: string; delta: number }>('host:adjust-score', (payload) => engine.adjustScore(payload.roomCode, payload.hostToken, payload.playerId, payload.delta));
-  hostAction<{ playerId: string }>('host:remove-player', (payload) => engine.removePlayer(payload.roomCode, payload.hostToken, payload.playerId));
-  hostAction('host:pause', (payload) => engine.pause(payload.roomCode, payload.hostToken));
-  hostAction('host:resume', (payload) => engine.resume(payload.roomCode, payload.hostToken));
-  hostAction('host:start-timer', (payload) => engine.startTimer(payload.roomCode, payload.hostToken));
-  hostAction('host:stop-timer', (payload) => engine.stopTimer(payload.roomCode, payload.hostToken));
-  hostAction('host:begin-final-wagers', (payload) => engine.beginFinalWagers(payload.roomCode, payload.hostToken));
-  hostAction('host:open-final-question', (payload) => engine.openFinalQuestion(payload.roomCode, payload.hostToken));
-  hostAction('host:begin-final-review', (payload) => engine.beginFinalReview(payload.roomCode, payload.hostToken));
-  hostAction<{ playerId: string; correct?: boolean }>('host:resolve-final', (payload) => engine.resolveFinalAnswer(payload.roomCode, payload.hostToken, payload.playerId, payload.correct));
-  hostAction('host:end-game', (payload) => engine.endGame(payload.roomCode, payload.hostToken));
+  hostAction<{ updates: Partial<GameSettings> }>('host:update-settings', (p) => engine.updateSettings(p.roomCode, p.hostToken, p.updates));
+  hostAction('host:start-game', (p) => engine.startGame(p.roomCode, p.hostToken));
+  hostAction<{ questionId: string; dailyDoublePlayerId?: string }>('host:select-question', (p) => engine.selectQuestion(p.roomCode, p.hostToken, p.questionId, p.dailyDoublePlayerId));
+  hostAction<{ wager: number }>('host:daily-double-wager', (p) => engine.setDailyDoubleWager(p.roomCode, p.hostToken, p.wager));
+  hostAction('host:open-buzzers', (p) => engine.openBuzzers(p.roomCode, p.hostToken));
+  hostAction('host:close-buzzers', (p) => engine.closeBuzzers(p.roomCode, p.hostToken));
+  hostAction<{ playerId: string }>('host:local-buzz', (p) => engine.localBuzz(p.roomCode, p.hostToken, p.playerId));
+  hostAction<{ playerId: string; correct: boolean }>('host:resolve-answer', (p) => engine.resolveAnswer(p.roomCode, p.hostToken, p.playerId, p.correct));
+  hostAction('host:reveal-answer', (p) => engine.revealAnswer(p.roomCode, p.hostToken));
+  hostAction('host:advance-board', (p) => engine.advanceToBoard(p.roomCode, p.hostToken));
+  hostAction<{ playerId: string; delta: number }>('host:adjust-score', (p) => engine.adjustScore(p.roomCode, p.hostToken, p.playerId, p.delta));
+  hostAction<{ playerId: string }>('host:remove-player', (p) => engine.removePlayer(p.roomCode, p.hostToken, p.playerId));
+  hostAction('host:pause', (p) => engine.pause(p.roomCode, p.hostToken));
+  hostAction('host:resume', (p) => engine.resume(p.roomCode, p.hostToken));
+  hostAction('host:start-timer', (p) => engine.startTimer(p.roomCode, p.hostToken));
+  hostAction('host:stop-timer', (p) => engine.stopTimer(p.roomCode, p.hostToken));
+  hostAction('host:begin-final-wagers', (p) => engine.beginFinalWagers(p.roomCode, p.hostToken));
+  hostAction('host:open-final-question', (p) => engine.openFinalQuestion(p.roomCode, p.hostToken));
+  hostAction('host:begin-final-review', (p) => engine.beginFinalReview(p.roomCode, p.hostToken));
+  hostAction<{ playerId: string; correct?: boolean }>('host:resolve-final', (p) => engine.resolveFinalAnswer(p.roomCode, p.hostToken, p.playerId, p.correct));
+  hostAction('host:end-game', (p) => engine.endGame(p.roomCode, p.hostToken));
 
   socket.on('player:buzz', (payload: { roomCode: string; playerId: string; reconnectToken: string }, ack: Ack) => {
     try {
@@ -209,13 +212,14 @@ io.on('connection', (socket) => {
       if (identity.role === 'host') engine.setHostConnected(identity.roomCode, false);
       if (identity.role === 'player' && identity.playerId) engine.setPlayerConnected(identity.roomCode, identity.playerId, false);
       emitRoom(identity.roomCode);
-    } catch { /* room may already be gone */ }
+    } catch { /* room may already be closed */ }
     socketIdentity.delete(socket.id);
   });
 });
 
 setInterval(() => {
-  for (const code of engine.tick()) emitRoom(code);
+  const changed = engine.tick();
+  for (const code of changed) emitRoom(code);
   for (const [socketId, identity] of socketIdentity) {
     const socket = io.sockets.sockets.get(socketId);
     if (!socket) continue;
@@ -228,7 +232,7 @@ setInterval(() => {
 
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(clientDist));
-  app.get('*', (_req, res) => res.sendFile(path.join(clientDist, 'index.html')));
+  app.use((_req, res) => res.sendFile(path.join(clientDist, 'index.html')));
 }
 
 httpServer.listen(PORT, HOST, () => {

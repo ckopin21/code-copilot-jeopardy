@@ -20,7 +20,7 @@ export class PackRegistry {
       const parsed = JSON.parse(fs.readFileSync(this.customFile, 'utf8')) as unknown[];
       for (const candidate of parsed) {
         const result = packSchema.safeParse(candidate);
-        if (result.success) this.packs.set(result.data.id, result.data as QuestionPack);
+        if (result.success) this.packs.set(result.data.id, result.data as unknown as QuestionPack);
       }
     } catch (error) {
       console.warn('Could not load custom packs:', error);
@@ -55,7 +55,7 @@ export class PackRegistry {
   }
 
   import(input: unknown): QuestionPack {
-    const parsed = packSchema.parse(input) as QuestionPack;
+    const parsed = packSchema.parse(input) as unknown as QuestionPack;
     if (builtInPacks.some((pack) => pack.id === parsed.id)) {
       throw new Error('Custom pack ID conflicts with a built-in pack');
     }
