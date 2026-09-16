@@ -11,4 +11,4 @@ import './pack-library.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(<React.StrictMode><App/></React.StrictMode>);
 
-// Source-touch commit intentionally triggers validated Pages deployment after UX patch automation.
+// Source-touch commit intentionally triggers validated Pages deployment after the full-game audit pass.
