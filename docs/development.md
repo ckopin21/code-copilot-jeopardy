@@ -6,34 +6,46 @@
 src/
   App.tsx                    top-level routing/global interaction hooks
   components/                host, phone, board, presentation, recap UI
-  lib/browserGameEngine.ts   authoritative engine for GitHub Pages
-  lib/socket.ts              PeerJS/WebRTC transport for Pages
+  lib/browserGameEngine.ts   authoritative game engine
+  lib/socket.ts              PeerJS/WebRTC transport
+  lib/snapshotSecurity.ts    role-based snapshot privacy
   lib/audio.ts               procedural music and cues
   packs/                     built-in question packs + builder/registry
   shared/                    shared types/config/validation
-server/
-  gameEngine.ts              alternate Node runtime engine
-  index.ts                   Express/Socket.IO server
-  packRegistry.ts            Node custom-pack support
-  persistence.ts             Node file persistence
 scripts/
   generate-pack-registry.mjs automatic built-in pack discovery
-  postbuild.cjs              production build post-processing
 tests/
-  gameEngine.test.ts
+  browserGameEngine.test.ts
+  snapshotSecurity.test.ts
   validation.test.ts
   packs.test.ts
+  gameLengthConfig.test.ts
 docs/                        maintained technical/gameplay documentation
 ```
 
 ## Install and run
 
 ```bash
-npm install
+npm ci
 npm run dev
 ```
 
-The dev command starts both the Node server and Vite client. For the primary GitHub Pages behavior, the browser/P2P path is the important runtime. The Node path is still compiled and tested to avoid silent breakage.
+`npm run dev` starts Vite on the local machine. The same browser/P2P engine used by GitHub Pages is the gameplay runtime used during development.
+
+For a production-style local build:
+
+```bash
+npm run build
+npm start
+```
+
+`npm start` serves the built static app through Vite Preview on port 3000.
+
+## Dependency reproducibility
+
+Runtime and development dependencies are pinned in `package.json`, and `package-lock.json` is committed. Use `npm ci` for clean installs so local machines and GitHub Actions use the exact locked dependency graph.
+
+Do not replace pinned versions with `latest` without intentionally regenerating and validating the lockfile.
 
 ## Quality commands
 
@@ -47,7 +59,7 @@ npm run build
 
 `npm run dev`, `npm run typecheck`, `npm test`, and `npm run build` automatically regenerate the built-in pack registry first.
 
-A change is ready to deploy only after typecheck, lint, tests, and production build pass. GitHub Actions runs these checks and the Pages workflow builds/deploys the static site.
+A change is ready to deploy only after typecheck, lint, tests, and production build pass. GitHub Actions installs with `npm ci`, runs these checks, and the Pages workflow builds/deploys the static site.
 
 ## GitHub Pages deployment
 
@@ -57,32 +69,22 @@ The live static app is deployed from the repository workflow to:
 https://ckopin21.github.io/code-copilot-jeopardy/
 ```
 
-Pages must not depend on a Node server being online. Browser-hosted multiplayer uses PeerJS/WebRTC and the browser engine.
-
-## Alternate Node deployment
-
-The Node runtime is built with:
-
-```bash
-npm run build
-npm start
-```
-
-It needs a host that supports long-lived WebSocket connections. `.data` persistence only applies to the Node implementation.
+The game does not require an application server. Multiplayer uses PeerJS/WebRTC and the host browser is authoritative for room/game state.
 
 ## Safely changing gameplay
 
 For a gameplay change, inspect all of these before editing:
 
-1. `src/shared/types.ts` — shared state contract
-2. `src/lib/browserGameEngine.ts` — Pages rule/state transition
-3. `src/components/HostAppV3.tsx` — host rendering/control flow
-4. `src/components/PlayerApp.tsx` — phone rendering/control flow
-5. `src/lib/socket.ts` — transport/authorization if the action crosses devices
-6. `tests/` — regression coverage
-7. `docs/gameplay.md` — documented expected behavior
+1. `src/shared/types.ts` — state contract
+2. `src/lib/browserGameEngine.ts` — authoritative rule/state transition
+3. `src/lib/snapshotSecurity.ts` — privacy impact of new state
+4. `src/components/HostAppV3.tsx` — host rendering/control flow
+5. `src/components/PlayerApp.tsx` — phone rendering/control flow
+6. `src/lib/socket.ts` — transport/authorization if the action crosses devices
+7. `tests/` — regression coverage
+8. `docs/gameplay.md` — documented expected behavior
 
-If the feature must also work in the Node runtime, additionally update/test `server/gameEngine.ts` and `server/index.ts`.
+There is no second server engine to keep in sync. Production and tests should target `BrowserGameEngine` directly.
 
 ## UI interaction rules
 
@@ -91,6 +93,7 @@ If the feature must also work in the Node runtime, additionally update/test `ser
 - A network action should be idempotent or safely reject duplicate/stale actions where possible.
 - Reset Game must propagate through a room snapshot; phones should not require reload.
 - Disconnected reserved players must not block active connected players.
+- Hidden answers/explanations and unrevealed player responses must not cross the snapshot privacy boundary.
 - Presentation mode is an in-page overlay and must use the same board selection callback as the normal board.
 - Score animation may delay display of the new score, but it must not delay authoritative engine state.
 - Motion must have a reduced-motion fallback.
@@ -106,20 +109,20 @@ Do not hand-edit `src/packs/generatedRegistry.ts`. Add/copy a pack file and let 
 
 ## Testing expectations
 
-Regression tests should cover rule/state behavior rather than only visual markup. Important areas include:
+Regression tests should target the production browser engine and cover rule/state behavior rather than only visual markup. Important areas include:
 
 - room creation and capacity
-- stable reconnect identity
-- disconnect/reserved-seat behavior
+- stable reconnect identity and reserved seats
+- timer persistence/restoration
 - board generation and pack validation
 - first-buzz acceptance and buzzer eligibility
 - score gain/loss and negative-score rules
-- Daily Double selection/wagers
+- Daily Double selection/wagers/practice-mode fallback
 - late-game multipliers
 - typed responses and grading
-- Final wagers/answers/review
+- snapshot privacy for answers/explanations/responses
+- Final participant selection, wagers, answer lock, timeout, disconnects, privacy, review, recap
 - reset behavior
-- completion/recap
 
 Visual interaction changes that depend on DOM geometry, WebRTC, camera APIs, vibration, or Web Audio still require browser/device smoke testing in addition to unit tests.
 
