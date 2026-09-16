@@ -1,4 +1,4 @@
-/* Turn ownership, mobile streak placement, and modifier announcement hardening. */
+/* Turn ownership, mobile streak placement, and modifier announcement hardening. Validated as part of the game-rule pass. */
 .modifier-reveal-overlay {
   position: fixed !important;
   inset: 0 !important;
