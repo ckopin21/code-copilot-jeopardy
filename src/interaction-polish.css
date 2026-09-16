@@ -1,11 +1,185 @@
-/* Small interaction overrides kept separate from the larger stage design sheet. */
+/* Focused interaction/layout overrides kept separate from the larger stage design sheet. */
 
-/* Daily Double control follows the current controller/last responder automatically. */
+/* Start / Continue screen should feel like a true full-screen launch surface. */
+.showcase-menu.menu-shell {
+  width: 100vw;
+  min-width: 100vw;
+  min-height: 100dvh;
+  margin: 0;
+  padding: 0 !important;
+  overflow: hidden;
+}
+
+.showcase-menu .menu-card {
+  width: 100%;
+  max-width: none !important;
+  min-height: 100dvh;
+  margin: 0;
+  padding: clamp(34px, 7vh, 86px) clamp(24px, 7vw, 110px) !important;
+  border-radius: 0 !important;
+  box-sizing: border-box;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+}
+
+.showcase-menu .menu-actions {
+  width: min(760px, 100%);
+}
+
+.showcase-menu .menu-footer {
+  position: fixed;
+  left: 50%;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  z-index: 4;
+  transform: translateX(-50%);
+}
+
+/* The old Daily Double controller selector is intentionally gone. */
 .board-actions > label {
   display: none;
 }
 
-/* Score impact should stay centered in the player card and pulse instead of translating sideways. */
+/* Rules explain themselves on desktop hover/focus without cluttering the setup screen. */
+.settings-card {
+  overflow: visible !important;
+}
+
+.settings-helper {
+  margin: -4px 0 12px;
+  color: #9cb4c4;
+  font-size: .82rem;
+}
+
+[data-tooltip] {
+  position: relative;
+}
+
+[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 9px);
+  z-index: 3500;
+  width: min(280px, 75vw);
+  padding: 8px 10px;
+  border: 1px solid rgba(255,255,255,.2);
+  border-radius: 9px;
+  background: rgba(2,18,28,.97);
+  box-shadow: 0 10px 28px rgba(0,0,0,.42);
+  color: #eefaff;
+  font-size: .72rem;
+  font-weight: 700;
+  line-height: 1.35;
+  letter-spacing: 0;
+  text-align: left;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, 5px);
+  transition: opacity .14s ease, transform .14s ease;
+}
+
+[data-tooltip]:hover::after,
+[data-tooltip]:focus-within::after {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+/* Lobby player management distinguishes a recoverable disconnect from deletion. */
+.roster-row {
+  grid-template-columns: auto minmax(0,1fr) auto !important;
+}
+
+.roster-row.reserved {
+  opacity: .72;
+  border-style: dashed;
+}
+
+.roster-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.seat-pause-button,
+.seat-remove-button {
+  min-height: 32px;
+  padding: 6px 9px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,.18);
+  color: #eefaff;
+  font: inherit;
+  font-size: .68rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.seat-pause-button {
+  background: rgba(93,190,255,.12);
+  border-color: rgba(93,190,255,.32);
+}
+
+.seat-remove-button {
+  background: rgba(240,82,82,.12);
+  border-color: rgba(240,82,82,.38);
+  color: #ffb9b5;
+}
+
+/* QR is an intentional interactive target in the lobby and becomes large in the modal. */
+.qr-expand-trigger {
+  position: relative;
+  display: grid;
+  place-items: center;
+  gap: 5px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #cae4f3;
+  cursor: zoom-in;
+}
+
+.qr-expand-trigger img {
+  display: block;
+}
+
+.qr-expand-trigger span {
+  font-size: .62rem;
+  font-weight: 900;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  opacity: .78;
+}
+
+.expanded-qr-modal {
+  width: min(760px, 92vw) !important;
+  max-height: 94dvh;
+  overflow: auto;
+}
+
+.expanded-qr-modal > img {
+  width: min(62dvh, 560px) !important;
+  max-width: 82vw !important;
+  height: auto !important;
+  margin-inline: auto;
+  image-rendering: pixelated;
+}
+
+/* Empty/unanwered used tiles should show one centered completion mark. */
+.used-check-empty {
+  display: grid !important;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  color: #7592a5;
+  font-family: 'Oswald', sans-serif;
+  font-size: clamp(1.2rem, 2.2vw, 2rem);
+  font-weight: 1000;
+  line-height: 1;
+}
+
+/* Score impact stays centered in the card and pulses like a heartbeat. */
 .player-card.score-impact-correct {
   transform-origin: center;
   animation: scoreCardHeartbeatGood .62s cubic-bezier(.2,.82,.22,1) both !important;
@@ -20,6 +194,366 @@
 .player-card.score-impact-wrong .score {
   transform-origin: center;
   animation: scoreNumberHeartbeat .62s cubic-bezier(.2,.82,.22,1) both !important;
+}
+
+/* Final/last-clue reveal spectacle. */
+.final-reveal-spectacle {
+  position: fixed;
+  inset: 0;
+  z-index: 4200;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: radial-gradient(circle at 50% 44%, rgba(22,116,159,.34), rgba(0,8,14,.9) 58%, rgba(0,5,9,.98));
+  backdrop-filter: blur(7px);
+  pointer-events: all;
+  animation: revealCurtainIn .26s ease both;
+}
+
+.final-reveal-card {
+  width: min(760px, 90vw);
+  min-height: 260px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 16px;
+  padding: 36px;
+  box-sizing: border-box;
+  border: 2px solid rgba(255,209,102,.52);
+  border-radius: 28px;
+  background: radial-gradient(circle at 50% 20%, rgba(255,209,102,.13), rgba(5,28,43,.96) 60%);
+  box-shadow: 0 0 80px rgba(0,0,0,.65), inset 0 0 45px rgba(80,202,255,.08);
+  text-align: center;
+}
+
+.final-reveal-card small {
+  color: #ffd166;
+  font-size: clamp(.72rem, 1.5vw, 1rem);
+  font-weight: 1000;
+  letter-spacing: .22em;
+}
+
+.final-reveal-card strong {
+  color: #f7fbff;
+  font-family: 'Oswald', sans-serif;
+  font-size: clamp(2.8rem, 8vw, 7rem);
+  font-weight: 1000;
+  letter-spacing: .035em;
+  line-height: .95;
+  text-shadow: 0 8px 36px rgba(0,0,0,.6);
+}
+
+.final-reveal-spectacle.beat-1 .final-reveal-card,
+.final-reveal-spectacle.beat-2 .final-reveal-card,
+.final-reveal-spectacle.beat-3 .final-reveal-card {
+  animation: revealTensionBeat .72s cubic-bezier(.2,.78,.24,1) both;
+}
+
+.final-reveal-spectacle.beat-4 .final-reveal-card {
+  animation: revealFinalImpact 1.08s cubic-bezier(.15,.84,.22,1) both;
+}
+
+.reveal-pulse-dots {
+  display: flex;
+  gap: 9px;
+}
+
+.reveal-pulse-dots i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #ffd166;
+  box-shadow: 0 0 15px rgba(255,209,102,.7);
+  animation: revealDotPulse .72s ease-in-out infinite alternate;
+}
+.reveal-pulse-dots i:nth-child(2) { animation-delay: .14s; }
+.reveal-pulse-dots i:nth-child(3) { animation-delay: .28s; }
+
+.final-reveal-trigger {
+  border-color: rgba(255,209,102,.52) !important;
+  box-shadow: 0 0 24px rgba(255,209,102,.12);
+}
+
+/* Final results remain readable with one player or all five. */
+.recap-scene-v2 {
+  width: 100%;
+  max-width: none !important;
+  padding: clamp(28px, 4vh, 58px) clamp(22px, 3vw, 48px) 34px !important;
+  box-sizing: border-box;
+}
+
+.recap-scene-v2 > h1 {
+  margin: 10px 0 22px !important;
+}
+
+.recap-grid-v2 {
+  width: 100%;
+  max-width: 1540px;
+  margin: 0 auto 22px !important;
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)) !important;
+  justify-content: center;
+  align-items: stretch;
+  gap: clamp(12px, 1.5vw, 20px) !important;
+}
+
+.recap-card-v2 {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 330px !important;
+  justify-self: center;
+  padding: 18px 18px 20px !important;
+  box-sizing: border-box;
+}
+
+.recap-player-heading {
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  padding-bottom: 13px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid rgba(255,255,255,.12);
+  text-align: center;
+}
+
+.recap-player-heading .stats-place {
+  font-size: .82rem;
+}
+
+.recap-player-heading > span {
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.recap-player-heading h2 {
+  margin: 2px 0 !important;
+  font-size: clamp(1.05rem, 1.5vw, 1.3rem) !important;
+}
+
+.recap-player-heading > strong {
+  color: #ffd166;
+  font-family: 'Oswald', sans-serif;
+  font-size: clamp(1.75rem, 2.6vw, 2.35rem) !important;
+  line-height: 1;
+}
+
+.recap-stats-list {
+  display: grid !important;
+  grid-template-columns: minmax(0,1fr) auto;
+  gap: 8px 14px !important;
+  margin: 0 !important;
+  font-size: clamp(.8rem, 1vw, .96rem) !important;
+  line-height: 1.2;
+}
+
+.recap-stats-list dt,
+.recap-stats-list dd {
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.recap-stats-list dt {
+  color: #a9c0ce;
+  font-weight: 700;
+}
+
+.recap-stats-list dd {
+  color: #f1f9fd;
+  font-weight: 1000;
+  text-align: right;
+}
+
+/* Phone layouts: center all stage content and keep question/reveal states inside one viewport. */
+.phone-state-v2 {
+  width: 100%;
+  box-sizing: border-box;
+  text-align: center;
+  justify-items: center;
+  align-items: center;
+}
+
+.phone-state-v2 > *,
+.phone-state-v2 .section-kicker,
+.phone-state-v2 .modifier-banner,
+.phone-state-v2 .status-badge,
+.phone-state-v2 .locked-wager-inline {
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
+.phone-state-v2 .status-badge {
+  width: max-content;
+  max-width: calc(100vw - 44px);
+  box-sizing: border-box;
+}
+
+.player-phone-v2:has(.phone-question-stage-v2) {
+  height: 100dvh;
+  min-height: 100dvh;
+  overflow: hidden;
+}
+
+.phone-question-stage-v2 {
+  height: calc(100dvh - 82px);
+  min-height: 0 !important;
+  padding: 12px 20px max(14px, env(safe-area-inset-bottom)) !important;
+  box-sizing: border-box;
+  display: grid !important;
+  grid-template-rows: auto minmax(0,1fr) auto;
+  align-items: center;
+  justify-items: center;
+  gap: 8px !important;
+  overflow: hidden;
+}
+
+.phone-question-v2 {
+  width: 100%;
+  max-width: 760px;
+  max-height: 34dvh;
+  margin: 0 auto !important;
+  padding: 4px 2px !important;
+  box-sizing: border-box;
+  overflow: hidden;
+  text-align: center;
+}
+
+.phone-question-v2 h2 {
+  margin: 7px auto 6px !important;
+  max-width: 94%;
+  font-size: clamp(1.35rem, 5.8vw, 2.15rem) !important;
+  line-height: 1.08 !important;
+}
+
+.phone-question-v2 .timer-display,
+.phone-question-v2 .timer-v2,
+.phone-question-v2 .timer {
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
+.buzzer-button-v2 {
+  width: min(76vw, 355px) !important;
+  height: auto !important;
+  max-height: 43dvh !important;
+  aspect-ratio: 1 / 1;
+  margin: 4px auto !important;
+  justify-self: center;
+  align-self: center;
+}
+
+.phone-question-stage-v2.answer-visible {
+  grid-template-rows: auto minmax(0,1fr);
+  gap: 10px !important;
+}
+
+.phone-question-stage-v2.answer-visible .phone-question-v2 {
+  max-height: 42dvh;
+}
+
+.response-reveal-phone.answer-only-phone {
+  width: min(92vw, 620px) !important;
+  max-width: 100%;
+  max-height: 40dvh;
+  margin: 0 auto !important;
+  padding: clamp(16px, 3.5vh, 28px) 18px !important;
+  box-sizing: border-box;
+  align-self: center;
+  justify-self: center;
+  overflow: auto;
+}
+
+.response-reveal-phone.answer-only-phone strong {
+  font-size: clamp(1.45rem, 6.2vw, 2.35rem) !important;
+  line-height: 1.08;
+  overflow-wrap: anywhere;
+}
+
+.text-response-panel {
+  width: 100%;
+  max-width: 620px;
+  min-height: 0;
+  margin: 0 auto !important;
+  align-self: center;
+}
+
+.spoken-answer-panel,
+.buzz-message-v2 {
+  margin-left: auto !important;
+  margin-right: auto !important;
+  text-align: center;
+}
+
+.pause-seat-icon {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  margin: 0 auto;
+  border-radius: 50%;
+  background: rgba(93,190,255,.12);
+  border: 1px solid rgba(93,190,255,.32);
+  font-size: 1.8rem;
+}
+
+/* Individual phone recap. */
+.phone-recap-v2 {
+  align-content: center !important;
+  gap: 12px !important;
+  padding: 20px 22px max(24px, env(safe-area-inset-bottom)) !important;
+  overflow: auto;
+}
+
+.phone-recap-hero {
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+}
+
+.phone-recap-hero > span {
+  font-size: 2.3rem;
+}
+
+.phone-recap-hero h1 {
+  margin: 0 !important;
+  color: #ffd166;
+  font-size: clamp(2.6rem, 12vw, 4.4rem) !important;
+  line-height: 1;
+}
+
+.phone-recap-hero strong {
+  color: #eefaff;
+  font-size: 1.05rem;
+}
+
+.phone-stats-grid {
+  width: min(100%, 520px);
+  display: grid;
+  grid-template-columns: minmax(0,1fr) auto;
+  gap: 9px 16px;
+  margin: 8px auto 12px;
+  padding: 16px 18px;
+  box-sizing: border-box;
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 16px;
+  background: rgba(255,255,255,.055);
+  text-align: left;
+}
+
+.phone-stats-grid dt,
+.phone-stats-grid dd {
+  margin: 0;
+  font-size: .9rem;
+}
+
+.phone-stats-grid dt {
+  color: #a9c0ce;
+  font-weight: 700;
+}
+
+.phone-stats-grid dd {
+  color: #f3fbff;
+  font-weight: 1000;
+  text-align: right;
 }
 
 @keyframes scoreCardHeartbeatGood {
@@ -48,11 +582,79 @@
   100% { transform: scale(1); opacity: 1; }
 }
 
+@keyframes revealCurtainIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes revealTensionBeat {
+  0% { transform: scale(.965); filter: brightness(.82); }
+  38% { transform: scale(1.025); filter: brightness(1.2); }
+  100% { transform: scale(1); filter: brightness(1); }
+}
+
+@keyframes revealFinalImpact {
+  0% { transform: scale(.78); filter: brightness(2); opacity: .25; }
+  30% { transform: scale(1.1); filter: brightness(1.6); opacity: 1; box-shadow: 0 0 110px rgba(255,209,102,.42); }
+  62% { transform: scale(.985); }
+  100% { transform: scale(1); filter: brightness(1); }
+}
+
+@keyframes revealDotPulse {
+  from { opacity: .35; transform: scale(.72); }
+  to { opacity: 1; transform: scale(1.18); }
+}
+
+@media (max-width: 900px) {
+  .recap-grid-v2 {
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)) !important;
+  }
+  .recap-card-v2 {
+    max-width: 300px !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .showcase-menu .menu-card {
+    padding: 24px 18px 74px !important;
+  }
+  .showcase-menu .menu-footer {
+    width: calc(100vw - 28px);
+    justify-content: center;
+    font-size: .6rem;
+  }
+  .roster-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .seat-pause-button,
+  .seat-remove-button {
+    min-height: 30px;
+    padding: 5px 7px;
+  }
+  .phone-question-stage-v2 {
+    height: calc(100dvh - 76px);
+    padding-inline: 14px !important;
+  }
+  .buzzer-button-v2 {
+    width: min(74vw, 330px) !important;
+  }
+}
+
+@media (hover: none) {
+  [data-tooltip]::after {
+    display: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .player-card.score-impact-correct,
   .player-card.score-impact-wrong,
   .player-card.score-impact-correct .score,
-  .player-card.score-impact-wrong .score {
+  .player-card.score-impact-wrong .score,
+  .final-reveal-spectacle,
+  .final-reveal-card,
+  .reveal-pulse-dots i {
     animation: none !important;
   }
 }
