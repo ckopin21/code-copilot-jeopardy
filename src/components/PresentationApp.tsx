@@ -37,7 +37,7 @@ export function PresentationApp() {
 
   const resultPlayers = useMemo(() => {
     if (!room) return [];
-    const ids = room.resultPlayerIds?.length ? new Set(room.resultPlayerIds) : null;
+    const ids = room.resultPlayerIds ? new Set(room.resultPlayerIds) : null;
     return ids ? room.players.filter((player) => ids.has(player.id)) : room.players;
   }, [room]);
   const winners = useMemo(() => {

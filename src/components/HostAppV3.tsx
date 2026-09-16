@@ -411,7 +411,7 @@ export function HostAppV3() {
     ? connectedPlayers.filter((player) => room.finalRound!.participantIds.includes(player.id))
     : connectedPlayers;
   const pendingFinalWagers = finalParticipants.filter((player) => !player.finalWagerSubmitted).length;
-  const resultIds = room.resultPlayerIds?.length ? new Set(room.resultPlayerIds) : null;
+  const resultIds = room.resultPlayerIds ? new Set(room.resultPlayerIds) : null;
   const recapPlayers = resultIds ? room.players.filter((player) => resultIds.has(player.id)) : room.players;
   const pointsAtStake = current ? current.dailyDouble
     ? (current.wager ?? 0) * (settings.dailyDoubleStacksWithMultiplier ? questionMultiplier : 1)

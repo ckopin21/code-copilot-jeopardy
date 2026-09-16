@@ -334,7 +334,7 @@ export function PlayerApp() {
   const winner = current?.buzzWinnerId === me.id;
   const myResponse = current?.textResponses?.[me.id];
   const isFinalParticipant = Boolean(room.finalRound?.participantIds.includes(me.id));
-  const isResultPlayer = !room.resultPlayerIds?.length || room.resultPlayerIds.includes(me.id);
+  const isResultPlayer = room.resultPlayerIds ? room.resultPlayerIds.includes(me.id) : true;
   const showFinalWager = isFinalParticipant && (room.phase === 'final-wager' || room.phase === 'final-question' || room.phase === 'final-review');
   const questionMultiplier = current ? Math.max(1, Math.round(current.effectiveValue / Math.max(1, current.baseValue))) : 1;
   const pointsAtStake = current ? current.dailyDouble

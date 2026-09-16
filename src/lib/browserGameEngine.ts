@@ -110,7 +110,7 @@ export class BrowserGameEngine {
             : 0;
         }
       }
-      if (record.state.phase === 'recap' && !record.state.resultPlayerIds?.length) {
+      if (record.state.phase === 'recap' && record.state.resultPlayerIds === undefined) {
         record.state.resultPlayerIds = record.state.finalRound?.rosterIds ?? record.state.players.map((player) => player.id);
       }
       if (record.state.timer.running && record.state.timer.endsAt) {

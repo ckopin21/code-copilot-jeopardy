@@ -227,6 +227,16 @@ describe('BrowserGameEngine production state', () => {
     expect(recap.resultPlayerIds).toEqual([finalist.playerId]);
   });
 
+  it('keeps an empty practice result roster empty when someone joins after the game', () => {
+    const { engine, host } = setup({ gameLength: 'quick', dailyDoublesEnabled: false, finalRoundEnabled: false });
+    engine.startGame(host.roomCode, host.hostToken);
+    finishBoardWithoutScoring(engine, host.roomCode, host.hostToken);
+    expect(engine.snapshot(host.roomCode).resultPlayerIds).toEqual([]);
+
+    addPlayer(engine, host.roomCode, 'Late');
+    expect(engine.snapshot(host.roomCode).resultPlayerIds).toEqual([]);
+  });
+
   it('freezes recap results before players join after a non-Final game ends', () => {
     const { engine, host } = setup({ gameLength: 'quick', dailyDoublesEnabled: false, finalRoundEnabled: false });
     const original = addPlayer(engine, host.roomCode, 'Original');
