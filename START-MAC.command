@@ -18,8 +18,20 @@ echo "Starting game..."
 npm start &
 SERVER_PID=$!
 sleep 3
-open "http://localhost:3000"
 
-echo "Game launched at http://localhost:3000"
+LAN_IP="$(ipconfig getifaddr en0 2>/dev/null || true)"
+if [ -z "$LAN_IP" ]; then
+  LAN_IP="$(ipconfig getifaddr en1 2>/dev/null || true)"
+fi
+if [ -n "$LAN_IP" ]; then
+  GAME_URL="http://${LAN_IP}:3000"
+else
+  GAME_URL="http://localhost:3000"
+fi
+
+open "$GAME_URL"
+
+echo "Game launched at $GAME_URL"
+echo "Opening the LAN address lets phone QR links point back to this computer."
 echo "Keep this window open while playing. Press Control-C to stop."
 wait "$SERVER_PID"
