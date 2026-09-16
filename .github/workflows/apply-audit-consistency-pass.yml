@@ -1,0 +1,40 @@
+name: Apply audit consistency pass
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/apply-audit-consistency-pass.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Apply consistency fixes
+        run: python scripts/apply-audit-consistency-pass.py
+      - run: npm ci --no-audit --no-fund
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+      - run: git diff --check
+      - name: Commit validated consistency fixes
+        shell: bash
+        run: |
+          rm .github/workflows/apply-audit-consistency-pass.yml
+          rm scripts/apply-audit-consistency-pass.py
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "fix: align game UI with audited rules"
+          git push origin HEAD:main
