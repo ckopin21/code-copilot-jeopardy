@@ -28,4 +28,12 @@ if old not in text:
     raise SystemExit('prepareFinalRound patch marker not found')
 text = text.replace(old, new, 1)
 
+# The regression must model a drop during the already-selected final clue, not a
+# player who had already been disconnected before that clue began.
+old = '''    engine.setPlayerConnected(host.roomCode, player.playerId, false);\n    const last = firstUnused(engine, host.roomCode);\n    engine.selectQuestion(host.roomCode, host.hostToken, last.questionId);'''
+new = '''    const last = firstUnused(engine, host.roomCode);\n    engine.selectQuestion(host.roomCode, host.hostToken, last.questionId);\n    engine.setPlayerConnected(host.roomCode, player.playerId, false);'''
+if old not in text:
+    raise SystemExit('transient Final fixture marker not found')
+text = text.replace(old, new, 1)
+
 path.write_text(text)
