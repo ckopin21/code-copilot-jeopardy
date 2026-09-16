@@ -11,8 +11,8 @@ if errorlevel 1 (
   exit /b 1
 )
 
-echo Installing dependencies...
-call npm install --no-audit --no-fund
+echo Installing locked dependencies...
+call npm ci --no-audit --no-fund
 if errorlevel 1 goto :fail
 
 echo Building game...
@@ -20,7 +20,7 @@ call npm run build
 if errorlevel 1 goto :fail
 
 echo Starting game...
-start "Blue Stage Trivia Server" cmd /k "npm start"
+start "Blue Stage Trivia" cmd /k "npm start"
 timeout /t 3 /nobreak >nul
 start "" "http://localhost:3000"
 
