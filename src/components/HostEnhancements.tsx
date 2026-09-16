@@ -114,7 +114,7 @@ export function HostEnhancements() {
 
   const healthMap = useMemo(() => new Map(health.map((item) => [item.playerId, item])), [health]);
   const connectedCount = room?.players.filter((player) => player.connected).length ?? 0;
-  const allReady = Boolean(room?.players.length) && room!.players.filter((player) => player.connected).every((player) => ['good', 'fair'].includes(healthMap.get(player.id)?.quality ?? ''));
+  const allReady = Boolean(room?.players.length) && connectedCount === room!.players.length && room!.players.every((player) => ['good', 'fair'].includes(healthMap.get(player.id)?.quality ?? ''));
 
   if (!credentials || !room || credentials.roomCode !== room.code) return null;
 
@@ -204,7 +204,7 @@ export function HostEnhancements() {
           const item = healthMap.get(player.id);
           return <div key={player.id} className={`preflight-row quality-${item?.quality ?? 'offline'}`}><span>P{player.seat}</span><b>{player.avatar} {player.name}</b><strong>{healthLabel(item)}</strong><small>{item?.ageMs == null ? 'No heartbeat' : `${Math.round(item.ageMs / 100) / 10}s since check-in`}{testedIds.has(player.id) ? ' · test sent' : ''}</small></div>;
         }) : <p>No phones are connected yet.</p>}</div>
-        <div className="preflight-summary"><strong>{allReady ? '✓ Connected controllers look ready' : 'Check any stale/offline controller before starting'}</strong><span>{connectedCount}/{room.players.length || 0} connected</span></div>
+        <div className="preflight-summary"><strong>{allReady ? '✓ All reserved controllers are ready' : 'Check any stale/offline controller before starting'}</strong><span>{connectedCount}/{room.players.length || 0} connected</span></div>
         <div className="preflight-actions"><button className="secondary-button" onClick={runControllerTest}>Test All Phones</button><button className="primary-button" onClick={() => setPreflightOpen(false)}>Done</button></div>
         {actionMessage && <p className="drawer-message">{actionMessage}</p>}
       </section>
