@@ -1,0 +1,21 @@
+import { buildPack, category, question } from './buildPack';
+
+const categories = [
+  category('Example Category', {
+    100: question('Easy question?', 'Answer'),
+    200: question('Another easy question?', ['Primary answer', 'Accepted alternate']),
+    300: question('Medium question?', 'Answer', { explanation: 'Optional host-facing context.' }),
+    400: question('Another medium question?', 'Answer', { tags: ['typed'], responseMode: 'text' }),
+    500: question('Hard question?', 'Answer', { dailyDoubleEligible: false }),
+    1000: question('Hardest question?', 'Answer')
+  })
+];
+
+export const examplePack = buildPack({
+  id: 'example',
+  title: 'Example Pack',
+  theme: 'Short theme description',
+  description: 'What this pack covers.',
+  difficulty: 'mixed',
+  approximateMinutes: 35
+}, categories);
