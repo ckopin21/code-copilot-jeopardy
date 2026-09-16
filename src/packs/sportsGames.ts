@@ -13,9 +13,9 @@ const categories: CategoryData[] = [
     ['How many points is a normal basket worth when shot from inside the three-point line?', '2'],
     ['How many players from one team are normally on the court at a time in basketball?', '5'],
     ['How many seconds are on the NBA shot clock?', '24'],
-    ['How many points is a made free throw worth?', '1'],
+    ['What violation is called when a player takes too many steps without dribbling?', ['Traveling', 'Travelling']],
     ['What is a triple-double?', ['Double digits in three statistical categories', '10 or more in three categories']],
-    ['Which player was famously nicknamed “Magic”?', ['Magic Johnson', 'Earvin Johnson']]
+    ['Which NBA team plays its home games at Madison Square Garden?', ['New York Knicks', 'Knicks']]
   ]},
   { name: 'Baseball', questions: [
     ['How many strikes make a strikeout in baseball?', '3'],
@@ -39,7 +39,7 @@ const categories: CategoryData[] = [
     ['Which city hosted the 2016 Summer Olympics?', ['Rio de Janeiro', 'Rio']],
     ['In which country is the Olympic flame traditionally lit?', 'Greece'],
     ['How many events make up a decathlon?', '10'],
-    ['What are the three medal colors awarded for first, second, and third place?', ['Gold, silver, bronze', 'Gold silver and bronze']]
+    ['Which city hosted the first modern Olympic Games in 1896?', 'Athens']
   ]},
   { name: 'Tennis & Golf', questions: [
     ['What word means a score of zero in tennis?', 'Love'],
@@ -55,7 +55,7 @@ const categories: CategoryData[] = [
     ['In Monopoly, what color are Boardwalk and Park Place in the standard U.S. edition?', ['Dark blue', 'Blue']],
     ['What chess move allows the king and a rook to move at the same time?', 'Castling'],
     ['In a standard deck of cards, how many cards are in each suit?', '13'],
-    ['What board game uses letter tiles with different point values to build words?', 'Scrabble']
+    ['In chess, what is it called when a player has no legal move but is not in check?', 'Stalemate']
   ]},
   { name: 'Video Games', questions: [
     ['What is the name of Mario’s brother?', 'Luigi'],
@@ -63,7 +63,7 @@ const categories: CategoryData[] = [
     ['In Minecraft, which green hostile creature silently approaches players and explodes?', 'Creeper'],
     ['Which game series features the hero Link and the kingdom of Hyrule?', ['The Legend of Zelda', 'Zelda']],
     ['What company created the PlayStation brand?', 'Sony'],
-    ['Which classic arcade character moves through a maze eating dots while avoiding ghosts?', ['Pac-Man', 'Pacman']]
+    ['What company released the original Sonic the Hedgehog?', 'Sega']
   ]}
 ];
 
