@@ -1,5 +1,5 @@
 type MusicState = 'lobby' | 'board' | 'thinking' | 'daily-double' | 'double' | 'triple' | 'final' | 'winner';
-type Cue = 'open' | 'buzz' | 'locked' | 'correct' | 'wrong' | 'daily-double' | 'fire' | 'cold' | 'phase';
+type Cue = 'click' | 'open' | 'buzz' | 'locked' | 'correct' | 'wrong' | 'daily-double' | 'fire' | 'cold' | 'phase' | 'reveal';
 
 const KEY = 'blue-stage-audio';
 interface AudioSettings { master: number; music: number; effects: number; muted: boolean }
@@ -131,6 +131,7 @@ class AudioEngine {
   cue(name: Cue): void {
     if (!this.context || !this.effects || this.settings.muted) return;
     const patterns: Record<Cue, [number, number, number][]> = {
+      click: [[440, 0, .035], [660, .025, .045]],
       open: [[523, 0, .08], [659, .08, .1]],
       buzz: [[784, 0, .07], [1047, .055, .13]],
       locked: [[196, 0, .14]],
@@ -139,12 +140,14 @@ class AudioEngine {
       'daily-double': [[392, 0, .1], [523, .09, .1], [784, .18, .24]],
       fire: [[440, 0, .07], [659, .05, .08], [880, .11, .16]],
       cold: [[330, 0, .12], [247, .1, .2]],
-      phase: [[330, 0, .06], [494, .06, .08], [659, .13, .14]]
+      phase: [[330, 0, .06], [494, .06, .08], [659, .13, .14]],
+      reveal: [[523, 0, .06], [659, .055, .07], [784, .11, .09], [1047, .19, .18]]
     };
     const start = this.context.currentTime;
     for (const [frequency, offset, duration] of patterns[name]) {
       // Source-level effect volume is intentionally boosted; the effects slider still controls the final mix independently.
-      this.tone(frequency, start + offset, duration, 0.24, name === 'wrong' || name === 'locked' ? 'sawtooth' : 'sine', this.effects);
+      const volume = name === 'click' ? 0.12 : name === 'reveal' ? 0.28 : 0.24;
+      this.tone(frequency, start + offset, duration, volume, name === 'wrong' || name === 'locked' ? 'sawtooth' : 'sine', this.effects);
     }
   }
 
