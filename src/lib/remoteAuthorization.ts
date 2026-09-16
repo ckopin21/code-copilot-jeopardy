@@ -1,3 +1,4 @@
+// Least-privilege policy for requests arriving over remote PeerJS data channels.
 export type RemoteIdentity = {
   roomCode: string;
   role: 'player' | 'presentation';
