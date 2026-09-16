@@ -44,9 +44,11 @@ export const geographyPack = buildPack({
   approximateMinutes: 35,
   accentColor: '#5eead4',
   categoryOrder: ['World Capitals'],
-  finalQuestionId: 'geography-final-world-capitals'
+  finalQuestionId: 'geography-1-6'
 }, categories);
 ```
+
+`buildPack()` generates question IDs as `<pack-id>-<category-number>-<question-number>`, so the example above reserves the first category's sixth question when that question was not already used on the board.
 
 The older tuple-array format used by the original built-in packs remains supported for compatibility, but the explicit value-map format above is preferred for new work.
 
