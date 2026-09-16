@@ -6,14 +6,14 @@ This folder is the maintained technical and gameplay reference for the current g
 
 - [`../README.md`](../README.md) — project overview, run/deploy commands, supported runtime
 - [`gameplay.md`](gameplay.md) — complete game flow, scoring, wagers, streaks, Final Round, reset/reconnect behavior
-- [`architecture.md`](architecture.md) — client structure, state ownership, engines, storage, audio, presentation mode
+- [`architecture.md`](architecture.md) — client structure, state ownership, storage, snapshot security, audio, presentation mode
 - [`networking.md`](networking.md) — phone connections, PeerJS/WebRTC lifecycle, reconnect/reserved-seat behavior, failure cases
-- [`question-packs.md`](question-packs.md) — built-in pack authoring, automatic registration, validation, custom server packs
+- [`question-packs.md`](question-packs.md) — built-in pack authoring, automatic registration, and validation
 - [`development.md`](development.md) — repository layout, testing, CI, deployment, safe modification checklist
 
 ## Runtime support
 
-The GitHub Pages build is the primary supported version. It runs the game host in the browser and connects player phones with PeerJS/WebRTC. The Node/Express/Socket.IO implementation remains available for traditional server deployment, but it is a separate runtime path and should not be assumed to receive a gameplay change unless that path is changed and tested too.
+Blue Stage has one supported gameplay runtime: the browser-hosted GitHub Pages/P2P architecture. The host browser owns authoritative state through `BrowserGameEngine`, and player/presentation clients connect through PeerJS/WebRTC. Local development and production tests use this same engine path.
 
 ## Documentation maintenance rule
 
