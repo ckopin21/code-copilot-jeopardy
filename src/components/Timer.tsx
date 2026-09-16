@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { TimerState } from '../shared/types';
 
 interface TimerProps {
@@ -6,45 +6,41 @@ interface TimerProps {
   serverNow?: number;
 }
 
-export function Timer({ timer, serverNow }: TimerProps) {
-  const [, forceTick] = useState(0);
-  const anchorRef = useRef({
-    key: '',
-    localAt: performance.now(),
-    serverAt: serverNow ?? Date.now(),
-    remainingAt: timer.remainingMs ?? timer.durationMs ?? 0
-  });
+interface TimerAnchor {
+  remainingMs: number;
+  localAt: number;
+  running: boolean;
+}
 
-  const key = `${timer.running}|${timer.endsAt ?? 'none'}|${timer.remainingMs ?? 'none'}|${timer.durationMs ?? 'none'}|${serverNow ?? 'local'}`;
-  if (anchorRef.current.key !== key) {
-    anchorRef.current = {
-      key,
-      localAt: performance.now(),
-      serverAt: serverNow ?? Date.now(),
-      remainingAt: Math.max(0, Math.min(timer.durationMs ?? Number.POSITIVE_INFINITY, timer.remainingMs ?? timer.durationMs ?? 0))
-    };
-  }
+function clampedRemaining(timer: TimerState): number {
+  if (!timer.durationMs) return 0;
+  return Math.max(0, Math.min(timer.durationMs, timer.remainingMs ?? timer.durationMs));
+}
+
+export function Timer({ timer, serverNow }: TimerProps) {
+  const [anchor, setAnchor] = useState<TimerAnchor>(() => ({
+    remainingMs: clampedRemaining(timer),
+    localAt: performance.now(),
+    running: timer.running
+  }));
+  const [, forceTick] = useState(0);
 
   useEffect(() => {
+    setAnchor({
+      remainingMs: clampedRemaining(timer),
+      localAt: performance.now(),
+      running: timer.running
+    });
+
     if (!timer.running) return;
     const id = window.setInterval(() => forceTick((value) => value + 1), 100);
     return () => window.clearInterval(id);
-  }, [timer.running, timer.endsAt]);
+  }, [timer.running, timer.endsAt, timer.remainingMs, timer.durationMs, serverNow]);
 
   if (!timer.durationMs) return null;
 
-  const elapsedLocal = performance.now() - anchorRef.current.localAt;
-  let remaining: number;
-  if (!timer.running) {
-    remaining = timer.remainingMs ?? 0;
-  } else if (timer.endsAt && serverNow !== undefined) {
-    const estimatedServerNow = anchorRef.current.serverAt + elapsedLocal;
-    remaining = timer.endsAt - estimatedServerNow;
-  } else {
-    remaining = anchorRef.current.remainingAt - elapsedLocal;
-  }
-
-  remaining = Math.max(0, Math.min(timer.durationMs, remaining));
+  const elapsed = anchor.running ? performance.now() - anchor.localAt : 0;
+  const remaining = Math.max(0, Math.min(timer.durationMs, anchor.remainingMs - elapsed));
   const ratio = Math.max(0, Math.min(1, remaining / timer.durationMs));
   const seconds = Math.min(Math.ceil(timer.durationMs / 1000), Math.ceil(remaining / 1000));
 
