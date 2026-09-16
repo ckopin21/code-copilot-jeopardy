@@ -17,7 +17,7 @@ export const DEFAULT_SETTINGS: GameSettings = {
   streaksEnabled: true,
   coldStreakThreshold: 3,
   finalRoundEnabled: true,
-  lockRoomOnStart: true,
+  lockRoomOnStart: false,
   allowRepeatBuzzAfterMiss: false,
   allowWagerBeyondScore: true,
   maxWager: 1000,
