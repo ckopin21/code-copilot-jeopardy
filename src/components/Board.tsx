@@ -32,7 +32,7 @@ export function Board({ board, multiplier = 1, disabled = false, onSelect, onRev
           {question.used ? questionResults.length ? <div className="used-tile-result">
             <small className="used-tile-value">{question.value}</small>
             <div className="used-result-list">{questionResults.map((result) => <span className={`used-result-chip ${result.correct ? 'correct' : 'wrong'}`} key={result.playerId}><b>{result.playerAvatar} {result.playerName}</b><em>{result.correct ? 'CORRECT' : 'INCORRECT'}</em></span>)}</div>
-          </div> : <span className="used-check used-check-empty">✓</span> : displayedValue}
+          </div> : <span className="used-check used-check-empty">X</span> : displayedValue}
         </button>;
       }))}
     </div>
