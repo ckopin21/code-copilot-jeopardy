@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { BrowserGameEngine, type RandomSource } from '../src/lib/browserGameEngine';
 import { mergeStoredRooms, recoverRoomStorage } from '../src/lib/roomStorageRecovery';
 
 class MemoryStorage implements Storage {
@@ -11,7 +12,18 @@ class MemoryStorage implements Storage {
   setItem(key: string, value: string): void { this.values.set(key, String(value)); }
 }
 
+class FixedRandom implements RandomSource {
+  private value = 0.419;
+  next(): number { this.value = (this.value * 6.17 + 0.11) % 1; return this.value; }
+}
+
 const room = (code: string, expiresAt: number, marker: string) => ({ state: { code, createdAt: 100, expiresAt }, marker });
+const PRIMARY_KEY = 'blue-stage-p2p-engine-v2';
+const BACKUP_KEY = 'blue-stage-p2p-engine-v2-backup';
+
+beforeEach(() => {
+  Object.defineProperty(globalThis, 'localStorage', { value: new MemoryStorage(), configurable: true });
+});
 
 describe('room storage recovery', () => {
   it('keeps the freshest version of each live room across primary and backup', () => {
@@ -33,11 +45,43 @@ describe('room storage recovery', () => {
   it('repairs a valid but incomplete primary snapshot from backup', () => {
     const storage = new MemoryStorage();
     const expiresAt = Date.now() + 60_000;
-    storage.setItem('blue-stage-p2p-engine-v2', JSON.stringify([room('OLD11', expiresAt, 'old')]));
-    storage.setItem('blue-stage-p2p-engine-v2-backup', JSON.stringify([room('ROOM1', expiresAt + 1_000, 'saved-room')]));
+    storage.setItem(PRIMARY_KEY, JSON.stringify([room('OLD11', expiresAt, 'old')]));
+    storage.setItem(BACKUP_KEY, JSON.stringify([room('ROOM1', expiresAt + 1_000, 'saved-room')]));
 
     const recovered = recoverRoomStorage(storage);
     expect(recovered.some((item) => item.state?.code === 'ROOM1')).toBe(true);
-    expect(JSON.parse(storage.getItem('blue-stage-p2p-engine-v2') ?? '[]')).toHaveLength(2);
+    expect(JSON.parse(storage.getItem(PRIMARY_KEY) ?? '[]')).toHaveLength(2);
+  });
+
+  it('recovers a real active room and preserves host and player reconnect credentials', () => {
+    const engine = new BrowserGameEngine(new FixedRandom(), 60_000);
+    const host = engine.createRoom('https://example.test/game', {
+      selectedPackIds: ['sports-games'],
+      gameLength: 'quick',
+      dailyDoublesEnabled: false,
+      finalRoundEnabled: false
+    });
+    const player = engine.joinPlayer(host.roomCode, { name: 'Recovery', avatar: '🚀', accent: '#93c5fd' });
+    engine.startGame(host.roomCode, host.hostToken);
+    const before = engine.snapshot(host.roomCode);
+    const activeSnapshot = localStorage.getItem(PRIMARY_KEY);
+    expect(activeSnapshot).toBeTruthy();
+
+    localStorage.setItem(BACKUP_KEY, activeSnapshot!);
+    localStorage.setItem(PRIMARY_KEY, '[]');
+    recoverRoomStorage(localStorage);
+
+    const restoredEngine = new BrowserGameEngine(new FixedRandom(), 60_000);
+    const restoredHost = restoredEngine.reconnectHost(host.roomCode, host.hostToken);
+    const restoredPlayer = restoredEngine.reconnectPlayer(host.roomCode, player.playerId, player.reconnectToken);
+    const after = restoredEngine.snapshot(host.roomCode);
+
+    expect(restoredHost.code).toBe(host.roomCode);
+    expect(restoredPlayer.playerId).toBe(player.playerId);
+    expect(after.phase).toBe(before.phase);
+    expect(after.board?.questions.map((item) => item.questionId)).toEqual(before.board?.questions.map((item) => item.questionId));
+    expect(after.players[0].id).toBe(player.playerId);
+    expect(after.players[0].seat).toBe(before.players[0].seat);
+    expect(after.players[0].connected).toBe(true);
   });
 });
