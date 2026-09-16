@@ -1,3 +1,4 @@
+export { QUESTION_VALUES } from './types';
 import type { GameSettings } from './types';
 
 export const DEFAULT_SETTINGS: GameSettings = {
