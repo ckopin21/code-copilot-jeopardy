@@ -11,8 +11,8 @@ https://ckopin21.github.io/code-copilot-jeopardy/
 ## Current features
 
 - 0–5 player seats, including practice mode with no phones
-- QR/camera join plus manual room codes
-- stable phone identity with automatic reconnect and reserved seats
+- QR/camera join plus manual room codes and click-to-enlarge host QR
+- stable phone identity with automatic reconnect, heartbeat disconnect detection, and reserved seats
 - host-selectable board with in-page fullscreen presentation mode
 - first-buzz locking, keyboard/gamepad host buzzers, typed-response questions
 - Daily Doubles with fixed wager choices
@@ -20,14 +20,15 @@ https://ckopin21.github.io/code-copilot-jeopardy/
 - 2× final-six and 3× final-three question values
 - On Fire and Cold Streak states
 - animated score transfer from used clue to player card, with impact/heartbeat score change
-- used board tiles retain player name + correct/incorrect result
+- used board tiles retain player name + correct/incorrect result; unanswered reveals use a centered completion mark
 - Final Round fixed wagers: 0, board values, or All In when score is positive
-- host can start Final question/review before every connected phone submits
-- staged end podium followed by player statistics
+- host-controlled Final reveal with a staged tension sequence
+- staged end podium followed by readable host statistics and individual phone statistics
+- temporary seat pause versus permanent player removal controls
 - procedural Web Audio music/effects with Master, Music, and Effects starting at 75%
 - short haptic pulse on phone button presses when the browser supports the Vibration API
 - reduced-motion support
-- three built-in question packs with automatic pack registration and validation
+- three built-in question packs with automatic pack registration and validation; one pack is selected per game
 
 ## Documentation
 
@@ -48,23 +49,24 @@ The host page is the live room endpoint. If it closes, phones cannot keep playin
 ### Game flow
 
 1. Choose **Start New Game** or **Continue Game**.
-2. Select packs/rules in the lobby.
-3. Players join by QR or room code.
-4. Host starts the game.
-5. Host selects a question from the normal or fullscreen board.
-6. Question response/reveal/grading runs according to its response mode.
-7. Correct/incorrect grading automatically returns to the board when complete.
-8. Late-game multipliers apply to the last six/three questions when enabled.
-9. Final Round collects wagers and phone answers when enabled.
-10. Podium reveal plays, then player statistics are shown.
+2. Select one question pack and the rules in the lobby.
+3. Choose Quick (16 clues), Standard (25), or Marathon (36, including the 1000-point row).
+4. Players join by QR or room code.
+5. Host starts the game.
+6. Host selects a question from the normal or fullscreen board.
+7. Question response/reveal/grading runs according to its response mode.
+8. Correct/incorrect grading returns to the board when complete; unanswered reveals wait for the host to continue.
+9. Late-game multipliers apply to the last six/three questions when enabled.
+10. Final Round collects wagers and phone answers when enabled, then waits for the host's staged reveal.
+11. Podium reveal plays, then host and phone player statistics are shown.
 
 See [`docs/gameplay.md`](docs/gameplay.md) for exact behavior.
 
 ## Reconnect behavior
 
-A joined phone receives a stable player ID and reconnect token stored in that browser. If the phone intentionally leaves, refreshes, loses connectivity, or reconnects, its seat remains reserved until it returns or the host removes/resets it.
+A joined phone receives a stable player ID and reconnect token stored in that browser. If the phone intentionally leaves, refreshes, loses connectivity, or disappears without a clean WebRTC close, its seat remains reserved until it returns or the host permanently removes/resets it. The host also uses an authenticated heartbeat timeout to detect stale mobile tabs.
 
-Disconnected players disappear from the connected-player strip but retain score and seat state. Connected-player-only phases do not wait forever on disconnected phones.
+Disconnected players disappear from the connected-player strip but retain score and seat state. **Pause seat** deliberately disconnects a controller while keeping that state; **Remove** deletes the player and reconnect identity. Connected-player-only phases do not wait forever on disconnected phones.
 
 See [`docs/networking.md`](docs/networking.md).
 
@@ -94,7 +96,7 @@ Final wager choices are:
 0, 100, 200, 300, 400, 500, 1000, ALL IN
 ```
 
-All In shows the player's current positive score and is disabled at zero/negative score. Host status cards show the locked wager amount. Missing wagers become 0 if the host starts the Final question early.
+All In shows the player's current positive score and is disabled at zero/negative score. Host status cards show the locked wager amount. Missing wagers become 0 if the host starts the Final question early. Final submissions or timer expiration do not expose the accepted answer; the host starts the tension/reveal sequence.
 
 ## Question packs
 
@@ -147,7 +149,7 @@ Pack registration is automatically refreshed before dev, typecheck, tests, and b
 
 ## Testing and CI
 
-Tests cover core engine behavior, answer normalization, pack loading, and modular pack validation. GitHub Actions runs installation, typecheck, lint, tests, production build, and GitHub Pages deployment checks.
+Tests cover core engine behavior, answer normalization, pack loading, modular pack validation, and the distinct game-length board sizes. GitHub Actions runs installation, typecheck, lint, tests, production build, and GitHub Pages deployment checks.
 
 DOM geometry, camera scanning, haptics, Web Audio, and real WebRTC connectivity still require browser/device smoke testing because those behaviors cannot be fully proven by unit tests alone.
 
@@ -178,4 +180,4 @@ React renders names/questions as text, avoiding raw HTML injection for normal co
 
 **Reset Game** keeps the room and reserved seats but resets the board, scores, statistics, current phase, and question history. Phones receive the lobby state immediately.
 
-**Reset Instance** is the destructive recovery/update option. It clears saved Blue Stage state and reloads the newest application build.
+**Reset Instance** clears saved Blue Stage host/player/game state and reloads the current application build cleanly.
