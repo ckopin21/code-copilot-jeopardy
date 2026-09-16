@@ -1,197 +1,181 @@
 # Blue Stage Trivia
 
-A server-authoritative multiplayer quiz-show party game for a host screen, player phones, and an optional presentation display. It uses original visuals and procedural Web Audio cues rather than copyrighted Jeopardy branding, music, or sound effects.
+A shared-screen browser trivia game with a host display and up to five phone controllers. The primary deployed version runs on GitHub Pages: the host browser owns the game state and player phones connect directly with PeerJS/WebRTC.
 
-## Features
+Live game:
 
-- 0–5 players: practice, solo, or competitive multiplayer
-- Short room codes, phone join URLs, and QR codes
-- Stable player identity across refresh/reconnect
-- Server-authoritative buzz order, scoring, timers, wagers, and state transitions
-- Host console plus board-only TV/projector presentation view
-- Phone-first buzzer with large touch target
-- Local keyboard buzzers (`1`–`5`) and Gamepad API support
-- Animated scoring, On Fire streaks, Cold Streaks, Daily Doubles, Double/Triple late-game phases
-- Secret Final Round wagers and phone answer submission
-- End-game recap with accuracy, streaks, wagers, buzz timing, and score movement
-- Independent master/music/effects controls with persistent preferences
-- Three built-in 60-question packs: Disney, Movies & TV, Science & Nature
-- JSON custom-pack import with server-side validation
-- Quick, Standard, and Marathon board presets
-- Reduced-motion support, keyboard focus, semantic controls, and responsive layouts
-- Active room persistence through host refresh and server restart when `.data` is persistent
+```text
+https://ckopin21.github.io/code-copilot-jeopardy/
+```
 
-## Screenshots
+## Current features
 
-Screenshots can be added under `docs/screenshots/` after deployment.
+- 0–5 player seats, including practice mode with no phones
+- QR/camera join plus manual room codes
+- stable phone identity with automatic reconnect and reserved seats
+- host-selectable board with in-page fullscreen presentation mode
+- first-buzz locking, keyboard/gamepad host buzzers, typed-response questions
+- Daily Doubles with fixed wager choices
+- visible locked wagers and points in play on host and phones
+- 2× final-six and 3× final-three question values
+- On Fire and Cold Streak states
+- animated score transfer from used clue to player card, with impact/heartbeat score change
+- used board tiles retain player name + correct/incorrect result
+- Final Round fixed wagers: 0, board values, or All In when score is positive
+- host can start Final question/review before every connected phone submits
+- staged end podium followed by player statistics
+- procedural Web Audio music/effects with Master, Music, and Effects starting at 75%
+- short haptic pulse on phone button presses when the browser supports the Vibration API
+- reduced-motion support
+- three built-in question packs with automatic pack registration and validation
 
-## Stack
+## Documentation
 
-- Node.js 22+
-- TypeScript
-- Express
-- Socket.IO
-- React + Vite
-- Vitest
-- ESLint
+The maintained documentation index is [`docs/README.md`](docs/README.md).
 
-The server owns all game state. Clients request actions but never award points, choose the accepted buzz, resolve correctness, or mutate room state directly.
+- [`docs/gameplay.md`](docs/gameplay.md) — complete game/rule flow
+- [`docs/architecture.md`](docs/architecture.md) — runtime, state ownership, storage, UI architecture
+- [`docs/networking.md`](docs/networking.md) — WebRTC/PeerJS, reconnects, reserved seats, failure behavior
+- [`docs/question-packs.md`](docs/question-packs.md) — easiest way to add questions and packs
+- [`docs/development.md`](docs/development.md) — repository layout, tests, CI, deployment, change checklist
 
-## Install
+## Primary runtime: GitHub Pages
+
+The Pages build is static. `src/lib/browserGameEngine.ts` is the authoritative engine for this runtime and stores active room state in the host browser. `src/lib/socket.ts` connects phones to the host over PeerJS/WebRTC.
+
+The host page is the live room endpoint. If it closes, phones cannot keep playing until the host page is reopened and restores the saved room.
+
+### Game flow
+
+1. Choose **Start New Game** or **Continue Game**.
+2. Select packs/rules in the lobby.
+3. Players join by QR or room code.
+4. Host starts the game.
+5. Host selects a question from the normal or fullscreen board.
+6. Question response/reveal/grading runs according to its response mode.
+7. Correct/incorrect grading automatically returns to the board when complete.
+8. Late-game multipliers apply to the last six/three questions when enabled.
+9. Final Round collects wagers and phone answers when enabled.
+10. Podium reveal plays, then player statistics are shown.
+
+See [`docs/gameplay.md`](docs/gameplay.md) for exact behavior.
+
+## Reconnect behavior
+
+A joined phone receives a stable player ID and reconnect token stored in that browser. If the phone intentionally leaves, refreshes, loses connectivity, or reconnects, its seat remains reserved until it returns or the host removes/resets it.
+
+Disconnected players disappear from the connected-player strip but retain score and seat state. Connected-player-only phases do not wait forever on disconnected phones.
+
+See [`docs/networking.md`](docs/networking.md).
+
+## Audio
+
+Audio is generated with Web Audio rather than external copyrighted game-show audio. Master, Music, and Sound Effects start at 75% for the current audio-default version and can be changed through the host audio drawer.
+
+Presentation mode does not create a second audio surface.
+
+## Daily Double
+
+Daily Double ownership follows the active controller/last-resolved player automatically; there is no separate board selector.
+
+Available wagers are fixed presets:
+
+```text
+100, 200, 300, 400, 500, 1000
+```
+
+The same choices are visible on the active player's phone and host screen. Other phones can see the available choices. After lock-in, every connected screen can see the chosen wager and total points in play.
+
+## Final Round
+
+Final wager choices are:
+
+```text
+0, 100, 200, 300, 400, 500, 1000, ALL IN
+```
+
+All In shows the player's current positive score and is disabled at zero/negative score. Host status cards show the locked wager amount. Missing wagers become 0 if the host starts the Final question early.
+
+## Question packs
+
+Built-in packs live in `src/packs/`.
+
+To add a new built-in pack:
+
+1. Copy `src/packs/_pack.template.ts.example` to a new `.ts` file.
+2. Fill in metadata/categories/questions.
+3. Export one `somethingPack` created with `buildPack(...)`.
+4. Run a normal dev/test/build command.
+
+The registry is generated automatically; do not edit `src/packs/index.ts` or `src/packs/generatedRegistry.ts` just to add a pack.
+
+Preferred category authoring uses explicit point keys:
+
+```ts
+category('Category', {
+  100: question('Question?', 'Answer'),
+  200: question('Question?', 'Answer'),
+  300: question('Question?', 'Answer'),
+  400: question('Question?', 'Answer'),
+  500: question('Question?', 'Answer'),
+  1000: question('Question?', 'Answer')
+})
+```
+
+See [`docs/question-packs.md`](docs/question-packs.md) for all options and validation rules.
+
+## Install and development
+
+Requires Node.js 22+.
 
 ```bash
 npm install
 npm run dev
 ```
 
-Development starts:
+Useful commands:
 
-- Vite client: `http://localhost:5173`
-- Socket/Express server: `http://localhost:3000`
-
-Vite proxies `/api` and `/socket.io` to the server.
-
-## Local-network phone play
-
-Run `npm run dev`, then use the LAN address printed by the Node server, for example:
-
-```text
-http://192.168.1.25:3000
+```bash
+npm run packs:sync
+npm run typecheck
+npm run lint
+npm test
+npm run build
 ```
 
-For the simplest same-Wi-Fi development flow, build once and run the production server so the host page and WebSocket server use the same port:
+Pack registration is automatically refreshed before dev, typecheck, tests, and builds.
+
+## Testing and CI
+
+Tests cover core engine behavior, answer normalization, pack loading, and modular pack validation. GitHub Actions runs installation, typecheck, lint, tests, production build, and GitHub Pages deployment checks.
+
+DOM geometry, camera scanning, haptics, Web Audio, and real WebRTC connectivity still require browser/device smoke testing because those behaviors cannot be fully proven by unit tests alone.
+
+## Alternate Node/Socket.IO runtime
+
+The repository also contains an alternate traditional server implementation under `server/` using Express and Socket.IO, including server persistence and server-imported JSON question packs.
+
+That path does **not** power the GitHub Pages build and should be treated as a separate runtime. A change to the browser engine/PeerJS path does not automatically change the Node engine/Socket.IO path.
+
+For the Node build:
 
 ```bash
 npm run build
 npm start
 ```
 
-Open the printed LAN URL on the host computer. The lobby QR code and join link use a phone-reachable LAN address when one can be detected.
+Server-imported JSON packs and `.data` persistence apply only to that Node runtime. See the architecture and question-pack docs for the distinction.
 
-If a phone cannot connect:
+## Security/authority model
 
-1. Confirm the phone and host are on the same LAN/Wi-Fi.
-2. Allow inbound Node.js traffic through the host firewall.
-3. Avoid guest Wi-Fi/client isolation networks.
-4. Set `PUBLIC_BASE_URL` if automatic LAN detection is wrong.
+In the primary Pages runtime, the host browser is authoritative for room/game state. Player actions are authorized with stable player IDs and reconnect tokens. Phones request actions but do not directly mutate scores or game phases.
 
-## Game flow
+In the alternate Node runtime, the server is authoritative and uses its own host/player authorization path.
 
-1. Open `/` and choose **Host a Game**.
-2. Select one or more question packs and game rules.
-3. Players scan the QR code or open `/?mode=player&room=ABCDE`.
-4. Start the game with 0–5 players.
-5. Host selects board tiles and opens buzzers.
-6. The server accepts the first eligible buzz it receives and locks the rest.
-7. Host marks the answer correct/incorrect. With steals enabled, remaining players can buzz after a miss.
-8. At six remaining questions, points become 2×. At three remaining, points become 3×.
-9. If enabled, Final Round collects secret wagers and typed answers from phones.
-10. The recap shows scores and player statistics.
+React renders names/questions as text, avoiding raw HTML injection for normal content paths.
 
-## Daily Doubles
+## Reset behavior
 
-Daily Doubles are assigned randomly to eligible board questions at game generation time. The default is three. The host chooses/retains the answering player, then selects a fixed wager (`100`, `200`, `300`, `400`, `500`, `1000`) or a custom amount. Wager limits and late-game multiplier stacking are configurable.
+**Reset Game** keeps the room and reserved seats but resets the board, scores, statistics, current phase, and question history. Phones receive the lobby state immediately.
 
-## Streaks
-
-- **On Fire** activates after three consecutive correct answers.
-- **Cold Streak** activates after the configured number of consecutive misses, default three.
-- Correct answers clear Cold Streak; incorrect answers clear On Fire progress.
-
-## Final Round
-
-1. Final category reveal
-2. Secret player wagers
-3. Final question reveal
-4. Private phone answer submission
-5. Host reviews answers one at a time
-6. Wagers are added/subtracted
-7. Final scores and winner ceremony
-
-Exact answer normalization is available, but the host can override correctness for human-language ambiguity.
-
-## Presentation view
-
-The host lobby exposes a presentation URL:
-
-```text
-/?mode=presentation&room=ABCDE
-```
-
-This view hides host controls and is intended for a TV, projector, or screen share.
-
-## Question packs
-
-Built-in packs live in `src/packs/`. Custom JSON packs can be imported with:
-
-```bash
-curl -X POST http://localhost:3000/api/packs/import \
-  -H 'content-type: application/json' \
-  --data @my-pack.json
-```
-
-See [`docs/question-packs.md`](docs/question-packs.md) for the schema and validation rules.
-
-## Scripts
-
-```bash
-npm run dev        # server + Vite dev clients
-npm run typecheck  # client and server TypeScript
-npm run lint       # ESLint
-npm test           # Vitest engine tests
-npm run build      # typecheck + Vite build + server compile
-npm start          # production server after build
-```
-
-## Environment
-
-Copy `.env.example` if needed:
-
-```text
-PORT=3000
-HOST=0.0.0.0
-PUBLIC_BASE_URL=
-ROOM_TTL_MINUTES=180
-```
-
-`PUBLIC_BASE_URL` should be the externally reachable origin when deployed behind a proxy or when LAN auto-detection is not suitable.
-
-## Persistence
-
-Active room snapshots are stored in `.data/rooms.json`. Custom packs are stored in `.data/custom-packs.json`. This first release intentionally uses an abstracted file adapter instead of requiring a database. For horizontally scaled production, replace the persistence adapter with shared storage and use a Socket.IO multi-node adapter.
-
-## Production deployment
-
-Use any Node hosting platform that supports long-lived WebSocket connections. Build and start with:
-
-```bash
-npm install
-npm run build
-NODE_ENV=production npm start
-```
-
-Deployment requirements:
-
-- Route HTTP and WebSocket traffic to the same app.
-- Enable WebSocket upgrade support in the reverse proxy.
-- Set `PUBLIC_BASE_URL=https://your-domain.example`.
-- Use sticky sessions or a shared Socket.IO adapter if running multiple app instances.
-- Mount `.data` on persistent storage if room/custom-pack recovery is required across instance replacement.
-
-The app is not hardcoded to a particular hosting vendor.
-
-## Security model
-
-- Every socket action is validated and authorized as host or player.
-- Players use random stable IDs plus reconnect tokens instead of socket IDs or display names.
-- Host actions require a random host token.
-- Scores, first-buzz selection, timers, Daily Doubles, Final Round scoring, and state transitions are server-owned.
-- Clients cannot submit arbitrary score changes or trigger host events without the host token.
-- Pack imports are schema-validated and capped by the Express JSON body limit.
-- Player names and question strings are rendered by React, avoiding raw HTML injection.
-
-## Testing
-
-`tests/gameEngine.test.ts` covers room creation, five-player limits, reconnect identity, duplicate names, pack loading, buzz locking, first-buzz wins, normal scoring, steals, Daily Doubles and wagers, exact late-game multipliers, On Fire, Cold Streak, answer normalization, invalid pack rejection, Final Round wagering/answers/scoring, and game completion.
-
-GitHub Actions runs install, typecheck, lint, tests, and production build on pushes and pull requests.
+**Reset Instance** is the destructive recovery/update option. It clears saved Blue Stage state and reloads the newest application build.
