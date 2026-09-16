@@ -1,0 +1,125 @@
+/* Desktop menu sizing and saved-session placement. */
+.showcase-menu.menu-shell-v2 {
+  width: 100%;
+  min-width: 100%;
+}
+
+.showcase-menu .menu-card-v2 {
+  width: min(1240px, calc(100vw - 72px)) !important;
+  max-width: none !important;
+  padding: clamp(28px, 3.6vh, 48px) clamp(28px, 3.2vw, 54px) !important;
+  gap: clamp(14px, 2vh, 22px) !important;
+}
+
+.showcase-menu .menu-logo-v2 strong {
+  font-size: clamp(4rem, 5.5vw, 6.4rem) !important;
+}
+
+.showcase-menu .menu-logo-v2 span {
+  font-size: clamp(.8rem, .8vw, 1rem) !important;
+}
+
+.showcase-menu .menu-subtitle-v2 {
+  max-width: 760px;
+  font-size: clamp(1rem, 1.05vw, 1.18rem);
+}
+
+.showcase-menu .menu-mode-grid {
+  grid-template-columns: minmax(0, 1.55fr) minmax(320px, .85fr);
+  gap: clamp(14px, 1.4vw, 22px);
+}
+
+.showcase-menu .menu-mode-section {
+  padding: clamp(18px, 1.7vw, 24px);
+  gap: 14px;
+}
+
+.showcase-menu .host-menu-actions {
+  gap: 12px;
+}
+
+.showcase-menu .host-menu-actions .menu-new-game {
+  min-height: 82px;
+}
+
+.showcase-menu .saved-game-inline {
+  width: 100%;
+  min-height: 92px;
+  margin: 0;
+  cursor: pointer !important;
+  border-color: rgba(255,209,102,.7);
+  background: linear-gradient(135deg,rgba(255,209,102,.18),rgba(3,30,48,.82));
+}
+
+.showcase-menu .saved-game-inline .saved-game-main strong {
+  font-size: clamp(1.45rem, 1.6vw, 1.9rem);
+}
+
+.showcase-menu .saved-game-inline .saved-game-main small,
+.showcase-menu .saved-game-inline .saved-game-main span,
+.showcase-menu .saved-game-inline .saved-game-meta b,
+.showcase-menu .saved-game-inline .saved-game-meta span,
+.showcase-menu .saved-game-inline .saved-game-meta small {
+  font-size: clamp(.68rem, .72vw, .84rem);
+}
+
+.showcase-menu .join-game-button {
+  min-height: 188px !important;
+}
+
+.showcase-menu .menu-tool-button {
+  min-height: 44px;
+  padding-inline: 16px;
+  font-size: .8rem;
+}
+
+@media (min-width: 1600px) {
+  .showcase-menu .menu-card-v2 {
+    width: min(1380px, 82vw) !important;
+  }
+
+  .showcase-menu .menu-mode-section {
+    padding: 26px;
+  }
+
+  .showcase-menu .host-menu-actions .menu-new-game,
+  .showcase-menu .saved-game-inline {
+    min-height: 96px;
+  }
+
+  .showcase-menu .join-game-button {
+    min-height: 210px !important;
+  }
+}
+
+@media (max-width: 1099px) and (min-width: 721px) {
+  .showcase-menu .menu-card-v2 {
+    width: min(980px, calc(100vw - 36px)) !important;
+  }
+
+  .showcase-menu .menu-logo-v2 strong {
+    font-size: clamp(3.2rem, 8vw, 5.2rem) !important;
+  }
+
+  .showcase-menu .menu-mode-grid {
+    grid-template-columns: minmax(0, 1.45fr) minmax(260px, .85fr);
+  }
+}
+
+@media (max-width: 720px) {
+  .showcase-menu .menu-card-v2 {
+    width: 100% !important;
+  }
+
+  .showcase-menu .menu-logo-v2 strong {
+    font-size: clamp(2.8rem, 15vw, 4.6rem) !important;
+  }
+
+  .showcase-menu .saved-game-inline {
+    min-height: 0;
+  }
+
+  .showcase-menu .join-game-button {
+    min-height: 76px !important;
+  }
+}
