@@ -23,7 +23,7 @@ Temporary disconnects never renumber seats. Permanent removal frees that exact s
 
 Every outgoing room snapshot is sanitized by `src/lib/snapshotSecurity.ts` according to the receiving role.
 
-Before reveal, accepted answers and explanations are withheld from player/presentation clients. Other players' typed answers and auto-grade information are hidden. Daily Double question text is withheld during the wager phase. Final wagers/answers remain private until the appropriate Final review step.
+Before reveal, accepted answers and explanations are withheld from player/presentation clients. Other players' typed answers and auto-grade information are hidden. Daily Double question text is withheld during the wager phase. The Final question itself is withheld until the answer phase begins, and future Final answers stay hidden even from the host until each player reaches progressive review.
 
 ## Connection state
 
@@ -92,7 +92,7 @@ When a current player connection closes, the host marks that player `connected=f
 
 A stale older connection closing after a newer connection has already replaced it must not mark the restored player offline. `playerConnections` tracks the current data connection per player ID to prevent this race.
 
-## Game flow during disconnects
+## Game flow during disconnects and late joins
 
 Disconnected seats do not block live progression:
 
@@ -103,17 +103,21 @@ Disconnected seats do not block live progression:
 - if a Final participant disconnects after that, active completion waits only on the remaining connected Final participants
 - reserved players remain part of persistent room state until explicitly removed/reset
 
+The room itself remains open throughout the game. A new player can still claim a free seat after play starts. Once Final begins, however, its participant roster and scoreboard roster are frozen. A player who joins after that point receives a valid reserved seat but spectates that Final, does not block wager/answer completion, cannot shift the active Final-review player, and is excluded from the finished-game scoreboard. The same result-roster freeze prevents players who join after recap begins from changing completed standings, including the intentionally empty scoreboard of zero-player practice mode.
+
 ## Final response lock and privacy
 
 Final answer collection has a separate authoritative lock state. When every active Final participant submits or the Final timer expires, `responsesClosed` becomes true and the timer stops while the room remains in `final-question`. Any later answer attempt is rejected.
 
-The host then explicitly transitions to `final-review`. Player/presentation snapshots reveal only the currently reviewed player and already resolved players; future Final answers remain hidden. Recap may expose all Final results.
+The host then explicitly transitions to `final-review`. Review tracks the active player by stable player ID rather than by mutable array position, so joins/removals cannot shift the reveal onto the wrong seat. Player/presentation snapshots reveal only the currently reviewed player and already resolved players; future Final answers remain hidden. Recap may expose all Final results.
 
 ## Host lifecycle and recovery
 
 The host peer attempts to reconnect to PeerJS signaling if signaling drops while the page remains open. The primary room authority still lives in the host browser. Closing the host page removes the live WebRTC endpoint until the host page is reopened and its saved room is restored.
 
 Authoritative room state is persisted after game mutations. Active timer `endsAt` values are persisted with the room. On host engine reconstruction, the timer is restored from that absolute end time and expired timers are reconciled immediately instead of restarting or disappearing silently.
+
+The browser keeps both a primary persisted room snapshot and a previous valid recovery snapshot. If the primary snapshot is malformed, startup falls back to the recovery copy; malformed primary data is not allowed to overwrite the valid backup during repair.
 
 This is browser-local recovery, not a cloud backup. Clearing site storage or Reset Instance intentionally removes that recovery state.
 
@@ -134,7 +138,7 @@ window.BLUE_STAGE_ICE_SERVERS = [
 ];
 ```
 
-The repository intentionally does not ship public TURN credentials. TURN credentials are deployment secrets and require an external relay service. Once configured before the game transport initializes, the same PeerJS/WebRTC path uses those ICE servers automatically.
+The repository intentionally does not ship public TURN credentials. TURN credentials are deployment secrets and require an external TURN service. Once configured before the game transport initializes, the same PeerJS/WebRTC path uses those ICE servers automatically.
 
 For the intended host-computer + phone-controller setup, keeping devices on normal Internet/Wi-Fi with WebRTC allowed remains the expected zero-configuration path.
 
