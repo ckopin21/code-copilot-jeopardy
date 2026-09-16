@@ -1,10 +1,11 @@
-import type { RoomSnapshot } from '../shared/types';
+import type { GamePhase, RoomState } from '../shared/types';
 
-export const HOST_PREVIEW_KEY = 'blue-stage-host-preview-v1';
+const ENGINE_STORAGE_KEY = 'blue-stage-p2p-engine-v2';
+const ROOM_TTL_MS = 24 * 60 * 60 * 1000;
 
 export interface HostPreview {
   roomCode: string;
-  phase: RoomSnapshot['phase'];
+  phase: GamePhase;
   connectedPlayers: number;
   totalPlayers: number;
   remainingQuestions: number;
@@ -12,49 +13,30 @@ export interface HostPreview {
   gameStartedAt: number | null;
 }
 
-export function saveHostPreview(room: RoomSnapshot): void {
-  const preview: HostPreview = {
-    roomCode: room.code,
-    phase: room.phase,
-    connectedPlayers: room.players.filter((player) => player.connected).length,
-    totalPlayers: room.players.length,
-    remainingQuestions: room.remainingQuestions,
-    updatedAt: Date.now(),
-    gameStartedAt: room.gameStartedAt,
-  };
+type PersistedRoomRecord = { state?: RoomState };
 
+export function readHostPreview(roomCode: string): HostPreview | null {
   try {
-    localStorage.setItem(HOST_PREVIEW_KEY, JSON.stringify(preview));
-  } catch {
-    // The menu preview is convenience metadata; gameplay must not depend on it.
-  }
-}
-
-export function readHostPreview(): HostPreview | null {
-  try {
-    const raw = localStorage.getItem(HOST_PREVIEW_KEY);
+    const raw = localStorage.getItem(ENGINE_STORAGE_KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<HostPreview>;
-    if (typeof parsed.roomCode !== 'string' || typeof parsed.updatedAt !== 'number' || typeof parsed.phase !== 'string') return null;
+    const records = JSON.parse(raw) as PersistedRoomRecord[];
+    if (!Array.isArray(records)) return null;
+    const state = records.find((record) => record.state?.code === roomCode)?.state;
+    if (!state) return null;
+
+    const activityFromExpiry = Math.max(state.createdAt, state.expiresAt - ROOM_TTL_MS);
+    const updatedAt = Math.max(activityFromExpiry, state.gameStartedAt ?? 0, state.gameEndedAt ?? 0);
     return {
-      roomCode: parsed.roomCode,
-      phase: parsed.phase as HostPreview['phase'],
-      connectedPlayers: typeof parsed.connectedPlayers === 'number' ? parsed.connectedPlayers : 0,
-      totalPlayers: typeof parsed.totalPlayers === 'number' ? parsed.totalPlayers : 0,
-      remainingQuestions: typeof parsed.remainingQuestions === 'number' ? parsed.remainingQuestions : 0,
-      updatedAt: parsed.updatedAt,
-      gameStartedAt: typeof parsed.gameStartedAt === 'number' ? parsed.gameStartedAt : null,
+      roomCode: state.code,
+      phase: state.phase,
+      connectedPlayers: state.players.filter((player) => player.connected).length,
+      totalPlayers: state.players.length,
+      remainingQuestions: state.remainingQuestions,
+      updatedAt,
+      gameStartedAt: state.gameStartedAt,
     };
   } catch {
     return null;
-  }
-}
-
-export function clearHostPreview(): void {
-  try {
-    localStorage.removeItem(HOST_PREVIEW_KEY);
-  } catch {
-    // Ignore storage failures; the room itself remains authoritative.
   }
 }
 
