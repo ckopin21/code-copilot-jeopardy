@@ -1,4 +1,5 @@
 import { resumeClientSession } from './socket';
+import './soundCaptions';
 
 // A phone page restored from the browser back/forward cache keeps its React tree,
 // but pagehide deliberately suspended its WebRTC session. Resume the transport so
