@@ -30,8 +30,8 @@ const categories: CategoryData[] = [
     ['What vegetable is used to make traditional french fries?', 'Potato'],
     ['Which fruit has varieties called Granny Smith and Honeycrisp?', 'Apple'],
     ['Guacamole is primarily made from which fruit?', 'Avocado'],
-    ['What citrus fruit is the main ingredient in traditional lemonade?', 'Lemon'],
-    ['Which vegetable is the main ingredient in sauerkraut?', 'Cabbage']
+    ['Which vegetable is the main ingredient in baba ganoush?', ['Eggplant', 'Aubergine']],
+    ['Which fruit is traditionally used to give grenadine its name and flavor?', 'Pomegranate']
   ]},
   { name: 'U.S. Destinations', questions: [
     ['In which U.S. city would you find the Statue of Liberty?', ['New York City', 'New York']],
@@ -39,15 +39,15 @@ const categories: CategoryData[] = [
     ['Which U.S. city is famous for the French Quarter and Bourbon Street?', 'New Orleans'],
     ['Yellowstone became the first U.S. national park and is mostly located in which state?', 'Wyoming'],
     ['Which U.S. city is home to the Space Needle?', 'Seattle'],
-    ['Which South Dakota landmark features four U.S. presidents carved into a mountain?', ['Mount Rushmore', 'Mt. Rushmore']]
+    ['Which national park is famous for Half Dome and El Capitan?', ['Yosemite National Park', 'Yosemite']]
   ]},
   { name: 'Europe', questions: [
     ['Which city is home to Big Ben and the Houses of Parliament?', 'London'],
     ['Which country is shaped like a boot on many maps?', 'Italy'],
     ['In which city would you find the Colosseum?', 'Rome'],
     ['Which European city is famous for canals and gondolas?', 'Venice'],
-    ['Which country is home to the Acropolis in Athens?', 'Greece'],
-    ['Which river flows through central Paris?', 'Seine']
+    ['Which European country contains the region of Transylvania?', 'Romania'],
+    ['Which major river flows through Budapest?', ['Danube', 'Danube River']]
   ]},
   { name: 'Asia & Pacific', questions: [
     ['Which country is home to the city of Tokyo?', 'Japan'],
@@ -63,7 +63,7 @@ const categories: CategoryData[] = [
     ['What does a round-trip ticket include?', ['Travel to a destination and back', 'An outbound and return trip']],
     ['What is a layover?', ['A stop between flights', 'Time between connecting flights']],
     ['What does “carry-on” mean when talking about luggage?', ['A bag you take into the airplane cabin', 'Cabin luggage']],
-    ['What is jet lag?', ['Temporary sleep disruption after rapid travel across time zones', 'Sleep disruption from crossing time zones']]
+    ['What is a “red-eye” flight?', ['An overnight flight', 'A flight that travels overnight']]
   ]}
 ];
 
