@@ -1,8 +1,11 @@
 /* Targeted visual fixes for phone streaks and score impacts. */
 .player-phone-v2.phone-fire::before,
 .player-phone-v2.phone-cold::before {
-  left: 50vw;
-  translate: -50% 0;
+  left: 0 !important;
+  right: 0 !important;
+  width: max-content;
+  margin-inline: auto !important;
+  translate: none !important;
   transform: scale(1);
   transform-origin: center center;
 }
@@ -13,6 +16,21 @@
 
 .player-phone-v2.phone-cold::before {
   animation: centeredPhoneColdPulse .9s ease-in-out infinite alternate;
+}
+
+/* The in-content streak badge previously reused the desktop ribbon animation,
+   whose translateX(-50%) pulled it off center even though it was already centered. */
+.phone-state-v2 .status-badge.fire,
+.phone-state-v2 .status-badge.cold {
+  transform-origin: center center;
+}
+
+.phone-state-v2 .status-badge.fire {
+  animation: centeredStatusFirePulse .72s ease-in-out infinite alternate !important;
+}
+
+.phone-state-v2 .status-badge.cold {
+  animation: centeredStatusColdPulse .9s ease-in-out infinite alternate !important;
 }
 
 .score.score-impact-pulse-correct,
@@ -41,6 +59,16 @@
   to { transform: scale(1.035); filter: brightness(1.1); }
 }
 
+@keyframes centeredStatusFirePulse {
+  from { transform: scale(1); filter: brightness(1); }
+  to { transform: scale(1.045); filter: brightness(1.12); }
+}
+
+@keyframes centeredStatusColdPulse {
+  from { transform: scale(1); filter: brightness(1); }
+  to { transform: scale(1.035); filter: brightness(1.1); }
+}
+
 @keyframes scorePulseGood {
   0% { transform: scale(1); filter: brightness(1); }
   48% { transform: scale(1.34); filter: brightness(1.35); }
@@ -56,6 +84,8 @@
 @media (prefers-reduced-motion: reduce) {
   .player-phone-v2.phone-fire::before,
   .player-phone-v2.phone-cold::before,
+  .phone-state-v2 .status-badge.fire,
+  .phone-state-v2 .status-badge.cold,
   .score.score-impact-pulse-correct,
   .score.score-impact-pulse-wrong {
     animation: none !important;
