@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildPack, category, difficultyForValue, normalizeQuestionIdentity, question } from '../src/packs/buildPack';
-import { builtInPacks, likelyRepeatedFact } from '../src/packs';
+import { builtInPacks, likelyRepeatedFact, validatePackCatalog } from '../src/packs';
 import { QUESTION_VALUES } from '../src/shared/types';
 
 const meta = {
@@ -40,7 +40,7 @@ describe('question pack catalog', () => {
     expect(new Set(promptKeys).size).toBe(promptKeys.length);
   });
 
-  it('detects likely duplicate facts even when the wording changes', () => {
+  it('detects and rejects likely duplicate facts even when the wording changes', () => {
     const template = builtInPacks[0].questions[0];
     const left = {
       ...template,
@@ -67,6 +67,10 @@ describe('question pack catalog', () => {
     };
     expect(likelyRepeatedFact(left, reworded)).toBe(true);
     expect(likelyRepeatedFact(left, differentFact)).toBe(false);
+
+    const leftPack = { ...builtInPacks[0], id: 'left-pack', finalQuestionId: undefined, questions: [left] };
+    const rightPack = { ...builtInPacks[1], id: 'right-pack', finalQuestionId: undefined, questions: [reworded] };
+    expect(() => validatePackCatalog([leftPack, rightPack])).toThrow(/likely repeated fact/i);
   });
 
   it('scales difficulty consistently with clue value', () => {
