@@ -163,6 +163,8 @@ export interface CurrentQuestionState {
   dailyDoublePlayerId: string | null;
   /** Player whose turn selected this question. */
   turnPlayerId: string | null;
+  /** Players eligible to answer this question. Late joins wait until the next clue. */
+  participantIds?: string[];
   /** True when the answer window expired with no response and the turn owner was penalized. */
   timedOut?: boolean;
   wager: number | null;

@@ -76,6 +76,9 @@ export class BrowserGameEngine {
       record.state.settings.lockRoomOnStart = false;
       record.state.settings.turnOrderMode ??= 'join-order';
       record.state.turnPlayerId ??= null;
+      if (record.state.currentQuestion && !record.state.currentQuestion.participantIds) {
+        record.state.currentQuestion.participantIds = record.state.players.map((player) => player.id);
+      }
       const claimedSeats = new Set<number>();
       for (const player of record.state.players) {
         const currentSeat = Number(player.seat);
@@ -166,19 +169,33 @@ export class BrowserGameEngine {
     return [room, player];
   }
   private connectedPlayers(room: RoomRecord): Player[] { return room.state.players.filter((player) => player.connected).sort((a, b) => a.seat - b.seat); }
+  private nextConnectedAfterSeat(room: RoomRecord, seat: number): Player | null {
+    const connected = this.connectedPlayers(room);
+    if (!connected.length) return null;
+    return connected.find((player) => player.seat > seat) ?? connected[0];
+  }
+  private currentQuestionParticipants(room: RoomRecord): Player[] {
+    const connected = this.connectedPlayers(room);
+    const ids = room.state.currentQuestion?.participantIds;
+    if (!ids) return connected;
+    const eligible = new Set(ids);
+    return connected.filter((player) => eligible.has(player.id));
+  }
   private ensureTurnPlayer(room: RoomRecord): Player | null {
     const connected = this.connectedPlayers(room);
     if (!connected.length) { room.state.turnPlayerId = null; return null; }
-    const current = connected.find((player) => player.id === room.state.turnPlayerId) ?? connected[0];
-    room.state.turnPlayerId = current.id;
-    return current;
+    const current = connected.find((player) => player.id === room.state.turnPlayerId);
+    if (current) return current;
+    const priorSeat = room.state.players.find((player) => player.id === room.state.turnPlayerId)?.seat ?? 0;
+    const replacement = this.nextConnectedAfterSeat(room, priorSeat) ?? connected[0];
+    room.state.turnPlayerId = replacement.id;
+    return replacement;
   }
   private advanceTurn(room: RoomRecord): void {
     if (room.state.settings.turnOrderMode === 'manual') { this.ensureTurnPlayer(room); return; }
-    const connected = this.connectedPlayers(room);
-    if (!connected.length) { room.state.turnPlayerId = null; return; }
-    const index = connected.findIndex((player) => player.id === room.state.turnPlayerId);
-    room.state.turnPlayerId = connected[(index < 0 ? 0 : index + 1) % connected.length].id;
+    const currentSeat = room.state.players.find((player) => player.id === room.state.turnPlayerId)?.seat ?? 0;
+    const next = this.nextConnectedAfterSeat(room, currentSeat);
+    room.state.turnPlayerId = next?.id ?? null;
   }
   private finalParticipants(room: RoomRecord): Player[] {
     const ids = new Set(room.state.finalRound?.participantIds ?? []);
@@ -276,6 +293,12 @@ export class BrowserGameEngine {
   reconnectPlayer(roomCode: string, playerId: string, reconnectToken: string): PlayerJoinCredentials {
     const [room, player] = this.playerRoom(roomCode, playerId, reconnectToken);
     player.connected = true;
+    const current = room.state.currentQuestion;
+    if (room.state.phase === 'board') this.ensureTurnPlayer(room);
+    if (current?.buzzOpen && !current.buzzWinnerId && current.responseMode !== 'text') {
+      const participating = !current.participantIds || current.participantIds.includes(player.id);
+      player.buzzEligible = participating && (room.state.settings.allowRepeatBuzzAfterMiss || !current.attemptedPlayerIds.includes(player.id));
+    }
     this.persist();
     return { playerId, reconnectToken, roomCode: room.state.code };
   }
@@ -288,14 +311,21 @@ export class BrowserGameEngine {
       player.buzzEligible = false;
       const current = room.state.currentQuestion;
       if (room.state.phase === 'question' && current?.responseMode === 'text' && !current.answerRevealed) {
-        const active = this.connectedPlayers(room);
+        const active = this.currentQuestionParticipants(room);
         if (active.length === 0 || active.every((candidate) => Boolean(current.textResponses?.[candidate.id]))) this.closeTextResponsesInternal(room);
       }
       if (room.state.phase === 'final-question' && room.state.finalRound && !room.state.finalRound.responsesClosed) {
         const active = this.activeFinalParticipants(room);
         if (active.length === 0 || active.every((candidate) => candidate.finalAnswerSubmitted)) this.closeFinalResponsesInternal(room);
       }
+    } else {
+      const current = room.state.currentQuestion;
+      if (current?.buzzOpen && !current.buzzWinnerId && current.responseMode !== 'text') {
+        const participating = !current.participantIds || current.participantIds.includes(player.id);
+        player.buzzEligible = participating && (room.state.settings.allowRepeatBuzzAfterMiss || !current.attemptedPlayerIds.includes(player.id));
+      }
     }
+    if (room.state.phase === 'board') this.ensureTurnPlayer(room);
     this.touch(room);
     this.persist();
   }
@@ -318,6 +348,16 @@ export class BrowserGameEngine {
     return this.snapshot(roomCode);
   }
 
+  setTurnPlayer(roomCode: string, hostToken: string, playerId: string): RoomSnapshot {
+    const room = this.hostRoom(roomCode, hostToken);
+    if (room.state.phase !== 'board') throw new Error('Turn selection is only available on the board');
+    const player = this.connectedPlayers(room).find((candidate) => candidate.id === playerId);
+    if (!player) throw new Error('Choose a connected player');
+    room.state.turnPlayerId = player.id;
+    this.persist();
+    return this.snapshot(roomCode);
+  }
+
   removePlayer(roomCode: string, hostToken: string, playerId: string): void {
     const room = this.hostRoom(roomCode, hostToken);
     const player = room.state.players.find((candidate) => candidate.id === playerId);
@@ -329,18 +369,22 @@ export class BrowserGameEngine {
 
     this.clearUndo(room);
     const removedBuzzWinner = current?.buzzWinnerId === playerId && !current.answerRevealed;
+    const removedTurnOwner = room.state.turnPlayerId === playerId;
+    const removedSeat = player.seat;
     if (current?.textResponses?.[playerId]) delete current.textResponses[playerId];
     room.state.players = room.state.players.filter((candidate) => candidate.id !== playerId);
     delete room.playerTokens[playerId];
+    if (removedTurnOwner) room.state.turnPlayerId = this.nextConnectedAfterSeat(room, removedSeat)?.id ?? null;
 
     if (current && room.state.phase === 'question' && !current.answerRevealed) {
       if (current.responseMode === 'text') {
-        const active = this.connectedPlayers(room);
+        const active = this.currentQuestionParticipants(room);
         if (active.length === 0 || active.every((candidate) => Boolean(current.textResponses?.[candidate.id]))) this.closeTextResponsesInternal(room);
       } else if (removedBuzzWinner) {
         current.buzzWinnerId = null;
+        const participants = new Set(current.participantIds ?? room.state.players.map((candidate) => candidate.id));
         room.state.players.forEach((candidate) => {
-          candidate.buzzEligible = candidate.connected && (room.state.settings.allowRepeatBuzzAfterMiss || !current.attemptedPlayerIds.includes(candidate.id));
+          candidate.buzzEligible = candidate.connected && participants.has(candidate.id) && (room.state.settings.allowRepeatBuzzAfterMiss || !current.attemptedPlayerIds.includes(candidate.id));
         });
         const someoneEligible = room.state.players.some((candidate) => candidate.buzzEligible);
         current.buzzOpen = someoneEligible;
@@ -556,6 +600,7 @@ export class BrowserGameEngine {
       dailyDouble: isPlayableDailyDouble,
       dailyDoublePlayerId: null,
       turnPlayerId: turnPlayer?.id ?? null,
+      participantIds: connected.map((player) => player.id),
       timedOut: false,
       wager: null,
       buzzOpen: false,
@@ -622,7 +667,8 @@ export class BrowserGameEngine {
     current.buzzOpen = true;
     current.buzzWinnerId = null;
     current.buzzOpenedAt = Date.now();
-    room.state.players.forEach((player) => { player.buzzEligible = player.connected && (room.state.settings.allowRepeatBuzzAfterMiss || !current.attemptedPlayerIds.includes(player.id)); });
+    const participants = new Set(current.participantIds ?? room.state.players.map((player) => player.id));
+    room.state.players.forEach((player) => { player.buzzEligible = player.connected && participants.has(player.id) && (room.state.settings.allowRepeatBuzzAfterMiss || !current.attemptedPlayerIds.includes(player.id)); });
     const someoneEligible = room.state.players.some((player) => player.buzzEligible);
     if (!someoneEligible) current.buzzOpen = false;
     if (someoneEligible) this.startTimerInternal(room);
@@ -736,13 +782,14 @@ export class BrowserGameEngine {
     const [room, player] = this.playerRoom(roomCode, playerId, reconnectToken);
     const current = room.state.currentQuestion;
     if (room.state.phase !== 'question' || !current || current.responseMode !== 'text' || current.answerRevealed || current.responsesClosed) throw new Error('Responses are closed');
+    if (current.participantIds && !current.participantIds.includes(player.id)) throw new Error('You joined after this question started. Wait for the next question.');
     const trimmed = answer.trim().slice(0, 200);
     if (!trimmed) throw new Error('Enter an answer first');
     if (current.textResponses?.[player.id]) throw new Error('Your response is already locked');
     const grade = autoGradeAnswer(trimmed, current.acceptedAnswers ?? []);
     current.textResponses ??= {};
     current.textResponses[player.id] = { answer: trimmed, submittedAt: Date.now(), autoCorrect: grade.correct, autoConfidence: grade.confidence, resolvedCorrect: null };
-    const active = this.connectedPlayers(room);
+    const active = this.currentQuestionParticipants(room);
     const allSubmitted = active.length > 0 && active.every((candidate) => Boolean(current.textResponses?.[candidate.id]));
     if (allSubmitted) this.closeTextResponsesInternal(room);
     this.persist();

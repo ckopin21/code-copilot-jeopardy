@@ -185,6 +185,7 @@ async function dispatchHost(event: string, payload: Record<string, unknown>, con
     case 'host:adjust-score': return engine.adjustScore(roomCode, hostToken, String(payload.playerId ?? ''), Number(payload.delta));
     case 'host:undo-last-score': return engine.undoLastScoreAction(roomCode, hostToken);
     case 'host:rename-player': return engine.renamePlayer(roomCode, hostToken, String(payload.playerId ?? ''), String(payload.name ?? ''));
+    case 'host:set-turn-player': return engine.setTurnPlayer(roomCode, hostToken, String(payload.playerId ?? ''));
     case 'host:suspend-player': {
       const playerId = String(payload.playerId ?? '');
       engine.suspendPlayer(roomCode, hostToken, playerId);

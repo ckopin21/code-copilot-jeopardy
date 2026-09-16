@@ -5,6 +5,7 @@ import { autoGradeAnswer } from '../shared/validation';
 import { emitAck, socket } from '../lib/socket';
 import { audio } from '../lib/audio';
 import { menuUrl, resetInstance } from '../lib/resetInstance';
+import { calculateComebackAward } from '../lib/comebackScoring';
 import { PlayerStrip } from './PlayerStrip';
 import { Board, type BoardResultMap } from './Board';
 import { Timer } from './Timer';
@@ -60,6 +61,7 @@ export function HostAppV3() {
   const lastMultiplierRef = useRef<1 | 2 | 3 | null>(null);
   const modifierTimerRef = useRef<number | null>(null);
   const revealRunningRef = useRef(false);
+  const lastPenaltySnapshotRef = useRef<RoomSnapshot | null>(null);
 
   const perform = useCallback(async (event: string, payload: Record<string, unknown> = {}): Promise<boolean> => {
     if (!credentials) return false;
@@ -317,6 +319,28 @@ export function HostAppV3() {
     return () => cancelAnimationFrame(frame);
   }, [room, perform]);
 
+  useEffect(() => {
+    const previous = lastPenaltySnapshotRef.current;
+    lastPenaltySnapshotRef.current = room;
+    const question = room?.currentQuestion;
+    const previousQuestion = previous?.currentQuestion;
+    if (!room || !previous || !question?.timedOut || previousQuestion?.questionId !== question.questionId || previousQuestion.timedOut) return;
+    const ownerId = question.turnPlayerId;
+    if (!ownerId) return;
+    const before = previous.players.find((player) => player.id === ownerId);
+    const after = room.players.find((player) => player.id === ownerId);
+    if (!before || !after || before.score === after.score) return;
+    setScoreOverrides((currentOverrides) => ({ ...currentOverrides, [ownerId]: before.score }));
+    setScoreFlights((currentFlights) => [...currentFlights, {
+      id: crypto.randomUUID(),
+      questionId: question.questionId,
+      playerId: ownerId,
+      delta: after.score - before.score,
+      correct: false
+    }]);
+    audio.cue('wrong');
+  }, [room]);
+
   const handleScoreImpact = useCallback((flight: ScoreFlightState) => {
     setScoreOverrides((previous) => {
       const next = { ...previous };
@@ -415,7 +439,8 @@ export function HostAppV3() {
     if (!current) return null;
     const player = room.players.find((item) => item.id === playerId);
     if (!player) return null;
-    const signedDelta = correct ? pointsAtStake : settings.allowNegativeScores ? -pointsAtStake : -Math.min(Math.max(0, player.score), pointsAtStake);
+    const awardedPoints = correct && !current.dailyDouble ? calculateComebackAward(room, player, pointsAtStake).points : pointsAtStake;
+    const signedDelta = correct ? awardedPoints : settings.allowNegativeScores ? -pointsAtStake : -Math.min(Math.max(0, player.score), pointsAtStake);
     setScoreOverrides((previous) => ({ ...previous, [player.id]: player.score }));
     return {
       id: crypto.randomUUID(),
@@ -464,16 +489,8 @@ export function HostAppV3() {
 
   const revealAnswer = async () => {
     if (!current || revealRunningRef.current) return;
-    const unansweredOwnerId = current.responseMode !== 'text' && !current.dailyDouble && !current.buzzWinnerId && !current.answerRevealed
-      ? current.turnPlayerId
-      : null;
-    const penaltyFlight = unansweredOwnerId ? prepareScoreFlight(unansweredOwnerId, false) : null;
     const ok = await perform('host:reveal-answer');
-    if (!ok) {
-      if (unansweredOwnerId) cancelPreparedScore(unansweredOwnerId);
-      return;
-    }
-    if (penaltyFlight) setScoreFlights((previous) => [...previous, penaltyFlight]);
+    if (!ok) return;
     audio.cue('reveal');
   };
 
@@ -570,7 +587,7 @@ export function HostAppV3() {
         <div className="board-header-v2">
           <div><div className="section-kicker">ROUND IN PROGRESS</div><strong>{room.remainingQuestions} questions left</strong></div>
           <div className="board-actions">
-            {connectedPlayers.length > 0 && <label>Turn<select value={controllerId} onChange={(event) => setControllerId(event.target.value)}>{connectedPlayers.map((player) => <option key={player.id} value={player.id}>{player.avatar} {player.name}</option>)}</select></label>}
+            {connectedPlayers.length > 0 && <label>Turn<select value={controllerId} onChange={(event) => { const playerId = event.target.value; setControllerId(playerId); void perform('host:set-turn-player', { playerId }); }}>{connectedPlayers.map((player) => <option key={player.id} value={player.id}>{player.avatar} {player.name}</option>)}</select></label>}
             <button className="nav-button" onClick={() => void perform('host:pause')}>Pause</button>
             <button className="nav-button" onClick={() => setPresentationMode(true)}>Presentation</button>
           </div>

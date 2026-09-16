@@ -402,6 +402,72 @@ describe('BrowserGameEngine production state', () => {
     expect(() => engine.reconnectPlayer(host.roomCode, player.playerId, player.reconnectToken)).not.toThrow();
   });
 
+  it('lets the host set an authoritative turn and manual mode keeps it after a clue', () => {
+    const { engine, host } = setup({ dailyDoublesEnabled: false, finalRoundEnabled: false, turnOrderMode: 'manual' });
+    const one = addPlayer(engine, host.roomCode, 'One');
+    const two = addPlayer(engine, host.roomCode, 'Two');
+    engine.startGame(host.roomCode, host.hostToken);
+    engine.setTurnPlayer(host.roomCode, host.hostToken, two.playerId);
+    expect(engine.snapshot(host.roomCode).turnPlayerId).toBe(two.playerId);
+
+    const tile = firstUnused(engine, host.roomCode);
+    engine.selectQuestion(host.roomCode, host.hostToken, tile.questionId);
+    engine.revealAnswer(host.roomCode, host.hostToken);
+    engine.advanceToBoard(host.roomCode, host.hostToken);
+    expect(engine.snapshot(host.roomCode).turnPlayerId).toBe(two.playerId);
+    expect(engine.snapshot(host.roomCode).players.find((player) => player.id === one.playerId)?.connected).toBe(true);
+  });
+
+  it('rotates forward when the current turn owner disconnects on the board', () => {
+    const { engine, host } = setup({ dailyDoublesEnabled: false, finalRoundEnabled: false });
+    const one = addPlayer(engine, host.roomCode, 'One');
+    const two = addPlayer(engine, host.roomCode, 'Two');
+    const three = addPlayer(engine, host.roomCode, 'Three');
+    engine.startGame(host.roomCode, host.hostToken);
+    engine.setTurnPlayer(host.roomCode, host.hostToken, two.playerId);
+    engine.setPlayerConnected(host.roomCode, two.playerId, false);
+    expect(engine.snapshot(host.roomCode).turnPlayerId).toBe(three.playerId);
+    engine.reconnectPlayer(host.roomCode, two.playerId, two.reconnectToken);
+    expect(engine.snapshot(host.roomCode).turnPlayerId).toBe(three.playerId);
+    expect(engine.snapshot(host.roomCode).players.find((player) => player.id === one.playerId)?.connected).toBe(true);
+  });
+
+  it('keeps late joiners out of a clue that already started, then includes them on the next clue', () => {
+    const { engine, host } = setup({ dailyDoublesEnabled: false, finalRoundEnabled: false, timerSeconds: null });
+    const one = addPlayer(engine, host.roomCode, 'One');
+    engine.startGame(host.roomCode, host.hostToken);
+    const first = firstUnused(engine, host.roomCode);
+    engine.selectQuestion(host.roomCode, host.hostToken, first.questionId);
+    const late = addPlayer(engine, host.roomCode, 'Late');
+    engine.openBuzzers(host.roomCode, host.hostToken);
+    expect(engine.snapshot(host.roomCode).players.find((player) => player.id === late.playerId)?.buzzEligible).toBe(false);
+    expect(engine.buzz(host.roomCode, late.playerId, late.reconnectToken).accepted).toBe(false);
+    expect(engine.buzz(host.roomCode, one.playerId, one.reconnectToken).accepted).toBe(true);
+    engine.revealAnswer(host.roomCode, host.hostToken);
+    engine.resolveAnswer(host.roomCode, host.hostToken, one.playerId, true);
+    engine.advanceToBoard(host.roomCode, host.hostToken);
+
+    const second = firstUnused(engine, host.roomCode);
+    engine.selectQuestion(host.roomCode, host.hostToken, second.questionId);
+    engine.openBuzzers(host.roomCode, host.hostToken);
+    expect(engine.snapshot(host.roomCode).players.find((player) => player.id === late.playerId)?.buzzEligible).toBe(true);
+  });
+
+  it('restores live buzzer eligibility when an original participant reconnects', () => {
+    const { engine, host } = setup({ dailyDoublesEnabled: false, finalRoundEnabled: false, timerSeconds: null });
+    const one = addPlayer(engine, host.roomCode, 'One');
+    addPlayer(engine, host.roomCode, 'Two');
+    engine.startGame(host.roomCode, host.hostToken);
+    const tile = firstUnused(engine, host.roomCode);
+    engine.selectQuestion(host.roomCode, host.hostToken, tile.questionId);
+    engine.openBuzzers(host.roomCode, host.hostToken);
+    engine.setPlayerConnected(host.roomCode, one.playerId, false);
+    expect(engine.snapshot(host.roomCode).players.find((player) => player.id === one.playerId)?.buzzEligible).toBe(false);
+    engine.reconnectPlayer(host.roomCode, one.playerId, one.reconnectToken);
+    expect(engine.snapshot(host.roomCode).players.find((player) => player.id === one.playerId)?.buzzEligible).toBe(true);
+    expect(engine.buzz(host.roomCode, one.playerId, one.reconnectToken).accepted).toBe(true);
+  });
+
   it('keeps exact late-game multiplier windows', () => {
     const { engine } = setup();
     expect(engine.multiplierForRemaining(7)).toBe(1);

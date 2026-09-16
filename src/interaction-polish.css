@@ -35,9 +35,33 @@
   transform: translateX(-50%);
 }
 
-/* The old Daily Double controller selector is intentionally gone. */
+/* Turn control remains visible so the host can override/repair ownership when needed. */
 .board-actions > label {
-  display: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 5px 8px 5px 11px;
+  border: 1px solid rgba(255,209,102,.34);
+  border-radius: 10px;
+  background: rgba(255,209,102,.08);
+  color: #ffd166;
+  font-size: .68rem;
+  font-weight: 1000;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.board-actions > label select {
+  min-height: 28px;
+  max-width: 180px;
+  border: 1px solid rgba(255,255,255,.16);
+  border-radius: 7px;
+  background: #071d2b;
+  color: #f4fbff;
+  font: inherit;
+  font-size: .72rem;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 /* Rules explain themselves on desktop hover/focus without cluttering the setup screen. */
