@@ -14,7 +14,7 @@ export function PlayerStrip({ players, activeId, scoreOverrides = {} }: { player
   const visiblePlayers = players.filter((player) => player.connected);
   if (!visiblePlayers.length) return <div className="practice-chip">PRACTICE / PRESENTATION MODE</div>;
   return (
-    <div className="player-strip showcase-player-strip" aria-label="Scores">
+    <div className="player-strip showcase-player-strip" data-player-count={visiblePlayers.length} aria-label="Scores">
       {visiblePlayers.map((player) => {
         const displayedScore = temporaryOverrides[player.id] ?? player.score;
         return (
