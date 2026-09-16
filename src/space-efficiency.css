@@ -1,16 +1,4 @@
-/* Use desktop space efficiently: wide landing menu and compact in-game host scores. */
-
-/* The landing panel should use the monitor instead of looking like a narrow laptop card. */
-@media (min-width: 900px) {
-  .showcase-menu .menu-card-v2 {
-    width: min(1760px, calc(100vw - 32px)) !important;
-    max-width: none !important;
-  }
-
-  .showcase-menu .menu-mode-grid {
-    grid-template-columns: minmax(0, 1.7fr) minmax(320px, .75fr) !important;
-  }
-}
+/* Use desktop space efficiently: compact in-game host scores and controls. */
 
 /* Normal host mode gets a compact scoreboard. Presentation mode keeps its larger cards. */
 @media (min-width: 760px) {
