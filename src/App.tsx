@@ -193,9 +193,20 @@ function Menu({ onNavigate }: { onNavigate: (mode: AppMode, fresh?: boolean) => 
       <div className="brand-mark hero-brand menu-logo-v2"><span>BLUE STAGE</span><strong>TRIVIA</strong></div>
       <p className="menu-subtitle menu-subtitle-v2">A shared-screen game show with phone buzzers, wagers, streaks, and a dramatic finish.</p>
 
-      {hasSavedHost && savedHost && <article className="saved-game-preview" aria-label="Saved game">
+      {hasSavedHost && savedHost && <article
+        className="saved-game-preview"
+        role="button"
+        tabIndex={0}
+        aria-label={`Continue saved game in room ${savedHost.roomCode}`}
+        onClick={() => void onNavigate('host')}
+        onKeyDown={(event) => {
+          if (event.key !== 'Enter' && event.key !== ' ') return;
+          event.preventDefault();
+          void onNavigate('host');
+        }}
+      >
         <div className="saved-game-icon" aria-hidden="true">▶</div>
-        <div className="saved-game-main"><small>SAVED GAME</small><strong>Room {savedHost.roomCode}</strong><span>{savedPhase}</span></div>
+        <div className="saved-game-main"><small>CONTINUE SAVED GAME</small><strong>Room {savedHost.roomCode}</strong><span>{savedPhase}</span></div>
         <div className="saved-game-meta"><b>{savedPlayers}</b>{preview && preview.phase !== 'lobby' && preview.phase !== 'recap' && <span>{preview.remainingQuestions} questions left</span>}<small>Last played {savedActivity}</small></div>
       </article>}
 
