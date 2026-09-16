@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/apply-audit-lifecycle-hardening.yml'
       - 'scripts/apply-audit-lifecycle-hardening.py'
+      - 'scripts/repair-audit-lifecycle-script.py'
 
 permissions:
   contents: write
@@ -22,24 +23,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci --no-audit --no-fund
-      - name: Repair score-flight patch count
-        shell: bash
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          path = Path('scripts/apply-audit-lifecycle-hardening.py')
-          text = path.read_text()
-          old = 'replace_once("src/components/HostAppV3.tsx", "id: crypto.randomUUID(),", "id: randomId(\'score-flight\'),")'
-          new = '''host_path = Path("src/components/HostAppV3.tsx")
-host_text = host_path.read_text()
-needle = "id: crypto.randomUUID(),"
-if host_text.count(needle) != 2:
-    raise SystemExit(f"src/components/HostAppV3.tsx: expected 2 randomUUID score ids, found {host_text.count(needle)}")
-host_path.write_text(host_text.replace(needle, "id: randomId('score-flight'),"))'''
-          if old not in text:
-              raise SystemExit('score-flight patch marker not found')
-          path.write_text(text.replace(old, new, 1))
-          PY
+      - run: python scripts/repair-audit-lifecycle-script.py
       - name: Apply lifecycle/recovery fixes
         run: python scripts/apply-audit-lifecycle-hardening.py
       - run: npm run typecheck
@@ -52,8 +36,9 @@ host_path.write_text(host_text.replace(needle, "id: randomId('score-flight'),"))
         run: |
           rm .github/workflows/apply-audit-lifecycle-hardening.yml
           rm scripts/apply-audit-lifecycle-hardening.py
+          rm scripts/repair-audit-lifecycle-script.py
           git config user.name "github-actions[bot]"
-          git config user.email "4189824+github-actions[bot]@users.noreply.github.com"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
           git commit -m "fix: harden host and client lifecycle"
           git push origin HEAD:audit-hardening-work
