@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { PlayerJoinCredentials, RoomSnapshot } from '../shared/types';
 import { emitAck, socket } from '../lib/socket';
 import { audio } from '../lib/audio';
@@ -20,26 +20,37 @@ export function PlayerEnhancements() {
   const [testToast, setTestToast] = useState(false);
   const [accessOpen, setAccessOpen] = useState(false);
   const [accessibility, setAccessibility] = useState<AccessibilityPreferences>(() => readAccessibility());
-  const credentials = useMemo(() => readCredentials(), [room?.code]);
+  const intentionalOfflineRef = useRef(false);
+  const credentials = readCredentials();
   const me = room?.players.find((player) => player.id === credentials?.playerId) ?? null;
 
   useEffect(() => {
     let delay = 0;
-    const onState = (snapshot: RoomSnapshot) => {
-      setRoom(snapshot);
+    const clearReconnectUi = () => {
+      window.clearTimeout(delay);
       setDisconnected(false);
       setShowReconnect(false);
-      window.clearTimeout(delay);
+    };
+    const onState = (snapshot: RoomSnapshot) => {
+      intentionalOfflineRef.current = false;
+      setRoom(snapshot);
+      clearReconnectUi();
     };
     const onConnect = () => {
-      setDisconnected(false);
-      setShowReconnect(false);
-      window.clearTimeout(delay);
+      intentionalOfflineRef.current = false;
+      clearReconnectUi();
+    };
+    const onIntentionalDisconnect = () => {
+      intentionalOfflineRef.current = true;
+      clearReconnectUi();
     };
     const onDisconnect = () => {
+      if (intentionalOfflineRef.current) return;
       setDisconnected(true);
       window.clearTimeout(delay);
-      delay = window.setTimeout(() => setShowReconnect(true), 500);
+      delay = window.setTimeout(() => {
+        if (!intentionalOfflineRef.current) setShowReconnect(true);
+      }, 500);
     };
     const onTest = async () => {
       setTestToast(true);
@@ -54,12 +65,16 @@ export function PlayerEnhancements() {
     socket.on('room:state', onState);
     socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);
+    socket.on('player:suspended', onIntentionalDisconnect);
+    socket.on('player:removed', onIntentionalDisconnect);
     socket.on('preflight:test', onTest);
     return () => {
       window.clearTimeout(delay);
       socket.off('room:state', onState);
       socket.off('connect', onConnect);
       socket.off('disconnect', onDisconnect);
+      socket.off('player:suspended', onIntentionalDisconnect);
+      socket.off('player:removed', onIntentionalDisconnect);
       socket.off('preflight:test', onTest);
     };
   }, []);
