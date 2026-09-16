@@ -464,8 +464,16 @@ export function HostAppV3() {
 
   const revealAnswer = async () => {
     if (!current || revealRunningRef.current) return;
+    const unansweredOwnerId = current.responseMode !== 'text' && !current.dailyDouble && !current.buzzWinnerId && !current.answerRevealed
+      ? current.turnPlayerId
+      : null;
+    const penaltyFlight = unansweredOwnerId ? prepareScoreFlight(unansweredOwnerId, false) : null;
     const ok = await perform('host:reveal-answer');
-    if (!ok) return;
+    if (!ok) {
+      if (unansweredOwnerId) cancelPreparedScore(unansweredOwnerId);
+      return;
+    }
+    if (penaltyFlight) setScoreFlights((previous) => [...previous, penaltyFlight]);
     audio.cue('reveal');
   };
 
@@ -577,7 +585,7 @@ export function HostAppV3() {
       {room.phase === 'daily-double-wager' && current && <section className="question-stage daily-double-v2"><div className="question-card-v2"><div className="daily-double-burst">DAILY DOUBLE</div><h1>{dailyPlayer?.avatar} {dailyPlayer?.name}, choose your wager</h1><p className="helper-copy">Choose a preset here, or let {dailyPlayer?.name ?? 'the player'} choose on their phone.</p><div className="wager-grid fixed-wagers">{QUESTION_VALUES.map((value) => <button key={value} onClick={() => void perform('host:daily-double-wager', { wager: value })}>{value.toLocaleString()}</button>)}</div><button className="text-button" onClick={() => void perform('host:cancel-question')}>Exit question</button></div></section>}
 
       {(room.phase === 'question' || room.phase === 'daily-double-question') && current && <section className={`question-stage ${current.dailyDouble ? 'daily-double-v2' : ''}`}>
-        <article className="question-card-v2 showcase-question-card">
+        <article className="question-card-v2 showcase-question-card" data-question-id={current.questionId}>
           <div className="question-meta-v2">
             <span>{current.category}</span>
             {current.dailyDouble ? <strong>{questionMultiplier > 1 && settings.dailyDoubleStacksWithMultiplier ? `WAGER ${(current.wager ?? 0).toLocaleString()} × ${questionMultiplier}` : `WAGER ${(current.wager ?? 0).toLocaleString()}`}</strong> : questionMultiplier > 1 ? <strong className={`inline-modifier x${questionMultiplier}`}>{current.baseValue} × {questionMultiplier} = {current.effectiveValue} POINTS</strong> : <strong>{current.effectiveValue} POINTS</strong>}

@@ -60,7 +60,7 @@ export function PresentationApp() {
 
   return <main className="presentation-shell">
     {!audioReady && <button className="presentation-audio-gate" onClick={async () => { await audio.unlock(); setAudioReady(true); }}>Enable game audio</button>}
-    <PlayerStrip players={room.players} activeId={active}/>
+    <PlayerStrip players={room.players} activeId={active} turnId={room.phase === 'lobby' || room.phase === 'recap' ? null : room.turnPlayerId}/>
 
     {room.phase === 'lobby' && <section className="presentation-center"><div className="brand-mark hero-brand"><span>BLUE STAGE</span><strong>TRIVIA</strong></div><div className="presentation-room"><small>ROOM CODE</small><strong>{room.code}</strong></div><p>Players join from their phones.</p></section>}
 
