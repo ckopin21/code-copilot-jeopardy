@@ -138,10 +138,6 @@ export function HostAppV3() {
     if (!connected.some((player) => player.id === controllerId)) setControllerId(connected[0]?.id ?? '');
   }, [room, controllerId]);
 
-  useEffect(() => {
-    if (room?.phase !== 'board') setPresentationMode(false);
-  }, [room?.phase]);
-
   const musicState = phaseMusic(room);
   useEffect(() => { void audio.setMusic(musicState); }, [musicState]);
 
