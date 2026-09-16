@@ -53,12 +53,20 @@ export class BrowserGameEngine {
     const now = Date.now();
     for (const record of loadRooms()) {
       if (record.state.expiresAt <= now) continue;
+      const previouslyConnected = record.state.players.filter((player) => player.connected).map((player) => player.id);
       record.state.hostConnected = false;
       record.state.players.forEach((player) => { player.connected = false; });
-      record.state.timer = emptyTimer();
+      if (record.state.finalRound) {
+        record.state.finalRound.participantIds ??= previouslyConnected.length ? previouslyConnected : record.state.players.map((player) => player.id);
+        record.state.finalRound.responsesClosed ??= record.state.phase === 'final-review' || record.state.phase === 'recap';
+      }
+      if (record.state.timer.running && record.state.timer.endsAt) {
+        record.state.timer.remainingMs = Math.max(0, record.state.timer.endsAt - now);
+      }
       this.rooms.set(record.state.code, record);
       for (const questionId of Object.keys(record.questions)) this.seenQuestionIds.add(questionId);
     }
+    this.tick(now);
     this.persist();
   }
 
@@ -96,6 +104,11 @@ export class BrowserGameEngine {
     return [room, player];
   }
   private connectedPlayers(room: RoomRecord): Player[] { return room.state.players.filter((player) => player.connected); }
+  private finalParticipants(room: RoomRecord): Player[] {
+    const ids = new Set(room.state.finalRound?.participantIds ?? []);
+    return room.state.players.filter((player) => ids.has(player.id));
+  }
+  private activeFinalParticipants(room: RoomRecord): Player[] { return this.finalParticipants(room).filter((player) => player.connected); }
 
   snapshot(roomCode: string): RoomSnapshot {
     const state = structuredClone(this.room(roomCode).state);
@@ -175,9 +188,9 @@ export class BrowserGameEngine {
         const active = this.connectedPlayers(room);
         if (active.length === 0 || active.every((candidate) => Boolean(current.textResponses?.[candidate.id]))) this.closeTextResponsesInternal(room);
       }
-      if (room.state.phase === 'final-question') {
-        const active = this.connectedPlayers(room);
-        if (active.length === 0 || active.every((candidate) => candidate.finalAnswerSubmitted)) this.closeFinalQuestionInternal(room);
+      if (room.state.phase === 'final-question' && room.state.finalRound && !room.state.finalRound.responsesClosed) {
+        const active = this.activeFinalParticipants(room);
+        if (active.length === 0 || active.every((candidate) => candidate.finalAnswerSubmitted)) this.closeFinalResponsesInternal(room);
       }
     }
     this.touch(room);
@@ -187,6 +200,15 @@ export class BrowserGameEngine {
     const room = this.hostRoom(roomCode, hostToken);
     room.state.players = room.state.players.filter((player) => player.id !== playerId);
     delete room.playerTokens[playerId];
+    if (room.state.finalRound) {
+      room.state.finalRound.participantIds = room.state.finalRound.participantIds.filter((idValue) => idValue !== playerId);
+      if (room.state.phase === 'final-review') {
+        const participants = new Set(room.state.finalRound.participantIds);
+        const nextIndex = room.state.players.findIndex((player) => participants.has(player.id) && !player.finalResolved);
+        if (nextIndex === -1) this.finishGame(room);
+        else room.state.finalRound.reviewPlayerIndex = nextIndex;
+      }
+    }
     this.persist();
   }
 
@@ -317,9 +339,11 @@ export class BrowserGameEngine {
     const question = room.questions[questionId];
     if (!tile || !question || tile.used) throw new Error('Question is unavailable');
     const multiplier = this.multiplierForRemaining(room.state.remainingQuestions, room.state.settings.lateGameModifiers);
+    const connected = this.connectedPlayers(room);
+    const isPlayableDailyDouble = tile.dailyDouble && connected.length > 0;
+    const responseMode = isPlayableDailyDouble ? 'buzz' : (question.responseMode ?? 'buzz');
     tile.used = true;
     room.state.remainingQuestions -= 1;
-    const responseMode = tile.dailyDouble ? 'buzz' : (question.responseMode ?? 'buzz');
     room.state.currentQuestion = {
       questionId,
       text: question.text,
@@ -332,7 +356,7 @@ export class BrowserGameEngine {
       responseMode,
       textResponses: {},
       responsesClosed: false,
-      dailyDouble: tile.dailyDouble,
+      dailyDouble: isPlayableDailyDouble,
       dailyDoublePlayerId: null,
       wager: null,
       buzzOpen: false,
@@ -341,16 +365,14 @@ export class BrowserGameEngine {
       attemptedPlayerIds: []
     };
     room.state.players.forEach((player) => { player.buzzEligible = false; player.hasBuzzedThisQuestion = false; });
-    if (tile.dailyDouble && room.state.players.length > 0) {
-      const player = room.state.players.find((item) => item.id === dailyDoublePlayerId && item.connected)
-        ?? room.state.players.find((item) => item.connected)
-        ?? room.state.players[0];
+    if (isPlayableDailyDouble) {
+      const player = connected.find((item) => item.id === dailyDoublePlayerId) ?? connected[0];
       room.state.currentQuestion.dailyDoublePlayerId = player.id;
       player.stats.dailyDoublesFound += 1;
       room.state.phase = 'daily-double-wager';
     } else {
       room.state.phase = 'question';
-      if (responseMode === 'text' && this.connectedPlayers(room).length > 0) this.startTimerInternal(room);
+      if (responseMode === 'text' && connected.length > 0) this.startTimerInternal(room);
     }
     this.persist();
     return this.snapshot(roomCode);
@@ -575,7 +597,7 @@ export class BrowserGameEngine {
     room.state.currentQuestion = null;
     this.stopTimerInternal(room);
     if (room.state.remainingQuestions === 0) {
-      if (room.state.settings.finalRoundEnabled && room.state.players.length > 0) this.prepareFinalRound(room);
+      if (room.state.settings.finalRoundEnabled && this.connectedPlayers(room).length > 0) this.prepareFinalRound(room);
       else this.finishGame(room);
     } else {
       room.state.multiplier = this.multiplierForRemaining(room.state.remainingQuestions, room.state.settings.lateGameModifiers);
@@ -635,7 +657,7 @@ export class BrowserGameEngine {
       if (!room.state.timer.running || !room.state.timer.endsAt || room.state.timer.endsAt > now) continue;
       room.state.timer = emptyTimer();
       if (room.state.phase === 'final-question') {
-        this.closeFinalQuestionInternal(room);
+        this.closeFinalResponsesInternal(room);
       } else if (room.state.currentQuestion?.responseMode === 'text' && !room.state.currentQuestion.answerRevealed) {
         this.closeTextResponsesInternal(room);
       } else if (room.state.settings.autoCloseBuzzersAtZero && room.state.currentQuestion?.buzzOpen) {
@@ -649,6 +671,8 @@ export class BrowserGameEngine {
   }
 
   private prepareFinalRound(room: RoomRecord): void {
+    const participantIds = this.connectedPlayers(room).map((player) => player.id);
+    if (!participantIds.length) { this.finishGame(room); return; }
     const selected = room.state.selectedPackIds.flatMap((packId) => this.getPack(packId)?.questions ?? []);
     const candidates = selected.filter((question) => !room.questions[question.id] && !this.seenQuestionIds.has(question.id));
     const fallback = selected.filter((question) => !room.questions[question.id]);
@@ -656,14 +680,30 @@ export class BrowserGameEngine {
     if (!question) return this.finishGame(room);
     room.questions[question.id] = question;
     room.finalQuestionId = question.id;
-    room.state.finalRound = { category: question.category, question: question.text, acceptedAnswers: question.acceptedAnswers, explanation: question.explanation, reviewPlayerIndex: 0 };
-    room.state.players.forEach((player) => { player.finalWager = null; player.finalWagerSubmitted = false; player.finalAnswer = null; player.finalAnswerSubmitted = false; player.finalResolved = false; });
+    room.state.finalRound = {
+      category: question.category,
+      question: question.text,
+      acceptedAnswers: question.acceptedAnswers,
+      explanation: question.explanation,
+      reviewPlayerIndex: 0,
+      participantIds,
+      responsesClosed: false
+    };
+    const participants = new Set(participantIds);
+    room.state.players.forEach((player) => {
+      const participating = participants.has(player.id);
+      player.finalWager = participating ? null : 0;
+      player.finalWagerSubmitted = !participating;
+      player.finalAnswer = null;
+      player.finalAnswerSubmitted = !participating;
+      player.finalResolved = !participating;
+    });
     room.state.phase = 'final-category';
   }
 
   beginFinalWagers(roomCode: string, hostToken: string): RoomSnapshot {
     const room = this.hostRoom(roomCode, hostToken);
-    if (room.state.phase !== 'final-category') throw new Error('Final Round is not ready for wagers');
+    if (room.state.phase !== 'final-category' || !room.state.finalRound) throw new Error('Final Round is not ready for wagers');
     room.state.phase = 'final-wager';
     this.persist();
     return this.snapshot(roomCode);
@@ -671,7 +711,9 @@ export class BrowserGameEngine {
 
   submitFinalWager(roomCode: string, playerId: string, reconnectToken: string, wager: number): RoomSnapshot {
     const [room, player] = this.playerRoom(roomCode, playerId, reconnectToken);
-    if (room.state.phase !== 'final-wager') throw new Error('Final wagers are closed');
+    if (room.state.phase !== 'final-wager' || !room.state.finalRound) throw new Error('Final wagers are closed');
+    if (!room.state.finalRound.participantIds.includes(player.id)) throw new Error('This seat is not participating in Final Round');
+    if (player.finalWagerSubmitted) throw new Error('Your Final wager is already locked');
     const max = room.state.settings.allowWagerBeyondScore ? room.state.settings.maxWager : Math.min(room.state.settings.maxWager, Math.max(0, player.score));
     if (!Number.isInteger(wager) || wager < 0 || wager > max) throw new Error(`Wager must be between 0 and ${max}`);
     player.finalWager = wager;
@@ -683,12 +725,13 @@ export class BrowserGameEngine {
 
   openFinalQuestion(roomCode: string, hostToken: string): RoomSnapshot {
     const room = this.hostRoom(roomCode, hostToken);
-    if (room.state.phase !== 'final-wager') throw new Error('Final wagers are not active');
-    room.state.players.forEach((player) => {
-      if (player.finalWager !== null) return;
+    if (room.state.phase !== 'final-wager' || !room.state.finalRound) throw new Error('Final wagers are not active');
+    for (const player of this.finalParticipants(room)) {
+      if (player.finalWager !== null) continue;
       player.finalWager = 0;
       player.finalWagerSubmitted = true;
-    });
+    }
+    room.state.finalRound.responsesClosed = false;
     room.state.phase = 'final-question';
     this.startTimerInternal(room);
     this.persist();
@@ -697,30 +740,40 @@ export class BrowserGameEngine {
 
   submitFinalAnswer(roomCode: string, playerId: string, reconnectToken: string, answer: string): RoomSnapshot {
     const [room, player] = this.playerRoom(roomCode, playerId, reconnectToken);
-    if (room.state.phase !== 'final-question') throw new Error('Final answers are closed');
+    if (room.state.phase !== 'final-question' || !room.state.finalRound || room.state.finalRound.responsesClosed) throw new Error('Final answers are closed');
+    if (!room.state.finalRound.participantIds.includes(player.id)) throw new Error('This seat is not participating in Final Round');
+    if (player.finalAnswerSubmitted) throw new Error('Your Final answer is already locked');
     const trimmed = answer.trim().slice(0, 200);
     if (!trimmed) throw new Error('Enter an answer first');
     player.finalAnswer = trimmed;
     player.finalAnswerSubmitted = true;
-    const active = this.connectedPlayers(room);
-    if (active.length > 0 && active.every((candidate) => candidate.finalAnswerSubmitted)) this.closeFinalQuestionInternal(room);
+    const active = this.activeFinalParticipants(room);
+    if (active.length === 0 || active.every((candidate) => candidate.finalAnswerSubmitted)) this.closeFinalResponsesInternal(room);
     this.persist();
     return this.snapshot(roomCode);
   }
 
-  private closeFinalQuestionInternal(room: RoomRecord): void {
-    room.state.phase = 'final-review';
+  private closeFinalResponsesInternal(room: RoomRecord): void {
+    if (!room.state.finalRound) return;
+    room.state.finalRound.responsesClosed = true;
     this.stopTimerInternal(room);
-    if (room.state.finalRound) {
-      const nextIndex = room.state.players.findIndex((player) => !player.finalResolved);
-      room.state.finalRound.reviewPlayerIndex = nextIndex === -1 ? 0 : nextIndex;
-    }
+  }
+
+  private enterFinalReviewInternal(room: RoomRecord): void {
+    const finalRound = room.state.finalRound;
+    if (!finalRound) return;
+    this.closeFinalResponsesInternal(room);
+    room.state.phase = 'final-review';
+    const participants = new Set(finalRound.participantIds);
+    const nextIndex = room.state.players.findIndex((player) => participants.has(player.id) && !player.finalResolved);
+    if (nextIndex === -1) this.finishGame(room);
+    else finalRound.reviewPlayerIndex = nextIndex;
   }
 
   beginFinalReview(roomCode: string, hostToken: string): RoomSnapshot {
     const room = this.hostRoom(roomCode, hostToken);
-    if (room.state.phase !== 'final-question') throw new Error('Final question is not active');
-    this.closeFinalQuestionInternal(room);
+    if (room.state.phase !== 'final-question' || !room.state.finalRound) throw new Error('Final question is not active');
+    this.enterFinalReviewInternal(room);
     this.persist();
     return this.snapshot(roomCode);
   }
@@ -728,6 +781,7 @@ export class BrowserGameEngine {
   resolveFinalAnswer(roomCode: string, hostToken: string, playerId: string, correct?: boolean): RoomSnapshot {
     const room = this.hostRoom(roomCode, hostToken);
     if (room.state.phase !== 'final-review' || !room.state.finalRound) throw new Error('Final answers are not under review');
+    if (!room.state.finalRound.participantIds.includes(playerId)) throw new Error('Player did not participate in Final Round');
     const player = room.state.players.find((item) => item.id === playerId);
     if (!player || player.finalResolved) throw new Error('Player final answer is unavailable');
     const suggestion = autoGradeAnswer(player.finalAnswer ?? '', room.state.finalRound.acceptedAnswers);
@@ -736,7 +790,8 @@ export class BrowserGameEngine {
     this.addScore(player, isCorrect ? wager : -wager, room.state.settings);
     if (isCorrect) player.stats.correct += 1; else player.stats.incorrect += 1;
     player.finalResolved = true;
-    const nextIndex = room.state.players.findIndex((candidate) => !candidate.finalResolved);
+    const participants = new Set(room.state.finalRound.participantIds);
+    const nextIndex = room.state.players.findIndex((candidate) => participants.has(candidate.id) && !candidate.finalResolved);
     if (nextIndex === -1) this.finishGame(room);
     else room.state.finalRound.reviewPlayerIndex = nextIndex;
     this.persist();
@@ -746,6 +801,7 @@ export class BrowserGameEngine {
   private finishGame(room: RoomRecord): void {
     room.state.phase = 'recap';
     room.state.gameEndedAt = Date.now();
+    if (room.state.finalRound) room.state.finalRound.responsesClosed = true;
     this.stopTimerInternal(room);
   }
   endGame(roomCode: string, hostToken: string): RoomSnapshot { const room = this.hostRoom(roomCode, hostToken); this.finishGame(room); this.persist(); return this.snapshot(roomCode); }
