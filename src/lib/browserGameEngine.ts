@@ -10,6 +10,8 @@ export interface RoomRecord {
   playerTokens: Record<string, string>;
   questions: Record<string, Question>;
   finalQuestionId: string | null;
+  /** One-level scoring checkpoint used by the host Undo control. */
+  undoState?: RoomState | null;
 }
 export interface RandomSource { next(): number }
 class MathRandomSource implements RandomSource { next(): number { return Math.random(); } }
@@ -44,6 +46,11 @@ function loadRooms(): RoomRecord[] {
     return Array.isArray(parsed) ? parsed : [];
   } catch { return []; }
 }
+function preferredDifficulty(value: number): Question['difficulty'] {
+  if (value <= 200) return 'easy';
+  if (value === 300) return 'medium';
+  return 'hard';
+}
 
 export class BrowserGameEngine {
   private rooms = new Map<string, RoomRecord>();
@@ -53,6 +60,19 @@ export class BrowserGameEngine {
     const now = Date.now();
     for (const record of loadRooms()) {
       if (record.state.expiresAt <= now) continue;
+      const claimedSeats = new Set<number>();
+      for (const player of record.state.players) {
+        const currentSeat = Number(player.seat);
+        if (Number.isInteger(currentSeat) && currentSeat >= 1 && currentSeat <= 5 && !claimedSeats.has(currentSeat)) {
+          claimedSeats.add(currentSeat);
+          player.seat = currentSeat;
+        } else {
+          const replacement = [1, 2, 3, 4, 5].find((seat) => !claimedSeats.has(seat)) ?? 5;
+          player.seat = replacement;
+          claimedSeats.add(replacement);
+        }
+      }
+      record.undoState ??= null;
       const previouslyConnected = record.state.players.filter((player) => player.connected).map((player) => player.id);
       record.state.hostConnected = false;
       record.state.players.forEach((player) => { player.connected = false; });
@@ -75,6 +95,8 @@ export class BrowserGameEngine {
     catch { /* keep the in-memory game running */ }
   }
   private touch(room: RoomRecord): void { room.state.expiresAt = Date.now() + this.roomTtlMs; }
+  private clearUndo(room: RoomRecord): void { room.undoState = null; }
+  private checkpointScore(room: RoomRecord): void { room.undoState = structuredClone(room.state); }
   private code(): string {
     for (let attempt = 0; attempt < 100; attempt += 1) {
       let value = '';
@@ -103,15 +125,16 @@ export class BrowserGameEngine {
     this.touch(room);
     return [room, player];
   }
-  private connectedPlayers(room: RoomRecord): Player[] { return room.state.players.filter((player) => player.connected); }
+  private connectedPlayers(room: RoomRecord): Player[] { return room.state.players.filter((player) => player.connected).sort((a, b) => a.seat - b.seat); }
   private finalParticipants(room: RoomRecord): Player[] {
     const ids = new Set(room.state.finalRound?.participantIds ?? []);
-    return room.state.players.filter((player) => ids.has(player.id));
+    return room.state.players.filter((player) => ids.has(player.id)).sort((a, b) => a.seat - b.seat);
   }
   private activeFinalParticipants(room: RoomRecord): Player[] { return this.finalParticipants(room).filter((player) => player.connected); }
 
   snapshot(roomCode: string): RoomSnapshot {
     const state = structuredClone(this.room(roomCode).state);
+    state.players.sort((a, b) => a.seat - b.seat);
     if (state.timer.running && state.timer.endsAt) state.timer.remainingMs = Math.max(0, state.timer.endsAt - Date.now());
     return { ...state, serverNow: Date.now() };
   }
@@ -140,7 +163,7 @@ export class BrowserGameEngine {
       gameStartedAt: null,
       gameEndedAt: null
     };
-    this.rooms.set(code, { state, hostToken, playerTokens: {}, questions: {}, finalQuestionId: null });
+    this.rooms.set(code, { state, hostToken, playerTokens: {}, questions: {}, finalQuestionId: null, undoState: null });
     this.persist();
     const root = baseUrl.replace(/\/$/, '');
     return { roomCode: code, hostToken, joinUrl: `${root}/?mode=player&room=${code}`, presentationUrl: `${root}/?mode=presentation&room=${code}` };
@@ -154,16 +177,20 @@ export class BrowserGameEngine {
     const room = this.room(roomCode);
     if (room.state.locked || (room.state.phase !== 'lobby' && room.state.settings.lockRoomOnStart)) throw new Error('Room is locked');
     if (room.state.players.length >= 5) throw new Error('Room already has 5 players');
+    const occupiedSeats = new Set(room.state.players.map((player) => player.seat));
+    const seat = [1, 2, 3, 4, 5].find((candidate) => !occupiedSeats.has(candidate));
+    if (!seat) throw new Error('No player seat is available');
     const playerId = id('player');
     const reconnectToken = randomToken();
     const duplicateCount = room.state.players.filter((player) => player.name.toLowerCase() === input.name.toLowerCase()).length;
     const name = duplicateCount ? `${input.name} ${duplicateCount + 1}` : input.name;
     room.state.players.push({
-      id: playerId, name, avatar: input.avatar, accent: input.accent, score: 0, connected: true,
+      id: playerId, seat, name, avatar: input.avatar, accent: input.accent, score: 0, connected: true,
       positiveStreak: 0, coldStreak: 0, onFire: false, isCold: false, buzzEligible: false, hasBuzzedThisQuestion: false,
       finalWager: null, finalWagerSubmitted: false, finalAnswer: null, finalAnswerSubmitted: false, finalResolved: false,
       stats: defaultStats()
     });
+    room.state.players.sort((a, b) => a.seat - b.seat);
     room.playerTokens[playerId] = reconnectToken;
     this.touch(room);
     this.persist();
@@ -203,8 +230,21 @@ export class BrowserGameEngine {
     this.setPlayerConnected(roomCode, playerId, false);
   }
 
+  renamePlayer(roomCode: string, hostToken: string, playerId: string, requestedName: string): RoomSnapshot {
+    const room = this.hostRoom(roomCode, hostToken);
+    const player = room.state.players.find((item) => item.id === playerId);
+    if (!player) throw new Error('Player not found');
+    const clean = requestedName.trim().replace(/\s+/g, ' ').slice(0, 24);
+    if (!clean) throw new Error('Enter a player name');
+    const duplicateCount = room.state.players.filter((candidate) => candidate.id !== playerId && candidate.name.toLowerCase() === clean.toLowerCase()).length;
+    player.name = duplicateCount ? `${clean} ${duplicateCount + 1}`.slice(0, 24) : clean;
+    this.persist();
+    return this.snapshot(roomCode);
+  }
+
   removePlayer(roomCode: string, hostToken: string, playerId: string): void {
     const room = this.hostRoom(roomCode, hostToken);
+    this.clearUndo(room);
     room.state.players = room.state.players.filter((player) => player.id !== playerId);
     delete room.playerTokens[playerId];
     if (room.state.finalRound) {
@@ -217,6 +257,29 @@ export class BrowserGameEngine {
       }
     }
     this.persist();
+  }
+
+  undoLastScoreAction(roomCode: string, hostToken: string): RoomSnapshot {
+    const room = this.hostRoom(roomCode, hostToken);
+    if (!room.undoState) throw new Error('There is no scoring action to undo');
+    const currentIds = room.state.players.map((player) => player.id).sort();
+    const savedIds = room.undoState.players.map((player) => player.id).sort();
+    if (currentIds.join('|') !== savedIds.join('|')) {
+      this.clearUndo(room);
+      throw new Error('Undo is unavailable after the player roster changed');
+    }
+    const connectionState = new Map(room.state.players.map((player) => [player.id, player.connected]));
+    const hostConnected = room.state.hostConnected;
+    const expiresAt = room.state.expiresAt;
+    const restored = structuredClone(room.undoState);
+    restored.players.forEach((player) => { player.connected = connectionState.get(player.id) ?? false; });
+    restored.hostConnected = hostConnected;
+    restored.expiresAt = expiresAt;
+    room.state = restored;
+    this.clearUndo(room);
+    this.touch(room);
+    this.persist();
+    return this.snapshot(roomCode);
   }
 
   updateSettings(roomCode: string, hostToken: string, updates: Partial<GameSettings>): RoomSnapshot {
@@ -254,7 +317,13 @@ export class BrowserGameEngine {
     }
     let usable = [...categoryGroups.entries()].filter(([, questions]) => QUESTION_VALUES.slice(0, config.rows).every((value) => questions.some((question) => question.value === value)));
     usable.sort((a, b) => b[1].filter((question) => !this.seenQuestionIds.has(question.id)).length - a[1].filter((question) => !this.seenQuestionIds.has(question.id)).length);
-    if (settings.randomizeCategories) usable = this.shuffle(usable);
+    const orderedCategories = selectedPacks.length === 1 ? selectedPacks[0].categoryOrder ?? [] : [];
+    if (!settings.randomizeCategories && orderedCategories.length) {
+      const order = new Map(orderedCategories.map((category, index) => [category, index]));
+      usable.sort((a, b) => (order.get(a[0]) ?? 999) - (order.get(b[0]) ?? 999));
+    } else if (settings.randomizeCategories) {
+      usable = this.shuffle(usable);
+    }
     const chosen = usable.slice(0, config.categories);
     if (chosen.length < config.categories) throw new Error('Selected packs do not contain enough complete categories for this game length');
     const boardQuestions: BoardQuestion[] = [];
@@ -262,8 +331,12 @@ export class BrowserGameEngine {
     for (const [categoryName, sourceQuestions] of chosen) {
       for (const value of QUESTION_VALUES.slice(0, config.rows)) {
         const candidates = sourceQuestions.filter((question) => question.value === value);
+        const preferred = preferredDifficulty(value);
         const unseen = candidates.filter((question) => !this.seenQuestionIds.has(question.id));
-        const chosenQuestion = this.shuffle(unseen.length ? unseen : candidates)[0];
+        const difficultyMatchedUnseen = unseen.filter((question) => question.difficulty === preferred);
+        const difficultyMatched = candidates.filter((question) => question.difficulty === preferred);
+        const selectionPool = difficultyMatchedUnseen.length ? difficultyMatchedUnseen : unseen.length ? unseen : difficultyMatched.length ? difficultyMatched : candidates;
+        const chosenQuestion = this.shuffle(selectionPool)[0];
         questions[chosenQuestion.id] = chosenQuestion;
         boardQuestions.push({ questionId: chosenQuestion.id, category: categoryName, value: chosenQuestion.value, used: false, dailyDouble: false });
         this.seenQuestionIds.add(chosenQuestion.id);
@@ -294,6 +367,7 @@ export class BrowserGameEngine {
 
   resetGame(roomCode: string, hostToken: string): RoomSnapshot {
     const room = this.hostRoom(roomCode, hostToken);
+    this.clearUndo(room);
     for (const questionId of Object.keys(room.questions)) this.seenQuestionIds.delete(questionId);
     room.questions = {};
     room.finalQuestionId = null;
@@ -316,6 +390,7 @@ export class BrowserGameEngine {
   startGame(roomCode: string, hostToken: string): RoomSnapshot {
     const room = this.hostRoom(roomCode, hostToken);
     if (room.state.phase !== 'lobby') throw new Error('Game already started');
+    this.clearUndo(room);
     const generated = this.generateBoard(room.state.settings);
     room.questions = generated.questions;
     room.state.board = generated.board;
@@ -342,6 +417,7 @@ export class BrowserGameEngine {
   selectQuestion(roomCode: string, hostToken: string, questionId: string, dailyDoublePlayerId?: string): RoomSnapshot {
     const room = this.hostRoom(roomCode, hostToken);
     if (room.state.phase !== 'board' || !room.state.board) throw new Error('Board is not ready');
+    this.clearUndo(room);
     const tile = room.state.board.questions.find((entry) => entry.questionId === questionId);
     const question = room.questions[questionId];
     if (!tile || !question || tile.used) throw new Error('Question is unavailable');
@@ -513,6 +589,7 @@ export class BrowserGameEngine {
     if (current.responseMode === 'text') throw new Error('Use free-response grading for this question');
     if (current.dailyDouble && current.dailyDoublePlayerId !== playerId) throw new Error('Only the Daily Double player can answer');
     if (!current.dailyDouble && current.buzzWinnerId !== playerId) throw new Error('Only the buzz winner can be resolved');
+    this.checkpointScore(room);
     let points = current.effectiveValue;
     if (current.dailyDouble) {
       const multiplier = room.state.settings.dailyDoubleStacksWithMultiplier ? this.multiplierForRemaining(room.state.remainingQuestions + 1, room.state.settings.lateGameModifiers) : 1;
@@ -562,6 +639,7 @@ export class BrowserGameEngine {
     const player = room.state.players.find((item) => item.id === playerId);
     if (!response || !player) throw new Error('Response not found');
     if (response.resolvedCorrect !== null) throw new Error('Response is already graded');
+    this.checkpointScore(room);
     response.resolvedCorrect = correct;
     this.addScore(player, correct ? current.effectiveValue : -current.effectiveValue, room.state.settings);
     if (correct) player.stats.correct += 1; else player.stats.incorrect += 1;
@@ -618,6 +696,7 @@ export class BrowserGameEngine {
     const room = this.hostRoom(roomCode, hostToken);
     const player = room.state.players.find((item) => item.id === playerId);
     if (!player || !Number.isFinite(delta) || Math.abs(delta) > 100_000) throw new Error('Invalid score adjustment');
+    this.checkpointScore(room);
     this.addScore(player, Math.round(delta), room.state.settings);
     this.persist();
     return this.snapshot(roomCode);
@@ -680,10 +759,13 @@ export class BrowserGameEngine {
   private prepareFinalRound(room: RoomRecord): void {
     const participantIds = this.connectedPlayers(room).map((player) => player.id);
     if (!participantIds.length) { this.finishGame(room); return; }
-    const selected = room.state.selectedPackIds.flatMap((packId) => this.getPack(packId)?.questions ?? []);
+    const selectedPacks = room.state.selectedPackIds.map((packId) => this.getPack(packId)).filter((pack): pack is QuestionPack => Boolean(pack));
+    const selected = selectedPacks.flatMap((pack) => pack.questions);
+    const preferredFinalId = selectedPacks.length === 1 ? selectedPacks[0].finalQuestionId : undefined;
+    const explicitFinal = preferredFinalId ? selected.find((question) => question.id === preferredFinalId && !room.questions[question.id]) : undefined;
     const candidates = selected.filter((question) => !room.questions[question.id] && !this.seenQuestionIds.has(question.id));
     const fallback = selected.filter((question) => !room.questions[question.id]);
-    const question = this.shuffle(candidates.length ? candidates : fallback)[0];
+    const question = explicitFinal ?? this.shuffle(candidates.length ? candidates : fallback)[0];
     if (!question) return this.finishGame(room);
     room.questions[question.id] = question;
     room.finalQuestionId = question.id;
@@ -711,6 +793,7 @@ export class BrowserGameEngine {
   beginFinalWagers(roomCode: string, hostToken: string): RoomSnapshot {
     const room = this.hostRoom(roomCode, hostToken);
     if (room.state.phase !== 'final-category' || !room.state.finalRound) throw new Error('Final Round is not ready for wagers');
+    this.clearUndo(room);
     room.state.phase = 'final-wager';
     this.persist();
     return this.snapshot(roomCode);
@@ -733,6 +816,7 @@ export class BrowserGameEngine {
   openFinalQuestion(roomCode: string, hostToken: string): RoomSnapshot {
     const room = this.hostRoom(roomCode, hostToken);
     if (room.state.phase !== 'final-wager' || !room.state.finalRound) throw new Error('Final wagers are not active');
+    this.clearUndo(room);
     for (const player of this.finalParticipants(room)) {
       if (player.finalWager !== null) continue;
       player.finalWager = 0;
@@ -791,6 +875,7 @@ export class BrowserGameEngine {
     if (!room.state.finalRound.participantIds.includes(playerId)) throw new Error('Player did not participate in Final Round');
     const player = room.state.players.find((item) => item.id === playerId);
     if (!player || player.finalResolved) throw new Error('Player final answer is unavailable');
+    this.checkpointScore(room);
     const suggestion = autoGradeAnswer(player.finalAnswer ?? '', room.state.finalRound.acceptedAnswers);
     const isCorrect = correct ?? suggestion.correct;
     const wager = player.finalWager ?? 0;
