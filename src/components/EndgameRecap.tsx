@@ -40,10 +40,10 @@ function buildAwards(players: Player[]): Award[] {
 }
 
 export function EndgameRecap({ players, onReset, onMenu }: { players: Player[]; onReset: () => void; onMenu: () => void }) {
-  const resultKey = players.map((player) => `${player.id}:${player.score}`).join('|');
+  const resultKey = players.map((player) => `${player.id}:${player.score}:${player.stats.correct}:${player.stats.incorrect}:${player.stats.longestStreak}:${player.stats.fastestBuzzMs ?? 'n'}:${player.stats.biggestWager}:${player.stats.pointsGained}`).join('|');
   const playerCount = players.length;
-  const standings = useMemo(() => [...players].sort((a, b) => b.score - a.score || a.seat - b.seat), [resultKey]);
-  const awards = useMemo(() => buildAwards(players), [resultKey]);
+  const standings = useMemo(() => [...players].sort((a, b) => b.score - a.score || a.seat - b.seat), [players]);
+  const awards = useMemo(() => buildAwards(players), [players]);
   const [revealed, setRevealed] = useState(0);
   const [showStats, setShowStats] = useState(false);
 
@@ -61,16 +61,16 @@ export function EndgameRecap({ players, onReset, onMenu }: { players: Player[]; 
   if (showStats) return <section className={`recap-scene-v2 stats-after-podium recap-count-${playerCount}`}>
     <div className="section-kicker gold">GAME STATS</div>
     <h1>Final results</h1>
-    {awards.length > 0 && <div className="postgame-awards" aria-label="Game awards">{awards.map((award) => {
+    {awards.length > 0 && <div className="recap-grid-v2 postgame-awards" aria-label="Game awards">{awards.map((award) => {
       const player = players.find((candidate) => candidate.id === award.playerId)!;
-      return <article key={`${award.title}-${award.playerId}`}><small>{award.title}</small><strong>{player.avatar} {player.name}</strong><span>{award.detail}</span></article>;
+      return <article className="recap-card-v2" key={`${award.title}-${award.playerId}`}><div className="section-kicker gold">{award.title}</div><div className="recap-player-heading"><span>{player.avatar}</span><h2>{player.name}</h2></div><strong>{award.detail}</strong></article>;
     })}</div>}
     <div className="recap-grid-v2">{standings.map((player) => {
       const place = competitionPlace(standings, player);
       const playerAwards = awards.filter((award) => award.playerId === player.id);
       return <article className="recap-card-v2" key={player.id}>
         <div className="recap-player-heading"><div className="stats-place">#{place}</div><span>{player.avatar}</span><h2>{player.name}</h2><strong>{player.score.toLocaleString()}</strong></div>
-        {playerAwards.length > 0 && <div className="player-award-pills">{playerAwards.map((award) => <span key={award.title}>{award.title}</span>)}</div>}
+        {playerAwards.length > 0 && <div className="player-award-pills">{playerAwards.map((award) => <span className="player-wager-pill" key={award.title}>{award.title}</span>)}</div>}
         <dl className="recap-stats-list"><dt>Correct</dt><dd>{player.stats.correct}</dd><dt>Incorrect</dt><dd>{player.stats.incorrect}</dd><dt>Accuracy</dt><dd>{Math.round(player.stats.correct / Math.max(1, player.stats.correct + player.stats.incorrect) * 100)}%</dd><dt>Longest streak</dt><dd>{player.stats.longestStreak}</dd><dt>Fastest buzz</dt><dd>{player.stats.fastestBuzzMs == null ? '—' : `${player.stats.fastestBuzzMs}ms`}</dd><dt>Points gained</dt><dd>{player.stats.pointsGained.toLocaleString()}</dd><dt>Points lost</dt><dd>{player.stats.pointsLost.toLocaleString()}</dd><dt>Biggest wager</dt><dd>{player.stats.biggestWager.toLocaleString()}</dd></dl>
       </article>;
     })}</div>
