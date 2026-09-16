@@ -158,6 +158,27 @@ describe('BrowserGameEngine production state', () => {
     expect(state.phase).toBe('final-question');
   });
 
+  it('requires host authorization before suspending a reserved seat', () => {
+    const { engine, host } = setup();
+    const player = addPlayer(engine, host.roomCode);
+
+    expect(() => engine.suspendPlayer(host.roomCode, 'wrong-token', player.playerId)).toThrow(/authorization/i);
+    expect(engine.snapshot(host.roomCode).players[0].connected).toBe(true);
+
+    engine.suspendPlayer(host.roomCode, host.hostToken, player.playerId);
+    expect(engine.snapshot(host.roomCode).players[0].connected).toBe(false);
+  });
+
+  it('honors room locking while reserved players can still reconnect', () => {
+    const { engine, host } = setup({ lockRoomOnStart: true });
+    const player = addPlayer(engine, host.roomCode, 'One');
+    engine.startGame(host.roomCode, host.hostToken);
+
+    expect(() => addPlayer(engine, host.roomCode, 'Two')).toThrow(/locked/i);
+    engine.setPlayerConnected(host.roomCode, player.playerId, false);
+    expect(() => engine.reconnectPlayer(host.roomCode, player.playerId, player.reconnectToken)).not.toThrow();
+  });
+
   it('keeps exact late-game multiplier windows', () => {
     const { engine } = setup();
     expect(engine.multiplierForRemaining(7)).toBe(1);

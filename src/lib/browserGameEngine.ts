@@ -196,6 +196,13 @@ export class BrowserGameEngine {
     this.touch(room);
     this.persist();
   }
+  suspendPlayer(roomCode: string, hostToken: string, playerId: string): void {
+    const room = this.hostRoom(roomCode, hostToken);
+    const player = room.state.players.find((item) => item.id === playerId);
+    if (!player) throw new Error('Player not found');
+    this.setPlayerConnected(roomCode, playerId, false);
+  }
+
   removePlayer(roomCode: string, hostToken: string, playerId: string): void {
     const room = this.hostRoom(roomCode, hostToken);
     room.state.players = room.state.players.filter((player) => player.id !== playerId);
