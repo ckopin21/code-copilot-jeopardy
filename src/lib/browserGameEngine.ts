@@ -95,6 +95,7 @@ export class BrowserGameEngine {
     this.touch(room);
     return [room, player];
   }
+  private connectedPlayers(room: RoomRecord): Player[] { return room.state.players.filter((player) => player.connected); }
 
   snapshot(roomCode: string): RoomSnapshot {
     const state = structuredClone(this.room(roomCode).state);
@@ -165,7 +166,22 @@ export class BrowserGameEngine {
   setPlayerConnected(roomCode: string, playerId: string, connected: boolean): void {
     const room = this.room(roomCode);
     const player = room.state.players.find((item) => item.id === playerId);
-    if (player) { player.connected = connected; this.touch(room); this.persist(); }
+    if (!player) return;
+    player.connected = connected;
+    if (!connected) {
+      player.buzzEligible = false;
+      const current = room.state.currentQuestion;
+      if (room.state.phase === 'question' && current?.responseMode === 'text' && !current.answerRevealed) {
+        const active = this.connectedPlayers(room);
+        if (active.length === 0 || active.every((candidate) => Boolean(current.textResponses?.[candidate.id]))) this.closeTextResponsesInternal(room);
+      }
+      if (room.state.phase === 'final-question') {
+        const active = this.connectedPlayers(room);
+        if (active.length === 0 || active.every((candidate) => candidate.finalAnswerSubmitted)) this.closeFinalQuestionInternal(room);
+      }
+    }
+    this.touch(room);
+    this.persist();
   }
   removePlayer(roomCode: string, hostToken: string, playerId: string): void {
     const room = this.hostRoom(roomCode, hostToken);
@@ -326,13 +342,15 @@ export class BrowserGameEngine {
     };
     room.state.players.forEach((player) => { player.buzzEligible = false; player.hasBuzzedThisQuestion = false; });
     if (tile.dailyDouble && room.state.players.length > 0) {
-      const player = room.state.players.find((item) => item.id === dailyDoublePlayerId) ?? room.state.players[0];
+      const player = room.state.players.find((item) => item.id === dailyDoublePlayerId && item.connected)
+        ?? room.state.players.find((item) => item.connected)
+        ?? room.state.players[0];
       room.state.currentQuestion.dailyDoublePlayerId = player.id;
       player.stats.dailyDoublesFound += 1;
       room.state.phase = 'daily-double-wager';
     } else {
       room.state.phase = 'question';
-      if (responseMode === 'text' && room.state.players.length > 0) this.startTimerInternal(room);
+      if (responseMode === 'text' && this.connectedPlayers(room).length > 0) this.startTimerInternal(room);
     }
     this.persist();
     return this.snapshot(roomCode);
@@ -383,8 +401,11 @@ export class BrowserGameEngine {
     current.buzzOpen = true;
     current.buzzWinnerId = null;
     current.buzzOpenedAt = Date.now();
-    room.state.players.forEach((player) => { player.buzzEligible = room.state.settings.allowRepeatBuzzAfterMiss || !current.attemptedPlayerIds.includes(player.id); });
-    this.startTimerInternal(room);
+    room.state.players.forEach((player) => { player.buzzEligible = player.connected && (room.state.settings.allowRepeatBuzzAfterMiss || !current.attemptedPlayerIds.includes(player.id)); });
+    const someoneEligible = room.state.players.some((player) => player.buzzEligible);
+    if (!someoneEligible) current.buzzOpen = false;
+    if (someoneEligible) this.startTimerInternal(room);
+    else this.stopTimerInternal(room);
     this.persist();
     return this.snapshot(roomCode);
   }
@@ -402,7 +423,7 @@ export class BrowserGameEngine {
     const [room, player] = this.playerRoom(roomCode, playerId, reconnectToken);
     const current = room.state.currentQuestion;
     if (!current?.buzzOpen || current.buzzWinnerId) return { accepted: false, reason: 'Buzzers are locked', snapshot: this.snapshot(roomCode) };
-    if (!player.buzzEligible || (!room.state.settings.allowRepeatBuzzAfterMiss && current.attemptedPlayerIds.includes(player.id))) return { accepted: false, reason: 'You are not eligible to buzz', snapshot: this.snapshot(roomCode) };
+    if (!player.connected || !player.buzzEligible || (!room.state.settings.allowRepeatBuzzAfterMiss && current.attemptedPlayerIds.includes(player.id))) return { accepted: false, reason: 'You are not eligible to buzz', snapshot: this.snapshot(roomCode) };
     current.buzzWinnerId = player.id;
     current.buzzOpen = false;
     current.attemptedPlayerIds.push(player.id);
@@ -419,7 +440,7 @@ export class BrowserGameEngine {
     const room = this.hostRoom(roomCode, hostToken);
     const current = room.state.currentQuestion;
     const player = room.state.players.find((item) => item.id === playerId);
-    if (!player || !current?.buzzOpen || current.buzzWinnerId || !player.buzzEligible) throw new Error('Local buzz is not valid');
+    if (!player || !player.connected || !current?.buzzOpen || current.buzzWinnerId || !player.buzzEligible) throw new Error('Local buzz is not valid');
     current.buzzWinnerId = player.id;
     current.buzzOpen = false;
     current.attemptedPlayerIds.push(player.id);
@@ -477,8 +498,8 @@ export class BrowserGameEngine {
       current.buzzOpen = false;
     } else {
       current.buzzWinnerId = null;
-      room.state.players.forEach((candidate) => { candidate.buzzEligible = room.state.settings.allowRepeatBuzzAfterMiss || !current.attemptedPlayerIds.includes(candidate.id); });
-      const someoneEligible = room.state.players.some((candidate) => candidate.buzzEligible && candidate.connected);
+      room.state.players.forEach((candidate) => { candidate.buzzEligible = candidate.connected && (room.state.settings.allowRepeatBuzzAfterMiss || !current.attemptedPlayerIds.includes(candidate.id)); });
+      const someoneEligible = room.state.players.some((candidate) => candidate.buzzEligible);
       current.buzzOpen = someoneEligible;
       current.buzzOpenedAt = someoneEligible ? Date.now() : null;
       if (someoneEligible) this.startTimerInternal(room); else current.answerRevealed = true;
@@ -497,7 +518,8 @@ export class BrowserGameEngine {
     const grade = autoGradeAnswer(trimmed, current.acceptedAnswers ?? []);
     current.textResponses ??= {};
     current.textResponses[player.id] = { answer: trimmed, submittedAt: Date.now(), autoCorrect: grade.correct, autoConfidence: grade.confidence, resolvedCorrect: null };
-    const allSubmitted = room.state.players.length > 0 && room.state.players.every((candidate) => Boolean(current.textResponses?.[candidate.id]));
+    const active = this.connectedPlayers(room);
+    const allSubmitted = active.length > 0 && active.every((candidate) => Boolean(current.textResponses?.[candidate.id]));
     if (allSubmitted) this.closeTextResponsesInternal(room);
     this.persist();
     return this.snapshot(roomCode);
@@ -662,7 +684,11 @@ export class BrowserGameEngine {
   openFinalQuestion(roomCode: string, hostToken: string): RoomSnapshot {
     const room = this.hostRoom(roomCode, hostToken);
     if (room.state.phase !== 'final-wager') throw new Error('Final wagers are not active');
-    if (room.state.players.some((player) => player.finalWager === null)) throw new Error('All players must submit a wager');
+    room.state.players.forEach((player) => {
+      if (player.finalWager !== null) return;
+      player.finalWager = 0;
+      player.finalWagerSubmitted = true;
+    });
     room.state.phase = 'final-question';
     this.startTimerInternal(room);
     this.persist();
@@ -676,7 +702,8 @@ export class BrowserGameEngine {
     if (!trimmed) throw new Error('Enter an answer first');
     player.finalAnswer = trimmed;
     player.finalAnswerSubmitted = true;
-    if (room.state.players.every((candidate) => candidate.finalAnswerSubmitted)) this.closeFinalQuestionInternal(room);
+    const active = this.connectedPlayers(room);
+    if (active.length > 0 && active.every((candidate) => candidate.finalAnswerSubmitted)) this.closeFinalQuestionInternal(room);
     this.persist();
     return this.snapshot(roomCode);
   }
