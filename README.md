@@ -1,6 +1,6 @@
 # Blue Stage Trivia
 
-A shared-screen browser trivia game with a host display and up to five phone controllers. The primary deployed version runs on GitHub Pages: the host browser owns the game state and player phones connect directly with PeerJS/WebRTC.
+A shared-screen browser trivia game with a host display and up to five phone controllers. The deployed version runs on GitHub Pages: the host browser owns the game state and player phones connect directly with PeerJS/WebRTC.
 
 Live game:
 
@@ -40,9 +40,11 @@ The maintained documentation index is [`docs/README.md`](docs/README.md).
 - [`docs/question-packs.md`](docs/question-packs.md) — easiest way to add questions and packs
 - [`docs/development.md`](docs/development.md) — repository layout, tests, CI, deployment, change checklist
 
-## Primary runtime: GitHub Pages
+## Runtime: GitHub Pages + PeerJS
 
-The Pages build is static. `src/lib/browserGameEngine.ts` is the authoritative engine for this runtime and stores active room state in the host browser. `src/lib/socket.ts` connects phones to the host over PeerJS/WebRTC.
+The build is static. `src/lib/browserGameEngine.ts` is the authoritative game engine and stores active room state in the host browser. `src/lib/socket.ts` connects phones and presentation screens to the host over PeerJS/WebRTC.
+
+There is one game engine and one multiplayer authority path. The former alternate Node/Socket.IO backend was removed so tests, local builds, and production cannot drift between separate implementations.
 
 The host page is the live room endpoint. If it closes, phones cannot keep playing until the host page is reopened and restores the saved room.
 
@@ -78,7 +80,7 @@ Presentation mode does not create a second audio surface.
 
 ## Daily Double
 
-Daily Double ownership follows the active controller/last-resolved player automatically; there is no separate board selector.
+Daily Double ownership follows the active controller/last-resolved player automatically; there is no separate board selector. In zero-player practice mode, an otherwise hidden Daily Double is treated as a normal clue because there is no player who can own a wager.
 
 Available wagers are fixed presets:
 
@@ -96,7 +98,9 @@ Final wager choices are:
 0, 100, 200, 300, 400, 500, 1000, ALL IN
 ```
 
-All In shows the player's current positive score and is disabled at zero/negative score. Host status cards show the locked wager amount. Missing wagers become 0 if the host starts the Final question early. Final submissions or timer expiration do not expose the accepted answer; the host starts the tension/reveal sequence.
+All In shows the player's current positive score and is disabled at zero/negative score. Host status cards show the locked wager amount. Missing wagers become 0 if the host starts the Final question early.
+
+Only players connected when Final begins become Final participants. Final answer submission closes when every active Final participant submits or the timer expires, but the accepted answer remains hidden until the host begins review. Late submissions are rejected after that lock. Player/presentation snapshots reveal only the currently reviewed or already resolved Final responses, not future players' answers.
 
 ## Question packs
 
@@ -131,7 +135,7 @@ See [`docs/question-packs.md`](docs/question-packs.md) for all options and valid
 Requires Node.js 22+.
 
 ```bash
-npm install
+npm ci
 npm run dev
 ```
 
@@ -145,34 +149,21 @@ npm test
 npm run build
 ```
 
-Pack registration is automatically refreshed before dev, typecheck, tests, and builds.
+Dependencies are pinned and `package-lock.json` is committed so local and CI installs resolve the same dependency graph. Pack registration is automatically refreshed before dev, typecheck, tests, and builds.
 
 ## Testing and CI
 
-Tests cover core engine behavior, answer normalization, pack loading, modular pack validation, and the distinct game-length board sizes. GitHub Actions runs installation, typecheck, lint, tests, production build, and GitHub Pages deployment checks.
+Tests exercise the production `BrowserGameEngine`, multiplayer snapshot privacy, answer normalization, pack loading, pack validation, and game-length board sizes. Regression coverage includes reconnect identity, timer restoration, practice-mode Daily Doubles, Final participants, Final timeout locking, disconnected Final players, and hidden multiplayer answers.
+
+GitHub Actions uses the committed lockfile, then runs typecheck, lint, tests, production build, and GitHub Pages deployment checks.
 
 DOM geometry, camera scanning, haptics, Web Audio, and real WebRTC connectivity still require browser/device smoke testing because those behaviors cannot be fully proven by unit tests alone.
 
-## Alternate Node/Socket.IO runtime
-
-The repository also contains an alternate traditional server implementation under `server/` using Express and Socket.IO, including server persistence and server-imported JSON question packs.
-
-That path does **not** power the GitHub Pages build and should be treated as a separate runtime. A change to the browser engine/PeerJS path does not automatically change the Node engine/Socket.IO path.
-
-For the Node build:
-
-```bash
-npm run build
-npm start
-```
-
-Server-imported JSON packs and `.data` persistence apply only to that Node runtime. See the architecture and question-pack docs for the distinction.
-
 ## Security/authority model
 
-In the primary Pages runtime, the host browser is authoritative for room/game state. Player actions are authorized with stable player IDs and reconnect tokens. Phones request actions but do not directly mutate scores or game phases.
+The host browser is authoritative for room/game state. Player actions are authorized with stable player IDs and reconnect tokens. Phones request actions but do not directly mutate scores or game phases.
 
-In the alternate Node runtime, the server is authoritative and uses its own host/player authorization path.
+Snapshots are sanitized by role before being sent. Hidden clue answers/explanations, unrevealed typed-response details, and future Final responses are withheld from player/presentation clients until their reveal phase.
 
 React renders names/questions as text, avoiding raw HTML injection for normal content paths.
 
