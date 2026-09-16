@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildPack, category, difficultyForValue, normalizeQuestionIdentity, question } from '../src/packs/buildPack';
-import { builtInPacks } from '../src/packs';
+import { builtInPacks, likelyRepeatedFact } from '../src/packs';
 import { QUESTION_VALUES } from '../src/shared/types';
 
 const meta = {
@@ -38,6 +38,35 @@ describe('question pack catalog', () => {
     expect(questions.every((item) => Boolean(item.questionType && item.factKey))).toBe(true);
     expect(new Set(factKeys).size).toBe(factKeys.length);
     expect(new Set(promptKeys).size).toBe(promptKeys.length);
+  });
+
+  it('detects likely duplicate facts even when the wording changes', () => {
+    const template = builtInPacks[0].questions[0];
+    const left = {
+      ...template,
+      id: 'left-fact',
+      packId: 'left-pack',
+      text: 'Who wrote the science-fiction novel Dune?',
+      acceptedAnswers: ['Frank Herbert'],
+      questionType: 'person' as const,
+      factKey: 'left-wording'
+    };
+    const reworded = {
+      ...template,
+      id: 'right-fact',
+      packId: 'right-pack',
+      text: 'Which author wrote the novel Dune?',
+      acceptedAnswers: ['Frank Herbert'],
+      questionType: 'person' as const,
+      factKey: 'right-wording'
+    };
+    const differentFact = {
+      ...reworded,
+      id: 'different-fact',
+      text: 'Which author was born in Tacoma, Washington?'
+    };
+    expect(likelyRepeatedFact(left, reworded)).toBe(true);
+    expect(likelyRepeatedFact(left, differentFact)).toBe(false);
   });
 
   it('scales difficulty consistently with clue value', () => {
