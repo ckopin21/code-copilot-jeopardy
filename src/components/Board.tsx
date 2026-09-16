@@ -29,10 +29,10 @@ export function Board({ board, multiplier = 1, disabled = false, onSelect, onRev
           aria-label={`${category} for ${displayedValue} points${multiplier > 1 && !question.used ? `, ${multiplier} times modifier active` : ''}${question.used ? ', used, click to review' : ''}`}
           title={canReview ? 'Review answered question' : undefined}
         >
-          {question.used ? <div className="used-tile-result">
+          {question.used ? questionResults.length ? <div className="used-tile-result">
             <small className="used-tile-value">{question.value}</small>
-            {questionResults.length ? <div className="used-result-list">{questionResults.map((result) => <span className={`used-result-chip ${result.correct ? 'correct' : 'wrong'}`} key={result.playerId}><b>{result.playerAvatar} {result.playerName}</b><em>{result.correct ? 'CORRECT' : 'INCORRECT'}</em></span>)}</div> : <span className="used-check">✓</span>}
-          </div> : displayedValue}
+            <div className="used-result-list">{questionResults.map((result) => <span className={`used-result-chip ${result.correct ? 'correct' : 'wrong'}`} key={result.playerId}><b>{result.playerAvatar} {result.playerName}</b><em>{result.correct ? 'CORRECT' : 'INCORRECT'}</em></span>)}</div>
+          </div> : <span className="used-check used-check-empty">✓</span> : displayedValue}
         </button>;
       }))}
     </div>
