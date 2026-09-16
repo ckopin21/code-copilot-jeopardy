@@ -1,12 +1,18 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ACCENT_COLORS, AVATARS, QUESTION_VALUES } from '../shared/config';
 import type { PlayerJoinCredentials, RoomSnapshot } from '../shared/types';
 import { emitAck, socket } from '../lib/socket';
 import { audio } from '../lib/audio';
 import { menuUrl } from '../lib/resetInstance';
 import { Timer } from './Timer';
+import { QrScanner } from './QrScanner';
 
 const PLAYER_KEY = 'blue-stage-player';
+
+function terminalReconnectError(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return normalized.includes('authorization') || normalized.includes('not found') || normalized.includes('expired');
+}
 
 export function PlayerApp() {
   const params = new URLSearchParams(location.search);
@@ -22,6 +28,7 @@ export function PlayerApp() {
   const [finalWager, setFinalWager] = useState('');
   const [finalAnswer, setFinalAnswer] = useState('');
   const [recovering, setRecovering] = useState(false);
+  const [showScanner, setShowScanner] = useState(false);
   const [modifierReveal, setModifierReveal] = useState<2 | 3 | null>(null);
   const syncFailuresRef = useRef(0);
   const lastQuestionIdRef = useRef('');
@@ -67,8 +74,14 @@ export function PlayerApp() {
         setRoomCode(result.roomCode);
         setRecovering(false);
         setError('');
-      } catch {
+      } catch (err) {
         if (cancelled) return;
+        const message = err instanceof Error ? err.message : 'Could not restore your saved seat';
+        if (terminalReconnectError(message)) {
+          setRecovering(false);
+          setError('That saved seat is no longer available. Choose “Use another seat” to join again.');
+          return;
+        }
         setRecovering(true);
         setError('Reconnecting to your saved seat…');
         retryTimer = window.setTimeout(reconnect, 1500);
@@ -80,29 +93,25 @@ export function PlayerApp() {
   }, [roomCode]);
 
   useEffect(() => {
-    if (!credentials) return;
+    if (!credentials || !room) return;
     let syncing = false;
     const sync = async () => {
       if (syncing) return;
       syncing = true;
       try {
-        await emitAck<PlayerJoinCredentials>('player:reconnect', credentials);
+        const result = await emitAck<PlayerJoinCredentials>('player:reconnect', credentials);
+        localStorage.setItem(PLAYER_KEY, JSON.stringify(result));
+        setCredentials(result);
         syncFailuresRef.current = 0;
+        setRecovering(false);
       } catch {
         syncFailuresRef.current += 1;
         setRecovering(true);
-        if (syncFailuresRef.current >= 2 && navigator.onLine) {
-          const lastReload = Number(sessionStorage.getItem('blue-stage-player-reload') ?? 0);
-          if (Date.now() - lastReload > 15000) {
-            sessionStorage.setItem('blue-stage-player-reload', String(Date.now()));
-            location.reload();
-          }
-        }
       } finally { syncing = false; }
     };
     const timer = window.setInterval(() => { void sync(); }, 4000);
     return () => window.clearInterval(timer);
-  }, [credentials]);
+  }, [credentials, room]);
 
   const me = useMemo(() => room?.players.find((player) => player.id === credentials?.playerId) ?? null, [room, credentials]);
   const current = room?.currentQuestion;
@@ -154,6 +163,23 @@ export function PlayerApp() {
     }
   };
 
+  const handleQrResult = useCallback((value: string) => {
+    let scannedRoom = '';
+    try {
+      const url = new URL(value, location.href);
+      scannedRoom = url.searchParams.get('room') ?? '';
+    } catch { /* fall back to plain room-code text */ }
+    if (!scannedRoom) scannedRoom = value.match(/[A-Z0-9]{5,8}/i)?.[0] ?? '';
+    const normalized = scannedRoom.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+    if (!normalized) {
+      setError('That QR code does not contain a Blue Stage room code.');
+      return;
+    }
+    setRoomCode(normalized);
+    setError('Room code scanned. Enter your name, then join.');
+    setShowScanner(false);
+  }, []);
+
   const buzz = async () => {
     if (!credentials || !me?.buzzEligible) return;
     setBuzzMessage('');
@@ -179,23 +205,33 @@ export function PlayerApp() {
 
   const leaveToMenu = () => {
     audio.stop();
-    localStorage.removeItem(PLAYER_KEY);
     location.href = menuUrl();
+  };
+
+  const forgetSeat = () => {
+    localStorage.removeItem(PLAYER_KEY);
+    setCredentials(null);
+    setRecovering(false);
+    setRoom(null);
+    setRoomCode('');
+    setError('');
   };
 
   if (!room || !me) {
     if (credentials && recovering) {
-      return <main className="phone-shell phone-join"><section className="phone-card reconnect-card"><div className="phone-brand"><span>BLUE STAGE</span><strong>TRIVIA</strong></div><div className="pulse-orb"/><h1>Reconnecting</h1><p>Restoring your seat in room <strong>{credentials.roomCode}</strong>.</p><button className="secondary-button" onClick={() => { localStorage.removeItem(PLAYER_KEY); setCredentials(null); setRecovering(false); setRoom(null); setError(''); }}>Use another seat</button><button className="text-button" onClick={leaveToMenu}>Back to menu</button></section></main>;
+      return <main className="phone-shell phone-join"><section className="phone-card reconnect-card"><div className="phone-brand"><span>BLUE STAGE</span><strong>TRIVIA</strong></div><div className="pulse-orb"/><h1>Reconnecting</h1><p>Restoring your seat in room <strong>{credentials.roomCode}</strong>.</p><button className="secondary-button" onClick={forgetSeat}>Use another seat</button><button className="text-button" onClick={leaveToMenu}>Back to menu</button></section></main>;
     }
     return <main className="phone-shell phone-join"><section className="phone-card join-form-v2">
       <div className="phone-brand"><span>BLUE STAGE</span><strong>TRIVIA</strong></div>
-      <label>Room code<input value={roomCode} maxLength={8} autoCapitalize="characters" onChange={(event)=>setRoomCode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g,''))} placeholder="ABCDE" /></label>
+      {credentials && <div className="saved-seat-notice"><strong>Saved seat: {credentials.roomCode}</strong><button type="button" className="text-button" onClick={forgetSeat}>Use another seat</button></div>}
+      <div className="join-code-row"><label>Room code<input value={roomCode} maxLength={8} autoCapitalize="characters" onChange={(event)=>setRoomCode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g,''))} placeholder="ABCDE" /></label><button type="button" className="secondary-button scan-qr-button" onClick={()=>setShowScanner(true)}>Scan QR</button></div>
       <label>Your name<input value={name} maxLength={24} onChange={(event)=>setName(event.target.value)} placeholder="Player name" /></label>
       <fieldset><legend>Avatar</legend><div className="avatar-picker-v2">{AVATARS.map((item)=><button type="button" className={item===avatar?'selected':''} key={item} onClick={()=>setAvatar(item)}>{item}</button>)}</div></fieldset>
       <fieldset><legend>Accent</legend><div className="color-picker-v2">{ACCENT_COLORS.map((item)=><button type="button" aria-label={item} className={item===accent?'selected':''} style={{background:item}} key={item} onClick={()=>setAccent(item)} />)}</div></fieldset>
-      {error && <p className="form-error">{error}</p>}
-      <button className="primary-button giant" disabled={!roomCode || !name.trim()} onClick={join}>Join Game</button>
-      <button className="text-button" onClick={() => { location.href = menuUrl(); }}>Back to menu</button>
+      {error && <p className={error.startsWith('Room code scanned') ? 'form-success' : 'form-error'}>{error}</p>}
+      <button className="primary-button giant" disabled={!roomCode || !name.trim() || Boolean(credentials)} onClick={join}>Join Game</button>
+      <button className="text-button" onClick={leaveToMenu}>Back to menu</button>
+      {showScanner && <QrScanner onResult={handleQrResult} onClose={()=>setShowScanner(false)}/>} 
     </section></main>;
   }
 
@@ -204,11 +240,11 @@ export function PlayerApp() {
   const myResponse = current?.textResponses?.[me.id];
 
   return <main className={`player-phone-v2 ${me.onFire?'phone-fire':''} ${me.isCold?'phone-cold':''}`} style={{'--accent':me.accent} as React.CSSProperties}>
-    <header className="phone-header-v2"><button className="phone-menu" onClick={leaveToMenu} aria-label="Leave game">←</button><span className="phone-avatar">{me.avatar}</span><div className="phone-identity"><strong>{me.name}</strong><small>{socket.connected && !recovering ? `ROOM ${room.code}` : 'RECONNECTING…'}</small></div><b>{me.score.toLocaleString()}</b></header>
+    <header className="phone-header-v2"><button className="phone-menu" onClick={leaveToMenu} aria-label="Leave game">←</button><span className="phone-avatar">{me.avatar}</span><div className="phone-identity"><strong>{me.name}</strong><small>{!recovering && socket.connected ? `ROOM ${room.code}` : 'RECONNECTING…'}</small></div><b>{me.score.toLocaleString()}</b></header>
 
     {modifierReveal && <div className={`modifier-reveal-overlay x${modifierReveal}`} aria-live="polite"><div className="modifier-reveal-card"><span>{modifierReveal === 2 ? 'FINAL SIX' : 'FINAL THREE'}</span><strong>{modifierReveal === 2 ? 'DOUBLE POINTS' : 'TRIPLE POINTS'}</strong><p>{modifierReveal === 2 ? 'Every clue is now worth 2×.' : 'Every remaining clue is now worth 3×.'}</p></div></div>}
 
-    {room.phase === 'lobby' && <section className="phone-state-v2"><div className="ready-ring"><span>{me.avatar}</span></div><div className="section-kicker">CONNECTED</div><h1>You’re in.</h1><p>Keep this screen open. Your phone becomes your controller when the game starts.</p></section>}
+    {room.phase === 'lobby' && <section className="phone-state-v2"><div className="ready-ring"><span>{me.avatar}</span></div><div className="section-kicker">CONNECTED</div><h1>You’re in.</h1><p>You can leave this screen and return from Join Game. This seat will be restored on the same phone and browser.</p></section>}
     {room.phase === 'paused' && <section className="phone-state-v2"><div className="section-kicker">PAUSED</div><h1>Game paused</h1><p>Waiting for the game to resume.</p></section>}
     {room.phase === 'board' && <section className="phone-state-v2"><div className="section-kicker">NEXT QUESTION</div><h1>Ready.</h1><p>Watch the main game screen.</p>{room.multiplier > 1 && <div className={`modifier-banner x${room.multiplier}`}><strong>{room.multiplier === 2 ? '2× DOUBLE POINTS' : '3× TRIPLE POINTS'}</strong></div>}{me.onFire&&<div className="status-badge fire">ON FIRE · {me.positiveStreak}</div>}{me.isCold&&<div className="status-badge cold">COLD STREAK · {me.coldStreak}</div>}</section>}
 
@@ -219,7 +255,7 @@ export function PlayerApp() {
       <div className="phone-question-v2"><div className="section-kicker">{current.category}</div>{room.multiplier > 1 && !current.dailyDouble && <div className={`inline-modifier x${room.multiplier}`}>{current.baseValue} × {room.multiplier} = {current.effectiveValue} POINTS</div>}<h2>{current.text || 'Wager in progress…'}</h2><Timer timer={room.timer} serverNow={room.serverNow}/></div>
 
       {current.responseMode === 'text' && !current.dailyDouble ? <div className="text-response-panel">
-        {!current.answerRevealed ? myResponse ? <div className="response-locked"><div className="lock-icon">✓</div><h3>Response locked</h3><p>{myResponse.answer}</p><small>Waiting for everyone else.</small></div> : <><label>Your answer<textarea value={textAnswer} maxLength={200} onChange={(event)=>setTextAnswer(event.target.value)} placeholder="Type your response" autoFocus /></label><button className="primary-button giant" disabled={!textAnswer.trim()} onClick={() => void submitText()}>Lock Response</button></> : <div className="response-reveal-phone"><small>CORRECT ANSWER</small><strong>{current.acceptedAnswers?.join(' / ')}</strong>{myResponse ? <><p>Your response: {myResponse.answer}</p><div className={`ruling-badge ${myResponse.resolvedCorrect === true ? 'correct' : myResponse.resolvedCorrect === false ? 'wrong' : ''}`}>{myResponse.resolvedCorrect === true ? 'AWARDED' : myResponse.resolvedCorrect === false ? 'REJECTED' : 'HOST REVIEWING'}</div></> : <p>No response submitted.</p>}</div>}
+        {!current.answerRevealed ? myResponse ? <div className="response-locked"><div className="lock-icon">✓</div><h3>Response locked</h3><p>{myResponse.answer}</p><small>Waiting for the other connected players.</small></div> : <><label>Your answer<textarea value={textAnswer} maxLength={200} onChange={(event)=>setTextAnswer(event.target.value)} placeholder="Type your response" autoFocus /></label><button className="primary-button giant" disabled={!textAnswer.trim()} onClick={() => void submitText()}>Lock Response</button></> : <div className="response-reveal-phone"><small>CORRECT ANSWER</small><strong>{current.acceptedAnswers?.join(' / ')}</strong>{myResponse ? <><p>Your response: {myResponse.answer}</p><div className={`ruling-badge ${myResponse.resolvedCorrect === true ? 'correct' : myResponse.resolvedCorrect === false ? 'wrong' : ''}`}>{myResponse.resolvedCorrect === true ? 'AWARDED' : myResponse.resolvedCorrect === false ? 'REJECTED' : 'HOST REVIEWING'}</div></> : <p>No response submitted.</p>}</div>}
       </div> : current.dailyDouble ? (current.dailyDoublePlayerId === me.id ? <div className="spoken-answer-panel"><div className="section-kicker gold">YOU HAVE IT</div><h1>Answer aloud</h1><p>Wait for the host to reveal the correct answer before it is graded.</p></div> : <div className="spoken-answer-panel"><div className="section-kicker">LOCKED</div><h1>Daily Double</h1><p>{room.players.find((player)=>player.id===current.dailyDoublePlayerId)?.name} is answering.</p></div>) : <button type="button" className={`buzzer-button-v2 ${buzzerOpen?'open':''} ${winner?'winner':''}`} disabled={!buzzerOpen} onPointerDown={buzz}><span>{winner ? 'YOU’RE IN' : buzzerOpen ? 'BUZZ' : current.buzzWinnerId ? 'LOCKED' : 'GET READY'}</span></button>}
 
       {buzzMessage && <div className="buzz-message-v2">{buzzMessage}</div>}
