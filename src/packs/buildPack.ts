@@ -74,7 +74,7 @@ export function buildPack(
       const text = assertNonEmpty(seed.text, `${meta.id}/${categoryName}/${value} question`);
       const acceptedAnswers = (Array.isArray(seed.answers) ? seed.answers : [seed.answers])
         .map((answer) => assertNonEmpty(answer, `${meta.id}/${categoryName}/${value} answer`));
-      const difficulty: Exclude<Difficulty, 'mixed'> = index < 2 ? 'easy' : index < 4 ? 'medium' : 'hard';
+      const difficulty: Exclude<Difficulty, 'mixed'> = value <= 200 ? 'easy' : value === 300 ? 'medium' : 'hard';
       const tags = seed.tags ?? [];
 
       questions.push({
