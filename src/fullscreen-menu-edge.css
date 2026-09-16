@@ -1,0 +1,31 @@
+/* Final fullscreen-menu boundary rules. Keep these last so desktop width breakpoints cannot reintroduce side gutters. */
+.showcase-menu.menu-fullscreen {
+  width: 100dvw !important;
+  max-width: 100dvw !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
+.showcase-menu.menu-fullscreen .menu-card-v2 {
+  width: 100dvw !important;
+  max-width: 100dvw !important;
+  min-width: 100dvw !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  border-left: 0 !important;
+  border-right: 0 !important;
+  border-top-left-radius: 0 !important;
+  border-top-right-radius: 0 !important;
+  border-bottom-left-radius: 0 !important;
+  border-bottom-right-radius: 0 !important;
+  box-sizing: border-box;
+}
+
+/* Preserve edge-to-edge fullscreen on large and portrait displays too. */
+@media (min-width: 1600px), (orientation: portrait) {
+  .showcase-menu.menu-fullscreen .menu-card-v2 {
+    width: 100dvw !important;
+    max-width: 100dvw !important;
+    min-width: 100dvw !important;
+  }
+}
