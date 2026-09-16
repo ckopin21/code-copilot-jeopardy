@@ -6,9 +6,10 @@ This folder is the maintained technical and gameplay reference for the current g
 
 - [`../README.md`](../README.md) — project overview, run/deploy commands, supported runtime
 - [`gameplay.md`](gameplay.md) — complete game flow, scoring, wagers, streaks, Final Round, reset/reconnect behavior
+- [`experience.md`](experience.md) — permanent seats, pre-game checks, host controls, presets, undo, recovery, transitions, awards, accessibility
 - [`architecture.md`](architecture.md) — client structure, state ownership, storage, snapshot security, audio, presentation mode
 - [`networking.md`](networking.md) — phone connections, PeerJS/WebRTC lifecycle, reconnect/reserved-seat behavior, failure cases
-- [`question-packs.md`](question-packs.md) — built-in pack authoring, automatic registration, and validation
+- [`question-packs.md`](question-packs.md) — built-in pack authoring, automatic registration, metadata, and validation
 - [`development.md`](development.md) — repository layout, testing, CI, deployment, safe modification checklist
 
 ## Runtime support
@@ -17,4 +18,4 @@ Blue Stage has one supported gameplay runtime: the browser-hosted GitHub Pages/P
 
 ## Documentation maintenance rule
 
-A gameplay, networking, persistence, deployment, or question-pack architecture change is not complete until the corresponding document above is updated. `README.md` should describe the current user-facing behavior; the files in this folder hold implementation detail.
+A gameplay, networking, persistence, deployment, question-pack, or experience-system architecture change is not complete until the corresponding document above is updated. `README.md` should describe the current user-facing behavior; the files in this folder hold implementation detail.
