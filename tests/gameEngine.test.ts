@@ -59,11 +59,13 @@ describe('GameEngine rooms and players', () => {
 });
 
 describe('board, buzzers, scoring, and modifiers', () => {
-  it('loads a complete standard board and assigns requested Daily Doubles', () => {
+  it('loads a complete 100-to-500 standard board and assigns requested Daily Doubles', () => {
     const { engine, host } = setup({ dailyDoubleCount: 3 });
     engine.startGame(host.roomCode, host.hostToken);
     const board = engine.snapshot(host.roomCode).board!;
-    expect(board.questions).toHaveLength(30);
+    expect(board.questions).toHaveLength(25);
+    expect([...new Set(board.questions.map((question) => question.value))]).toEqual([100, 200, 300, 400, 500]);
+    expect(board.questions.some((question) => question.value === 1000)).toBe(false);
     expect(board.questions.filter((question) => question.dailyDouble)).toHaveLength(3);
   });
 
