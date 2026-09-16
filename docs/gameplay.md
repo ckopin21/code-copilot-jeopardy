@@ -2,17 +2,32 @@
 
 ## Players and room lifecycle
 
-A room supports 0–5 player seats. Zero-player games can be used as practice/presentation mode. A joined phone receives a stable player ID and reconnect token. If a phone disconnects or leaves to the menu, the player is removed from the visible connected-player strip but the seat, score, and identity remain reserved. Returning from the same browser restores that seat automatically when the host room still exists.
+A room supports 0–5 player seats. Zero-player games can be used as practice/presentation mode. A joined phone receives a stable player ID and reconnect token. If a phone disconnects or leaves to the menu, the player is removed from the visible connected-player strip but the seat, score, statistics, and identity remain reserved. Returning from the same browser restores that seat when the host room still exists.
+
+The host has two different player-management actions:
+
+- **Pause seat** temporarily disconnects the controller while preserving the player, score, statistics, and reconnect token. The phone can reconnect to the same seat.
+- **Remove** permanently deletes the player from the room and invalidates that reconnect seat. A returning phone must join as a new player.
 
 The room stays open throughout the game. There is no host-facing lock-session control.
 
 ## Lobby
 
-The host chooses question packs and rules, then starts the game. Players can join by room code or QR scan. Audio begins when the host starts or continues a game. Master, music, and effects begin at 75% and remain adjustable.
+The host chooses exactly one question pack and the game rules, then starts the game. Players can join by room code or QR scan. The lobby QR itself is clickable and opens a larger scanning view. Audio begins when the host starts or continues a game. Master, music, and effects begin at 75% and remain adjustable.
+
+## Game length
+
+Game length changes the generated board, not only a label:
+
+- **Quick:** 4 categories × 4 rows = 16 clues
+- **Standard:** 5 categories × 5 rows = 25 clues
+- **Marathon:** 6 categories × 6 rows = 36 clues, including the 1000-point row
+
+The selected pack must contain enough complete categories for the chosen length.
 
 ## Board
 
-The board is generated from selected packs using complete categories and supported point values: 100, 200, 300, 400, 500, and 1000. Questions already used in recent generated boards are deprioritized where possible.
+The board is generated from the selected pack using complete categories and supported point values: 100, 200, 300, 400, 500, and 1000. Questions already used in recent generated boards are deprioritized where possible.
 
 When late-game modifiers are enabled:
 
@@ -20,7 +35,7 @@ When late-game modifiers are enabled:
 - 4–6 questions remaining: 2x
 - 1–3 questions remaining: 3x
 
-The displayed board value reflects the active multiplier before selection. Used tiles show the player result history instead of returning to a blank checkmark-only state.
+The displayed board value reflects the active multiplier before selection. Used tiles show recorded player results when somebody answered. If a clue was revealed with no player response, the used tile shows a single centered completion checkmark.
 
 Fullscreen presentation is an in-page board view. Questions remain selectable there. A Back button returns to the normal host layout.
 
@@ -33,13 +48,17 @@ Fullscreen presentation is an in-page board view. Questions remain selectable th
 5. Host reveals the accepted answer.
 6. Host marks the response Correct or Incorrect.
 7. Score state is resolved by the engine.
-8. On the host display, the awarded/lost number launches from the used tile, curves toward the player score card, and the visible score changes on impact while the card performs a centered heartbeat pulse.
-9. The game automatically returns to the board when grading is complete.
+8. On the host display, the awarded/lost number travels to the player score card, the visible score changes on impact, and the card performs a centered heartbeat pulse.
+9. The game returns to the board when grading is complete.
 10. The used tile records who answered and whether the result was correct or incorrect.
+
+If the host reveals an answer before anybody buzzes, the answer now remains on screen. The host explicitly chooses **Continue to Board** instead of the game skipping the reveal.
+
+The last board clue uses a staged tension overlay before the answer is revealed.
 
 ## Typed/free-response questions
 
-Eligible phones type and lock answers. The answer reveals when all connected players submit or the timer closes responses. The host grades each submitted response. After the final unresolved response is graded, the game returns to the board automatically.
+Eligible phones type and lock answers. The answer reveals when all connected players submit or the timer closes responses. The host grades each submitted response. After the final unresolved response is graded, the game returns to the board automatically. If nobody submitted, the revealed answer stays visible until the host continues.
 
 ## Daily Double
 
@@ -64,9 +83,16 @@ Final Round flow:
 5. A locked wager is shown on that player's phone and host player/status card.
 6. Host may start the Final question before every connected phone locks a wager; missing wagers become 0.
 7. Players submit Final answers from their phones.
-8. Host may wait for connected submissions/timer or start review manually.
-9. Host reviews each player response and awards/rejects it.
-10. When review ends, the staged podium animation plays, then the game transitions to individual player statistics.
+8. Submission completion or timer expiration does not expose the accepted answer. The host starts the reveal.
+9. A staged tension sequence plays before the accepted answer appears.
+10. Host reviews each player response and awards/rejects it.
+11. When review ends, the staged podium animation plays, then the game transitions to readable per-player statistics.
+
+Each phone also receives its own final score and statistics: correct, incorrect, accuracy, longest streak, fastest buzz, points gained/lost, and biggest wager.
+
+## Rule tooltips
+
+Every lobby rule control has a brief desktop hover/focus tooltip describing what the setting changes. Touch devices keep the setup uncluttered and do not render hover-only tooltip bubbles.
 
 ## Reset behavior
 
