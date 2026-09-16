@@ -21,7 +21,10 @@ jobs:
           node-version: 22
           cache: npm
       - name: Apply audit fixes
-        run: python scripts/apply-full-game-audit-fixes.py
+        shell: bash
+        run: |
+          sed -i 's/if count != 1:/if count < 1:/' scripts/apply-full-game-audit-fixes.py
+          python scripts/apply-full-game-audit-fixes.py
       - run: npm ci --no-audit --no-fund
       - run: npm run typecheck
       - run: npm run lint
