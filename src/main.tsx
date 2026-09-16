@@ -10,3 +10,5 @@ import './turn-rules-polish.css';
 import './pack-library.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(<React.StrictMode><App/></React.StrictMode>);
+
+// Source-touch commit intentionally triggers validated Pages deployment after UX patch automation.
