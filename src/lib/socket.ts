@@ -1,10 +1,11 @@
 import Peer, { type DataConnection } from 'peerjs';
 import QRCode from 'qrcode';
-import type { GameSettings, PlayerJoinCredentials, RoomSnapshot, TextResponseState } from '../shared/types';
+import type { GameSettings, PlayerJoinCredentials, RoomSnapshot } from '../shared/types';
 import { QUESTION_VALUES } from '../shared/types';
 import { playerJoinSchema } from '../shared/validation';
 import { packSummaries } from '../packs';
 import { BrowserGameEngine, type RoomRecord } from './browserGameEngine';
+import { sanitizeRoomSnapshot } from './snapshotSecurity';
 
 type Listener = (data: any) => void;
 type Identity = { roomCode: string; role: 'host' | 'player' | 'presentation'; playerId?: string };
@@ -60,48 +61,17 @@ function presetWager(wager: number, includeZero = false): boolean {
   return (includeZero && wager === 0) || QUESTION_VALUES.includes(wager as (typeof QUESTION_VALUES)[number]);
 }
 
-function hiddenResponse(response: TextResponseState): TextResponseState {
-  return { ...response, answer: '', autoCorrect: false, autoConfidence: 'low', resolvedCorrect: null };
-}
-
-function safeSnapshot(snapshot: RoomSnapshot, role: Identity['role'], playerId?: string): RoomSnapshot {
-  const copy = structuredClone(snapshot);
-  const revealFinal = copy.phase === 'final-review' || copy.phase === 'recap';
-
-  copy.players = copy.players.map((player) => {
-    if (role === 'host') return revealFinal ? player : { ...player, finalAnswer: null };
-    const own = role === 'player' && player.id === playerId;
-    if (revealFinal || own) return player;
-    return { ...player, finalWager: null, finalAnswer: null };
-  });
-
-  if (copy.currentQuestion) {
-    if (!copy.currentQuestion.answerRevealed) copy.currentQuestion.acceptedAnswers = undefined;
-    const responses = copy.currentQuestion.textResponses;
-    if (responses && !copy.currentQuestion.answerRevealed) {
-      copy.currentQuestion.textResponses = Object.fromEntries(Object.entries(responses).map(([id, response]) => {
-        const own = role === 'player' && id === playerId;
-        return [id, own ? response : hiddenResponse(response)];
-      }));
-    }
-  }
-
-  if (copy.phase === 'daily-double-wager' && role !== 'host' && copy.currentQuestion) copy.currentQuestion.text = '';
-  if (copy.finalRound && !revealFinal) copy.finalRound.acceptedAnswers = [];
-  return copy;
-}
-
 function sendEvent(connection: DataConnection, event: string, data: unknown): void {
   if (connection.open) connection.send({ kind: 'event', event, data } satisfies EventMessage);
 }
 function emitRoom(roomCode: string): void {
   let snapshot: RoomSnapshot;
   try { snapshot = engine.snapshot(roomCode); } catch { return; }
-  if (hostRoomCode === roomCode) emitLocal('room:state', safeSnapshot(snapshot, 'host'));
+  if (hostRoomCode === roomCode) emitLocal('room:state', sanitizeRoomSnapshot(snapshot, 'host'));
   for (const connection of connections) {
     const identity = identities.get(connection);
     if (!identity || identity.roomCode !== roomCode) continue;
-    sendEvent(connection, 'room:state', safeSnapshot(snapshot, identity.role, identity.playerId));
+    sendEvent(connection, 'room:state', sanitizeRoomSnapshot(snapshot, identity.role, identity.playerId));
   }
 }
 function bindIdentity(connection: DataConnection, identity: Identity): void {
@@ -131,12 +101,6 @@ function closePlayerConnection(playerId: string, event?: 'player:suspended' | 'p
   identities.delete(connection);
   window.setTimeout(() => { try { connection.close(); } catch { /* ignore */ } }, event ? 60 : 0);
 }
-function holdFinalForHost(roomCode: string): void {
-  const record = roomRecord(roomCode);
-  if (!record || record.state.phase !== 'final-review' || record.state.players.some((player) => player.finalResolved)) return;
-  record.state.phase = 'final-question';
-  engine.setHostConnected(roomCode, record.state.hostConnected);
-}
 
 async function dispatchHost(event: string, payload: Record<string, unknown>, connection?: DataConnection): Promise<unknown> {
   const roomCode = String(payload.roomCode ?? '').toUpperCase();
@@ -147,12 +111,12 @@ async function dispatchHost(event: string, payload: Record<string, unknown>, con
       engine.reconnectHost(roomCode, hostToken);
       forceRoomOpen(roomCode);
       engine.setHostConnected(roomCode, true);
-      return safeSnapshot(engine.snapshot(roomCode), 'host');
+      return sanitizeRoomSnapshot(engine.snapshot(roomCode), 'host');
     }
     case 'presentation:join': {
       const snapshot = engine.snapshot(roomCode);
       if (connection) bindIdentity(connection, { roomCode: snapshot.code, role: 'presentation' });
-      return safeSnapshot(snapshot, 'presentation');
+      return sanitizeRoomSnapshot(snapshot, 'presentation');
     }
     case 'player:join': {
       if (!connection) throw new Error('Player join requires a phone connection');
@@ -252,7 +216,6 @@ async function dispatchHost(event: string, payload: Record<string, unknown>, con
     }
     case 'player:final-answer': {
       engine.submitFinalAnswer(roomCode, String(payload.playerId ?? ''), String(payload.reconnectToken ?? ''), String(payload.answer ?? ''));
-      holdFinalForHost(roomCode);
       return null;
     }
     default: throw new Error(`Unsupported game event: ${event}`);
@@ -574,7 +537,6 @@ window.addEventListener('online', () => { if (currentMode() !== 'host' && client
 window.setInterval(() => {
   if (currentMode() !== 'host' || !hostRoomCode) return;
   for (const changedRoom of engine.tick()) {
-    holdFinalForHost(changedRoom);
     if (changedRoom === hostRoomCode) emitRoom(changedRoom);
   }
 }, 250);
