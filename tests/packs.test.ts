@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildPack, category, question } from '../src/packs/buildPack';
+import { buildPack, category, difficultyForValue, normalizeQuestionIdentity, question } from '../src/packs/buildPack';
 import { builtInPacks } from '../src/packs';
 import { QUESTION_VALUES } from '../src/shared/types';
 
@@ -24,11 +24,32 @@ function completeCategory(name = 'Category') {
 }
 
 describe('question pack catalog', () => {
-  it('loads every built-in pack with globally unique ids', () => {
-    expect(builtInPacks.length).toBeGreaterThanOrEqual(3);
+  it('loads the expanded built-in catalog with globally unique ids', () => {
+    expect(builtInPacks.length).toBeGreaterThanOrEqual(7);
     expect(new Set(builtInPacks.map((pack) => pack.id)).size).toBe(builtInPacks.length);
-    const questionIds = builtInPacks.flatMap((pack) => pack.questions.map((question) => question.id));
+    const questionIds = builtInPacks.flatMap((pack) => pack.questions.map((item) => item.id));
     expect(new Set(questionIds).size).toBe(questionIds.length);
+  });
+
+  it('tracks question type and rejects repeated facts or prompt text across packs', () => {
+    const questions = builtInPacks.flatMap((pack) => pack.questions);
+    const factKeys = questions.map((item) => item.factKey);
+    const promptKeys = questions.map((item) => normalizeQuestionIdentity(item.text));
+    expect(questions.every((item) => Boolean(item.questionType && item.factKey))).toBe(true);
+    expect(new Set(factKeys).size).toBe(factKeys.length);
+    expect(new Set(promptKeys).size).toBe(promptKeys.length);
+  });
+
+  it('scales difficulty consistently with clue value', () => {
+    for (const pack of builtInPacks) {
+      for (const item of pack.questions) expect(item.difficulty).toBe(difficultyForValue(item.value));
+    }
+    expect(difficultyForValue(100)).toBe('easy');
+    expect(difficultyForValue(200)).toBe('easy');
+    expect(difficultyForValue(300)).toBe('medium');
+    expect(difficultyForValue(400)).toBe('medium');
+    expect(difficultyForValue(500)).toBe('hard');
+    expect(difficultyForValue(1000)).toBe('hard');
   });
 
   it('maps explicit point values without relying on array position', () => {
@@ -39,7 +60,16 @@ describe('question pack catalog', () => {
     expect(pack.questions.find((item) => item.value === 1000)?.acceptedAnswers).toEqual(['A1000', 'Alternate']);
   });
 
-  it('rejects duplicate category names before a game can start', () => {
+  it('rejects duplicate category names and duplicate facts before a game can start', () => {
     expect(() => buildPack(meta, [completeCategory('Same'), completeCategory('Same')])).toThrow(/duplicate category/i);
+    const repeated = category('Repeated', {
+      100: question('Same fact?', 'One', { factKey: 'same-fact' }),
+      200: question('Reworded same fact?', 'One', { factKey: 'same-fact' }),
+      300: question('Different 300?', 'A'),
+      400: question('Different 400?', 'B'),
+      500: question('Different 500?', 'C'),
+      1000: question('Different 1000?', 'D')
+    });
+    expect(() => buildPack(meta, [repeated])).toThrow(/repeats the same fact/i);
   });
 });

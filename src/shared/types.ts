@@ -19,6 +19,7 @@ export type GameLength = 'quick' | 'standard' | 'marathon';
 export type Difficulty = 'easy' | 'medium' | 'hard' | 'mixed';
 export type ResponseMode = 'buzz' | 'text';
 export type AutoGradeConfidence = 'high' | 'medium' | 'low';
+export type QuestionType = 'person' | 'place' | 'time' | 'title' | 'term' | 'number' | 'object' | 'organization' | 'event' | 'general';
 
 export interface Question {
   id: string;
@@ -29,6 +30,10 @@ export interface Question {
   alternateAnswers?: string[];
   value: QuestionValue;
   difficulty: 'easy' | 'medium' | 'hard';
+  /** What kind of knowledge/answer target this clue asks for. */
+  questionType: QuestionType;
+  /** Catalog-wide identity for the underlying fact. Duplicate fact keys are rejected across packs. */
+  factKey: string;
   explanation?: string;
   dailyDoubleEligible?: boolean;
   responseMode?: ResponseMode;
