@@ -25,11 +25,12 @@ export const DEFAULT_SETTINGS: GameSettings = {
   controllerBuzzersEnabled: true
 };
 
-// Normal boards use the first five values ($100-$500). $1000 remains a preset wager; Final also supports a player's positive-score All In value.
+// Game length changes both category count and board depth so the modes are visibly different.
+// Quick: 16 clues. Standard: 25 clues. Marathon: 36 clues and includes the $1000 row.
 export const GAME_LENGTH_CONFIG = {
-  quick: { categories: 4, rows: 5 },
+  quick: { categories: 4, rows: 4 },
   standard: { categories: 5, rows: 5 },
-  marathon: { categories: 6, rows: 5 }
+  marathon: { categories: 6, rows: 6 }
 } as const;
 
 export const AVATARS = ['🎬', '🚀', '🐭', '🦊', '🧠', '⭐', '🎮', '🧪', '🌙', '🏆'];
