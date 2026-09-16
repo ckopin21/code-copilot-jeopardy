@@ -1,5 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import './lib/roomStorageRecovery';
 import App from './App';
 import './responsive-player-cards.css';
 import './endgame-menu-fixes.css';
