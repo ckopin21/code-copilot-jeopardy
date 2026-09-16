@@ -1,0 +1,236 @@
+/* Player cards scale with the active player count instead of using one fixed density. */
+
+.showcase-host .showcase-player-strip.player-strip[data-player-count] {
+  width: 100%;
+  justify-content: center;
+  align-items: stretch;
+  margin-inline: auto;
+  box-sizing: border-box;
+}
+
+@media (min-width: 760px) {
+  .showcase-host .showcase-player-strip.player-strip[data-player-count="1"] {
+    grid-template-columns: minmax(360px, 500px) !important;
+    max-width: 560px !important;
+  }
+
+  .showcase-host .showcase-player-strip.player-strip[data-player-count="2"] {
+    grid-template-columns: repeat(2, minmax(300px, 1fr)) !important;
+    max-width: 900px !important;
+  }
+
+  .showcase-host .showcase-player-strip.player-strip[data-player-count="3"] {
+    grid-template-columns: repeat(3, minmax(240px, 1fr)) !important;
+    max-width: 1160px !important;
+  }
+
+  .showcase-host .showcase-player-strip.player-strip[data-player-count="4"] {
+    grid-template-columns: repeat(4, minmax(205px, 1fr)) !important;
+    max-width: 1420px !important;
+  }
+
+  .showcase-host .showcase-player-strip.player-strip[data-player-count="5"] {
+    grid-template-columns: repeat(5, minmax(170px, 1fr)) !important;
+    max-width: 1580px !important;
+  }
+
+  .showcase-host .showcase-player-strip.player-strip[data-player-count="1"] .showcase-player-card,
+  .showcase-host .showcase-player-strip.player-strip[data-player-count="2"] .showcase-player-card {
+    min-height: clamp(82px, 10.5vh, 108px) !important;
+    grid-template-columns: clamp(54px, 5vw, 68px) minmax(0, 1fr) auto !important;
+    padding: clamp(9px, 1.35vh, 14px) clamp(13px, 1.2vw, 18px) !important;
+    gap: clamp(9px, 1vw, 14px) !important;
+    border-width: 3px !important;
+  }
+
+  .showcase-host .showcase-player-strip.player-strip[data-player-count="1"] .player-avatar-large,
+  .showcase-host .showcase-player-strip.player-strip[data-player-count="2"] .player-avatar-large {
+    width: clamp(54px, 5vw, 66px) !important;
+    height: clamp(54px, 5vw, 66px) !important;
+    font-size: clamp(1.7rem, 2.8vw, 2.25rem) !important;
+  }
+
+  .showcase-host .showcase-player-strip.player-strip[data-player-count="1"] .showcase-player-card .player-name,
+  .showcase-host .showcase-player-strip.player-strip[data-player-count="2"] .showcase-player-card .player-name {
+    font-size: clamp(.95rem, 1.7vh, 1.15rem) !important;
+  }
+
+  .showcase-host .showcase-player-strip.player-strip[data-player-count="1"] .showcase-player-card .score,
+  .showcase-host .showcase-player-strip.player-strip[data-player-count="2"] .showcase-player-card .score {
+    font-size: clamp(1.8rem, 3.7vh, 2.45rem) !important;
+  }
+
+  .showcase-host .showcase-player-strip.player-strip[data-player-count="3"] .showcase-player-card {
+    min-height: clamp(74px, 9.4vh, 98px) !important;
+  }
+
+  .showcase-host .showcase-player-strip.player-strip[data-player-count="3"] .player-avatar-large {
+    width: clamp(46px, 4vw, 58px) !important;
+    height: clamp(46px, 4vw, 58px) !important;
+    font-size: clamp(1.45rem, 2.35vw, 1.95rem) !important;
+  }
+
+  .showcase-host .showcase-player-strip.player-strip[data-player-count="3"] .showcase-player-card .score {
+    font-size: clamp(1.5rem, 3.1vh, 2.05rem) !important;
+  }
+}
+
+/* Presentation mode uses the same count-aware hierarchy, but preserves board space. */
+.presentation-name-strip[data-player-count] {
+  width: 100%;
+  justify-self: center;
+  align-items: stretch;
+}
+
+.presentation-name-strip[data-player-count="1"] {
+  grid-template-columns: minmax(360px, 520px) !important;
+  max-width: 560px;
+}
+
+.presentation-name-strip[data-player-count="2"] {
+  grid-template-columns: repeat(2, minmax(280px, 1fr)) !important;
+  max-width: 900px;
+}
+
+.presentation-name-strip[data-player-count="3"] {
+  grid-template-columns: repeat(3, minmax(220px, 1fr)) !important;
+  max-width: 1180px;
+}
+
+.presentation-name-strip[data-player-count="4"] {
+  grid-template-columns: repeat(4, minmax(190px, 1fr)) !important;
+  max-width: 1450px;
+}
+
+.presentation-name-strip[data-player-count="5"] {
+  grid-template-columns: repeat(5, minmax(155px, 1fr)) !important;
+  max-width: 1600px;
+}
+
+.presentation-name-card {
+  min-height: 58px;
+  padding: 9px 12px !important;
+  border-width: 2px !important;
+}
+
+.presentation-name-strip[data-player-count="1"] .presentation-name-card,
+.presentation-name-strip[data-player-count="2"] .presentation-name-card {
+  min-height: 72px;
+  padding: 11px 16px !important;
+  border-width: 3px !important;
+  gap: 12px !important;
+}
+
+.presentation-player-avatar {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: 2px solid rgba(255,255,255,.75);
+  border-radius: 50%;
+  background: rgba(2,20,33,.66);
+  font-size: 1.5rem !important;
+}
+
+.presentation-name-strip[data-player-count="1"] .presentation-player-avatar,
+.presentation-name-strip[data-player-count="2"] .presentation-player-avatar {
+  width: 54px;
+  height: 54px;
+  font-size: 1.95rem !important;
+}
+
+.presentation-player-main {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.presentation-player-main strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: .94rem !important;
+}
+
+.presentation-player-main small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #a9c9db;
+  font-size: .58rem;
+  font-weight: 900;
+  letter-spacing: .07em;
+}
+
+.presentation-name-card > b {
+  color: #ffd166;
+  font-size: 1.25rem !important;
+}
+
+.presentation-name-strip[data-player-count="1"] .presentation-player-main strong,
+.presentation-name-strip[data-player-count="2"] .presentation-player-main strong {
+  font-size: 1.08rem !important;
+}
+
+.presentation-name-strip[data-player-count="1"] .presentation-name-card > b,
+.presentation-name-strip[data-player-count="2"] .presentation-name-card > b {
+  font-size: 1.7rem !important;
+}
+
+.presentation-name-card.is-fire {
+  border-color: #ff9d00 !important;
+  background: linear-gradient(180deg,#7a3c1b,#15354b) !important;
+  box-shadow: 0 0 24px rgba(255,111,0,.42), 0 5px 16px rgba(0,0,0,.3) !important;
+}
+
+.presentation-name-card.is-cold {
+  border-color: #80d8ff !important;
+  background: linear-gradient(180deg,#175a7b,#0b304b) !important;
+  box-shadow: 0 0 22px rgba(128,216,255,.34), 0 5px 16px rgba(0,0,0,.3) !important;
+}
+
+@media (max-width: 1100px) and (min-width: 760px) {
+  .showcase-host .showcase-player-strip.player-strip[data-player-count="4"],
+  .showcase-host .showcase-player-strip.player-strip[data-player-count="5"] {
+    gap: 6px !important;
+  }
+
+  .presentation-name-strip[data-player-count="4"],
+  .presentation-name-strip[data-player-count="5"] {
+    gap: 6px !important;
+  }
+
+  .presentation-name-strip[data-player-count="5"] .presentation-player-main small {
+    display: none;
+  }
+}
+
+@media (max-height: 720px) and (min-width: 760px) {
+  .showcase-host .showcase-player-strip.player-strip[data-player-count="1"] .showcase-player-card,
+  .showcase-host .showcase-player-strip.player-strip[data-player-count="2"] .showcase-player-card {
+    min-height: 72px !important;
+  }
+
+  .showcase-host .showcase-player-strip.player-strip[data-player-count="1"] .player-avatar-large,
+  .showcase-host .showcase-player-strip.player-strip[data-player-count="2"] .player-avatar-large {
+    width: 48px !important;
+    height: 48px !important;
+    font-size: 1.55rem !important;
+  }
+
+  .board-presentation-header {
+    min-height: 58px !important;
+  }
+
+  .presentation-name-strip[data-player-count="1"] .presentation-name-card,
+  .presentation-name-strip[data-player-count="2"] .presentation-name-card {
+    min-height: 58px;
+  }
+
+  .presentation-name-strip[data-player-count="1"] .presentation-player-avatar,
+  .presentation-name-strip[data-player-count="2"] .presentation-player-avatar {
+    width: 42px;
+    height: 42px;
+    font-size: 1.5rem !important;
+  }
+}
