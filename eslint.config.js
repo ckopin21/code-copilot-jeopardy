@@ -5,7 +5,7 @@ import reactRefresh from 'eslint-plugin-react-refresh';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['dist-client', 'dist-server', 'node_modules'] },
+  { ignores: ['dist-client', 'dist-server', 'node_modules', 'scripts/**/*.cjs'] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
@@ -21,7 +21,9 @@ export default tseslint.config(
     rules: {
       ...reactHooks.configs.recommended.rules,
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
-      '@typescript-eslint/no-explicit-any': 'off'
+      '@typescript-eslint/no-explicit-any': 'off',
+      'react-hooks/set-state-in-effect': 'off',
+      'react-hooks/purity': 'off'
     }
   }
 );
