@@ -22,7 +22,8 @@ Every compiled question also records a `factKey`.
 
 - By default, `factKey` is derived from normalized question text.
 - Exact or punctuation-only question repeats are rejected automatically.
-- If two differently worded clues test the same underlying fact, authors must give both the same explicit `factKey`. Catalog validation then rejects the duplicate before the game builds.
+- Catalog validation also compares questions across packs and rejects likely rewordings when they target the same accepted answer and substantially overlap on subject terms.
+- If two differently worded clues test the same underlying fact, authors should still give both the same explicit `factKey`; that is the strongest deterministic duplicate check.
 - Question IDs are also globally unique.
 
 These checks run when the pack catalog is imported, so typecheck, tests, and production builds fail instead of shipping duplicated question data.
@@ -34,4 +35,4 @@ These checks run when the pack catalog is imported, so typecheck, tests, and pro
 3. Search existing packs before adding a fact.
 4. Set an explicit `factKey` when a new clue is a rewording of an existing fact.
 5. Use a `questionType` override only when automatic inference is misleading.
-6. Run `npm test`, which audits every built-in pack at Quick, Standard, and Marathon lengths.
+6. Run `npm test`, which audits every built-in pack at Quick, Standard, and Marathon lengths and exercises the full multiplayer game lifecycle.
