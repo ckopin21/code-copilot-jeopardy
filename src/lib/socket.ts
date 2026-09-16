@@ -1,9 +1,10 @@
 import Peer, { type DataConnection } from 'peerjs';
 import QRCode from 'qrcode';
 import type { GameSettings, PlayerJoinCredentials, RoomSnapshot, TextResponseState } from '../shared/types';
+import { QUESTION_VALUES } from '../shared/types';
 import { playerJoinSchema } from '../shared/validation';
 import { packSummaries } from '../packs';
-import { BrowserGameEngine } from './browserGameEngine';
+import { BrowserGameEngine, type RoomRecord } from './browserGameEngine';
 
 type Listener = (data: any) => void;
 type Identity = { roomCode: string; role: 'host' | 'player' | 'presentation'; playerId?: string };
@@ -42,6 +43,18 @@ export const socket = {
   off(event: string, listener: Listener) { listeners.get(event)?.delete(listener); }
 };
 function failMessage(error: unknown): string { return error instanceof Error ? error.message : 'Unknown error'; }
+function roomRecord(roomCode: string): RoomRecord | undefined {
+  return (engine as unknown as { rooms: Map<string, RoomRecord> }).rooms.get(roomCode.toUpperCase());
+}
+function forceRoomOpen(roomCode: string): void {
+  const record = roomRecord(roomCode);
+  if (!record) return;
+  record.state.locked = false;
+  record.state.settings.lockRoomOnStart = false;
+}
+function presetWager(wager: number, includeZero = false): boolean {
+  return (includeZero && wager === 0) || QUESTION_VALUES.includes(wager as (typeof QUESTION_VALUES)[number]);
+}
 
 function hiddenResponse(response: TextResponseState): TextResponseState {
   return { ...response, answer: '', autoCorrect: false, autoConfidence: 'low', resolvedCorrect: null };
@@ -108,7 +121,12 @@ async function dispatchHost(event: string, payload: Record<string, unknown>, con
   const hostToken = String(payload.hostToken ?? '');
   switch (event) {
     case 'room:create': throw new Error('Room creation is only available on the host screen');
-    case 'host:reconnect': return safeSnapshot(engine.reconnectHost(roomCode, hostToken), 'host');
+    case 'host:reconnect': {
+      engine.reconnectHost(roomCode, hostToken);
+      forceRoomOpen(roomCode);
+      engine.setHostConnected(roomCode, true);
+      return safeSnapshot(engine.snapshot(roomCode), 'host');
+    }
     case 'presentation:join': {
       const snapshot = engine.snapshot(roomCode);
       if (connection) bindIdentity(connection, { roomCode: snapshot.code, role: 'presentation' });
@@ -117,6 +135,7 @@ async function dispatchHost(event: string, payload: Record<string, unknown>, con
     case 'player:join': {
       if (!connection) throw new Error('Player join requires a phone connection');
       const input = playerJoinSchema.parse(payload);
+      forceRoomOpen(input.roomCode);
       const credentials = engine.joinPlayer(input.roomCode.toUpperCase(), input);
       bindIdentity(connection, { roomCode: credentials.roomCode, role: 'player', playerId: credentials.playerId });
       emitRoom(credentials.roomCode);
@@ -129,12 +148,28 @@ async function dispatchHost(event: string, payload: Record<string, unknown>, con
       emitRoom(credentials.roomCode);
       return credentials;
     }
-    case 'host:update-settings': return engine.updateSettings(roomCode, hostToken, (payload.updates ?? {}) as Partial<GameSettings>);
-    case 'host:start-game': return engine.startGame(roomCode, hostToken);
-    case 'host:reset-game': return engine.resetGame(roomCode, hostToken);
+    case 'host:update-settings': {
+      const updates = { ...((payload.updates ?? {}) as Partial<GameSettings>), lockRoomOnStart: false };
+      return engine.updateSettings(roomCode, hostToken, updates);
+    }
+    case 'host:start-game': {
+      forceRoomOpen(roomCode);
+      const result = engine.startGame(roomCode, hostToken);
+      forceRoomOpen(roomCode);
+      return result;
+    }
+    case 'host:reset-game': {
+      const result = engine.resetGame(roomCode, hostToken);
+      forceRoomOpen(roomCode);
+      return result;
+    }
     case 'host:select-question': return engine.selectQuestion(roomCode, hostToken, String(payload.questionId ?? ''), payload.dailyDoublePlayerId ? String(payload.dailyDoublePlayerId) : undefined);
     case 'host:cancel-question': return engine.cancelQuestion(roomCode, hostToken);
-    case 'host:daily-double-wager': return engine.setDailyDoubleWager(roomCode, hostToken, Number(payload.wager));
+    case 'host:daily-double-wager': {
+      const wager = Number(payload.wager);
+      if (!presetWager(wager)) throw new Error('Choose one of the preset Daily Double wagers');
+      return engine.setDailyDoubleWager(roomCode, hostToken, wager);
+    }
     case 'host:open-buzzers': return engine.openBuzzers(roomCode, hostToken);
     case 'host:close-buzzers': return engine.closeBuzzers(roomCode, hostToken);
     case 'host:local-buzz': return engine.localBuzz(roomCode, hostToken, String(payload.playerId ?? ''));
@@ -168,7 +203,30 @@ async function dispatchHost(event: string, payload: Record<string, unknown>, con
       return { accepted: result.accepted, reason: result.reason };
     }
     case 'player:text-response': return engine.submitTextResponse(roomCode, String(payload.playerId ?? ''), String(payload.reconnectToken ?? ''), String(payload.answer ?? ''));
-    case 'player:final-wager': engine.submitFinalWager(roomCode, String(payload.playerId ?? ''), String(payload.reconnectToken ?? ''), Number(payload.wager)); return null;
+    case 'player:daily-double-wager': {
+      const playerId = String(payload.playerId ?? '');
+      const reconnectToken = String(payload.reconnectToken ?? '');
+      const wager = Number(payload.wager);
+      if (!presetWager(wager)) throw new Error('Choose one of the preset Daily Double wagers');
+      engine.reconnectPlayer(roomCode, playerId, reconnectToken);
+      const snapshot = engine.snapshot(roomCode);
+      if (snapshot.phase !== 'daily-double-wager' || snapshot.currentQuestion?.dailyDoublePlayerId !== playerId) throw new Error('This Daily Double belongs to another player');
+      const record = roomRecord(roomCode);
+      if (!record) throw new Error('Room not found');
+      return engine.setDailyDoubleWager(roomCode, record.hostToken, wager);
+    }
+    case 'player:final-wager': {
+      const playerId = String(payload.playerId ?? '');
+      const reconnectToken = String(payload.reconnectToken ?? '');
+      const wager = Number(payload.wager);
+      engine.reconnectPlayer(roomCode, playerId, reconnectToken);
+      const player = engine.snapshot(roomCode).players.find((candidate) => candidate.id === playerId);
+      if (!player) throw new Error('Player not found');
+      const allIn = player.score > 0 && wager === player.score;
+      if (!presetWager(wager, true) && !allIn) throw new Error('Choose a preset wager or All In');
+      engine.submitFinalWager(roomCode, playerId, reconnectToken, wager);
+      return null;
+    }
     case 'player:final-answer': engine.submitFinalAnswer(roomCode, String(payload.playerId ?? ''), String(payload.reconnectToken ?? ''), String(payload.answer ?? '')); return null;
     default: throw new Error(`Unsupported game event: ${event}`);
   }
@@ -258,7 +316,10 @@ function attachClientConnection(connection: DataConnection): void {
       if (message.ok) request.resolve(message.data); else request.reject(new Error(message.error ?? 'Request failed'));
       return;
     }
-    if (message?.kind === 'event') emitLocal(message.event, message.data);
+    if (message?.kind === 'event') {
+      socket.connected = true;
+      emitLocal(message.event, message.data);
+    }
   });
   const closed = () => {
     if (clientConnection !== connection) return;
@@ -302,11 +363,23 @@ function createClientPeer(): Promise<Peer> {
     window.setTimeout(() => { if (!settled) { settled = true; reject(new Error('Timed out connecting to signaling')); } }, 8000);
   });
 }
+function dropClientConnection(connection: DataConnection): void {
+  if (clientConnection !== connection) return;
+  clientConnection = null;
+  socket.connected = false;
+  emitLocal('disconnect');
+  try { connection.close(); } catch { /* ignore stale close */ }
+  scheduleClientReconnect();
+}
 function sendRequestOn(connection: DataConnection, event: string, payload: Record<string, unknown>, timeoutMs = 8000): Promise<unknown> {
   return new Promise((resolve, reject) => {
     if (!connection.open) { reject(new Error('Host connection is not open')); return; }
     const requestId = crypto.randomUUID();
-    const timeoutId = window.setTimeout(() => { pending.delete(requestId); reject(new Error('Host did not respond')); }, timeoutMs);
+    const timeoutId = window.setTimeout(() => {
+      pending.delete(requestId);
+      reject(new Error('Host did not respond'));
+      dropClientConnection(connection);
+    }, timeoutMs);
     pending.set(requestId, { resolve, reject, timeoutId });
     connection.send({ kind: 'request', requestId, event, payload } satisfies RequestMessage);
   });
@@ -337,8 +410,7 @@ async function connectToHost(roomCode: string): Promise<DataConnection> {
           try {
             await sendRequestOn(connection, authReplay.event, authReplay.payload, 6000);
           } catch (error) {
-            socket.connected = false;
-            try { connection.close(); } catch { /* retry loop will recover */ }
+            dropClientConnection(connection);
             reject(error instanceof Error ? error : new Error('Could not restore session'));
             return;
           }
@@ -381,9 +453,11 @@ async function clientRequest(event: string, payload: Record<string, unknown>): P
 }
 async function createHostRoom(payload: Record<string, unknown>): Promise<unknown> {
   for (let attempt = 0; attempt < 5; attempt += 1) {
-    const credentials = engine.createRoom(String(payload.baseUrl ?? baseUrl()), (payload.settings ?? {}) as Partial<GameSettings>);
+    const settings = { ...((payload.settings ?? {}) as Partial<GameSettings>), lockRoomOnStart: false };
+    const credentials = engine.createRoom(String(payload.baseUrl ?? baseUrl()), settings);
     try {
       await startHostPeer(credentials.roomCode, false);
+      forceRoomOpen(credentials.roomCode);
       engine.setHostConnected(credentials.roomCode, true);
       emitRoom(credentials.roomCode);
       return credentials;
@@ -445,3 +519,6 @@ window.setInterval(() => {
   if (currentMode() !== 'host' || !hostRoomCode) return;
   for (const changedRoom of engine.tick()) if (changedRoom === hostRoomCode) emitRoom(changedRoom);
 }, 250);
+window.setInterval(() => {
+  if (currentMode() === 'host' && hostRoomCode) emitRoom(hostRoomCode);
+}, 1500);
