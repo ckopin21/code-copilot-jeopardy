@@ -1,0 +1,137 @@
+name: Apply turn ownership fixes
+on:
+  push:
+    paths:
+      - '.github/workflows/turn-rules-fix.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch game rules and UI
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def replace(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              if old not in text:
+                  raise SystemExit(f'Missing pattern in {path}: {old[:120]!r}')
+              p.write_text(text.replace(old, new, 1))
+
+          # Types/state
+          replace('src/shared/types.ts',
+            "  controllerBuzzersEnabled: boolean;\n}",
+            "  controllerBuzzersEnabled: boolean;\n  /** Join order rotates automatically; manual keeps the host-selected picker until changed. */\n  turnOrderMode: 'join-order' | 'manual';\n}")
+          replace('src/shared/types.ts',
+            "  dailyDoublePlayerId: string | null;\n  wager: number | null;",
+            "  dailyDoublePlayerId: string | null;\n  /** Player whose turn selected this question. */\n  turnPlayerId: string | null;\n  /** True when the answer window expired with no response and the turn owner was penalized. */\n  timedOut?: boolean;\n  wager: number | null;")
+          replace('src/shared/types.ts',
+            "  multiplier: 1 | 2 | 3;\n  remainingQuestions: number;",
+            "  multiplier: 1 | 2 | 3;\n  /** Player currently entitled to choose the next question. */\n  turnPlayerId: string | null;\n  remainingQuestions: number;")
+
+          # Defaults
+          replace('src/shared/config.ts',
+            "  controllerBuzzersEnabled: true\n};",
+            "  controllerBuzzersEnabled: true,\n  turnOrderMode: 'join-order'\n};")
+
+          # Engine migrations/state/helpers
+          replace('src/lib/browserGameEngine.ts',
+            "      record.state.settings.lockRoomOnStart = false;\n      const claimedSeats",
+            "      record.state.settings.lockRoomOnStart = false;\n      record.state.settings.turnOrderMode ??= 'join-order';\n      record.state.turnPlayerId ??= null;\n      const claimedSeats")
+          replace('src/lib/browserGameEngine.ts',
+            "  private connectedPlayers(room: RoomRecord): Player[] { return room.state.players.filter((player) => player.connected).sort((a, b) => a.seat - b.seat); }\n  private finalParticipants",
+            "  private connectedPlayers(room: RoomRecord): Player[] { return room.state.players.filter((player) => player.connected).sort((a, b) => a.seat - b.seat); }\n  private ensureTurnPlayer(room: RoomRecord): Player | null {\n    const connected = this.connectedPlayers(room);\n    if (!connected.length) { room.state.turnPlayerId = null; return null; }\n    const current = connected.find((player) => player.id === room.state.turnPlayerId) ?? connected[0];\n    room.state.turnPlayerId = current.id;\n    return current;\n  }\n  private advanceTurn(room: RoomRecord): void {\n    if (room.state.settings.turnOrderMode === 'manual') { this.ensureTurnPlayer(room); return; }\n    const connected = this.connectedPlayers(room);\n    if (!connected.length) { room.state.turnPlayerId = null; return; }\n    const index = connected.findIndex((player) => player.id === room.state.turnPlayerId);\n    room.state.turnPlayerId = connected[(index < 0 ? 0 : index + 1) % connected.length].id;\n  }\n  private finalParticipants")
+          replace('src/lib/browserGameEngine.ts',
+            "      multiplier: 1,\n      remainingQuestions: 0,",
+            "      multiplier: 1,\n      turnPlayerId: null,\n      remainingQuestions: 0,")
+          replace('src/lib/browserGameEngine.ts',
+            "    room.state.players.sort((a, b) => a.seat - b.seat);\n    room.playerTokens[playerId] = reconnectToken;",
+            "    room.state.players.sort((a, b) => a.seat - b.seat);\n    if (!room.state.turnPlayerId) room.state.turnPlayerId = playerId;\n    room.playerTokens[playerId] = reconnectToken;")
+          replace('src/lib/browserGameEngine.ts',
+            "    room.state.players.forEach((player) => this.resetPlayerForGame(player));\n    this.persist();\n    return this.snapshot(roomCode);\n  }\n\n  startGame",
+            "    room.state.players.forEach((player) => this.resetPlayerForGame(player));\n    room.state.turnPlayerId = this.connectedPlayers(room)[0]?.id ?? null;\n    this.persist();\n    return this.snapshot(roomCode);\n  }\n\n  startGame")
+          replace('src/lib/browserGameEngine.ts',
+            "    room.state.players.forEach((player) => this.resetPlayerForGame(player));\n    this.persist();\n    return this.snapshot(roomCode);\n  }\n\n  multiplierForRemaining",
+            "    room.state.players.forEach((player) => this.resetPlayerForGame(player));\n    room.state.turnPlayerId = this.connectedPlayers(room)[0]?.id ?? null;\n    this.persist();\n    return this.snapshot(roomCode);\n  }\n\n  multiplierForRemaining")
+
+          # Question ownership/DD owner
+          replace('src/lib/browserGameEngine.ts',
+            "    const connected = this.connectedPlayers(room);\n    const isPlayableDailyDouble = tile.dailyDouble && connected.length > 0;",
+            "    const connected = this.connectedPlayers(room);\n    const requestedTurnPlayer = dailyDoublePlayerId ? connected.find((player) => player.id === dailyDoublePlayerId) : null;\n    if (requestedTurnPlayer) room.state.turnPlayerId = requestedTurnPlayer.id;\n    const turnPlayer = this.ensureTurnPlayer(room);\n    const isPlayableDailyDouble = tile.dailyDouble && connected.length > 0;")
+          replace('src/lib/browserGameEngine.ts',
+            "      dailyDoublePlayerId: null,\n      wager: null,",
+            "      dailyDoublePlayerId: null,\n      turnPlayerId: turnPlayer?.id ?? null,\n      timedOut: false,\n      wager: null,")
+          replace('src/lib/browserGameEngine.ts',
+            "      const player = connected.find((item) => item.id === dailyDoublePlayerId) ?? connected[0];\n      room.state.currentQuestion.dailyDoublePlayerId = player.id;",
+            "      const player = turnPlayer ?? connected[0];\n      room.state.currentQuestion.dailyDoublePlayerId = player.id;")
+
+          # Rotate after every completed question
+          replace('src/lib/browserGameEngine.ts',
+            "    room.state.currentQuestion = null;\n    this.stopTimerInternal(room);",
+            "    this.advanceTurn(room);\n    room.state.currentQuestion = null;\n    this.stopTimerInternal(room);")
+
+          # Timeout penalty helper and tick behavior
+          replace('src/lib/browserGameEngine.ts',
+            "  private stopTimerInternal(room: RoomRecord): void { room.state.timer = emptyTimer(); }\n\n  tick(now = Date.now()): string[] {",
+            "  private stopTimerInternal(room: RoomRecord): void { room.state.timer = emptyTimer(); }\n\n  private penalizeUnansweredTurn(room: RoomRecord): void {\n    const current = room.state.currentQuestion;\n    if (!current || current.answerRevealed || current.buzzWinnerId) return;\n    if (current.responseMode === 'text' && Object.keys(current.textResponses ?? {}).length > 0) return;\n    const player = room.state.players.find((candidate) => candidate.id === current.turnPlayerId);\n    if (!player) return;\n    this.checkpointScore(room);\n    let points = current.effectiveValue;\n    if (current.dailyDouble) {\n      const multiplier = room.state.settings.dailyDoubleStacksWithMultiplier ? this.multiplierForRemaining(room.state.remainingQuestions + 1, room.state.settings.lateGameModifiers) : 1;\n      points = (current.wager ?? 0) * multiplier;\n    }\n    this.addScore(player, -points, room.state.settings);\n    player.stats.incorrect += 1;\n    this.applyStreak(player, false, room.state.settings);\n    current.timedOut = true;\n    current.answerRevealed = true;\n    current.responsesClosed = true;\n    current.buzzOpen = false;\n    room.state.players.forEach((candidate) => { candidate.buzzEligible = false; });\n  }\n\n  tick(now = Date.now()): string[] {")
+          replace('src/lib/browserGameEngine.ts',
+            "      } else if (room.state.currentQuestion?.responseMode === 'text' && !room.state.currentQuestion.answerRevealed) {\n        this.closeTextResponsesInternal(room);\n      } else if (room.state.settings.autoCloseBuzzersAtZero && room.state.currentQuestion?.buzzOpen) {\n        room.state.currentQuestion.buzzOpen = false;\n        room.state.players.forEach((player) => { player.buzzEligible = false; });\n      }",
+            "      } else if (room.state.currentQuestion?.responseMode === 'text' && !room.state.currentQuestion.answerRevealed) {\n        this.penalizeUnansweredTurn(room);\n        this.closeTextResponsesInternal(room);\n      } else if (room.state.phase === 'daily-double-question' && room.state.currentQuestion && !room.state.currentQuestion.answerRevealed) {\n        this.penalizeUnansweredTurn(room);\n      } else if (room.state.settings.autoCloseBuzzersAtZero && room.state.currentQuestion?.buzzOpen) {\n        this.penalizeUnansweredTurn(room);\n      }")
+
+          # Host turn syncing, controls, timeout judging, and reliable multiplier reveal
+          replace('src/components/HostAppV3.tsx',
+            "    if (!connected.some((player) => player.id === controllerId)) setControllerId(connected[0]?.id ?? '');",
+            "    const preferred = room.turnPlayerId && connected.some((player) => player.id === room.turnPlayerId) ? room.turnPlayerId : connected[0]?.id ?? '';\n    if (preferred !== controllerId) setControllerId(preferred);")
+          replace('src/components/HostAppV3.tsx',
+            "    if (room.phase !== 'board') {\n      setModifierReveal(null);\n      lastMultiplierRef.current = room.multiplier;\n      return;\n    }",
+            "    if (room.phase !== 'board') return;")
+          replace('src/components/HostAppV3.tsx',
+            "    setControllerId(spokenPlayer.id);\n    audio.cue(correct ? 'correct' : 'wrong');",
+            "    audio.cue(correct ? 'correct' : 'wrong');")
+          replace('src/components/HostAppV3.tsx',
+            "            <label data-tooltip=\"How many hidden Daily Doubles are placed on the board.\">Daily Doubles<input",
+            "            <label data-tooltip=\"By default, question selection rotates through players in join order. Manual keeps the selected picker until you change it.\">Turn rotation<select value={settings.turnOrderMode} onChange={(event) => void updateSettings({ turnOrderMode: event.target.value as GameSettings['turnOrderMode'] })}><option value=\"join-order\">Join order · rotate</option><option value=\"manual\">Manual · host selects</option></select></label>\n            <label data-tooltip=\"How many hidden Daily Doubles are placed on the board.\">Daily Doubles<input")
+          replace('src/components/HostAppV3.tsx',
+            "          <div className=\"board-actions\">\n            <button className=\"nav-button\" onClick={() => void perform('host:pause')}>Pause</button>",
+            "          <div className=\"board-actions\">\n            {connectedPlayers.length > 0 && <label>Turn<select value={controllerId} onChange={(event) => setControllerId(event.target.value)}>{connectedPlayers.map((player) => <option key={player.id} value={player.id}>{player.avatar} {player.name}</option>)}</select></label>}\n            <button className=\"nav-button\" onClick={() => void perform('host:pause')}>Pause</button>")
+          replace('src/components/HostAppV3.tsx',
+            "current.responseMode !== 'text' && current.answerRevealed && spokenPlayer && !judgedAttempt",
+            "current.responseMode !== 'text' && current.answerRevealed && spokenPlayer && !current.timedOut && !judgedAttempt")
+          replace('src/components/HostAppV3.tsx',
+            "current.answerRevealed && current.responseMode !== 'text' && !spokenPlayer",
+            "current.answerRevealed && current.responseMode !== 'text' && (!spokenPlayer || current.timedOut)")
+
+          # Phone: reliable multiplier reveal + streak indicator in header instead of floating overlay
+          replace('src/components/PlayerApp.tsx',
+            "    lastMultiplierRef.current = nextMultiplier;\n  }, [room?.multiplier, room?.phase]);",
+            "    if (room.phase === 'board') lastMultiplierRef.current = nextMultiplier;\n  }, [room?.multiplier, room?.phase]);")
+          replace('src/components/PlayerApp.tsx',
+            "<div className=\"phone-score-stack\"><b>{me.score.toLocaleString()}</b>{showFinalWager",
+            "<div className=\"phone-score-stack\"><b>{me.score.toLocaleString()}</b>{me.onFire && <small className=\"phone-header-streak fire\">🔥 ON FIRE</small>}{me.isCold && <small className=\"phone-header-streak cold\">❄ COLD</small>}{showFinalWager")
+
+          # CSS fixes: no floating mobile streak pill, reliable modifier overlay.
+          p = Path('src/turn-rules-polish.css')
+          p.write_text('''/* Turn ownership, mobile streak placement, and modifier announcement hardening. */\n.modifier-reveal-overlay {\n  position: fixed !important;\n  inset: 0 !important;\n  z-index: 10000 !important;\n  display: grid !important;\n  place-items: center !important;\n  pointer-events: none !important;\n  background: rgba(1,10,18,.42) !important;\n}\n.modifier-reveal-card {\n  min-width: min(520px, calc(100vw - 32px));\n  padding: 28px 34px;\n  border: 3px solid #ffd166;\n  border-radius: 24px;\n  background: linear-gradient(180deg,#176b9e,#082943);\n  text-align: center;\n  box-shadow: 0 24px 80px rgba(0,0,0,.55),0 0 42px rgba(255,209,102,.26);\n  animation: modifierAnnouncement .32s cubic-bezier(.18,.9,.25,1.18) both;\n}\n.modifier-reveal-card span,.modifier-reveal-card strong,.modifier-reveal-card p { display:block; }\n.modifier-reveal-card span { color:#9cddff;font-weight:900;letter-spacing:.16em;font-size:.78rem; }\n.modifier-reveal-card strong { margin:8px 0;color:#ffd166;font-family:Oswald,sans-serif;font-size:clamp(2.4rem,6vw,5rem);line-height:1; }\n.modifier-reveal-card p { margin:0;color:#eef9ff;font-weight:800; }\n@keyframes modifierAnnouncement { from { opacity:0; transform:scale(.72); } to { opacity:1; transform:scale(1); } }\n\n/* The old floating streak pill collided with Daily Double/question UI. Keep status inside the header/card instead. */\n.player-phone-v2.phone-fire::before,.player-phone-v2.phone-fire::after,\n.player-phone-v2.phone-cold::before,.player-phone-v2.phone-cold::after { display:none !important; content:none !important; }\n.phone-header-streak { display:block; margin-top:2px; font-size:.48rem; line-height:1; font-weight:1000; letter-spacing:.06em; white-space:nowrap; }\n.phone-header-streak.fire { color:#ffb33f; }\n.phone-header-streak.cold { color:#8fe5ff; }\n@media (max-width: 520px) {\n  .modifier-reveal-card { min-width:calc(100vw - 28px); padding:22px 18px; }\n  .modifier-reveal-card strong { font-size:2.6rem; }\n}\n''')
+          replace('src/main.tsx',
+            "import './space-efficiency.css';",
+            "import './space-efficiency.css';\nimport './turn-rules-polish.css';")
+
+          # Regression tests
+          test = Path('tests/browserGameEngine.test.ts')
+          text = test.read_text()
+          insert = '''\n  it('rotates question ownership in join order and assigns Daily Double to the turn owner', () => {\n    const { engine, host } = setup({ gameLength: 'quick', dailyDoublesEnabled: true, dailyDoubleCount: 16, finalRoundEnabled: false });\n    const one = addPlayer(engine, host.roomCode, 'One');\n    const two = addPlayer(engine, host.roomCode, 'Two');\n    engine.startGame(host.roomCode, host.hostToken);\n    expect(engine.snapshot(host.roomCode).turnPlayerId).toBe(one.playerId);\n    const first = firstUnused(engine, host.roomCode);\n    engine.selectQuestion(host.roomCode, host.hostToken, first.questionId);\n    expect(engine.snapshot(host.roomCode).currentQuestion?.dailyDoublePlayerId).toBe(one.playerId);\n    engine.setDailyDoubleWager(host.roomCode, host.hostToken, 100);\n    engine.revealAnswer(host.roomCode, host.hostToken);\n    engine.resolveAnswer(host.roomCode, host.hostToken, one.playerId, true);\n    engine.advanceToBoard(host.roomCode, host.hostToken);\n    expect(engine.snapshot(host.roomCode).turnPlayerId).toBe(two.playerId);\n  });\n\n  it('penalizes the turn owner when a buzzer question expires unanswered', () => {\n    const { engine, host } = setup({ dailyDoublesEnabled: false, finalRoundEnabled: false, timerSeconds: 5, allowNegativeScores: true });\n    const one = addPlayer(engine, host.roomCode, 'One');\n    addPlayer(engine, host.roomCode, 'Two');\n    engine.startGame(host.roomCode, host.hostToken);\n    const tile = firstUnused(engine, host.roomCode);\n    engine.selectQuestion(host.roomCode, host.hostToken, tile.questionId);\n    const value = engine.snapshot(host.roomCode).currentQuestion!.effectiveValue;\n    engine.openBuzzers(host.roomCode, host.hostToken);\n    const endsAt = engine.snapshot(host.roomCode).timer.endsAt!;\n    engine.tick(endsAt + 1);\n    const state = engine.snapshot(host.roomCode);\n    expect(state.currentQuestion?.timedOut).toBe(true);\n    expect(state.currentQuestion?.answerRevealed).toBe(true);\n    expect(state.players.find((player) => player.id === one.playerId)?.score).toBe(-value);\n  });\n'''
+          marker = "describe('BrowserGameEngine production state', () => {\n"
+          if insert.strip() not in text:
+              text = text.replace(marker, marker + insert, 1)
+          test.write_text(text)
+      - name: Commit patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src tests
+          git commit -m "fix: make turns own questions and timeouts" || exit 0
+          git push
