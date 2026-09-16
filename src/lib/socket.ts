@@ -18,6 +18,7 @@ const engine = new BrowserGameEngine();
 const listeners = new Map<string, Set<Listener>>();
 const identities = new Map<DataConnection, Identity>();
 const playerConnections = new Map<string, DataConnection>();
+const playerLastSeen = new Map<string, number>();
 const connections = new Set<DataConnection>();
 const pending = new Map<string, PendingRequest>();
 let hostPeer: Peer | null = null;
@@ -29,6 +30,8 @@ let clientSuspended = false;
 let reconnectDelayMs = 400;
 let reconnectTimer: number | null = null;
 let authReplay: { event: 'player:reconnect' | 'presentation:join'; payload: Record<string, unknown> } | null = null;
+
+const PLAYER_STALE_MS = 8000;
 
 function currentMode(): string | null { return new URLSearchParams(location.search).get('mode'); }
 function baseUrl(): string { const url = new URL('.', location.href); url.search = ''; url.hash = ''; return url.href.replace(/\/$/, ''); }
@@ -106,6 +109,7 @@ function bindIdentity(connection: DataConnection, identity: Identity): void {
   if (identity.role !== 'player' || !identity.playerId) return;
   const prior = playerConnections.get(identity.playerId);
   playerConnections.set(identity.playerId, connection);
+  playerLastSeen.set(identity.playerId, Date.now());
   if (prior && prior !== connection) { identities.delete(prior); try { prior.close(); } catch { /* ignore duplicate close */ } }
 }
 function handleConnectionClosed(connection: DataConnection): void {
@@ -115,15 +119,23 @@ function handleConnectionClosed(connection: DataConnection): void {
   if (!identity || identity.role !== 'player' || !identity.playerId) return;
   if (playerConnections.get(identity.playerId) !== connection) return;
   playerConnections.delete(identity.playerId);
+  playerLastSeen.delete(identity.playerId);
   try { engine.setPlayerConnected(identity.roomCode, identity.playerId, false); emitRoom(identity.roomCode); } catch { /* stale room */ }
 }
 function closePlayerConnection(playerId: string, event?: 'player:suspended' | 'player:removed'): void {
   const connection = playerConnections.get(playerId);
+  playerLastSeen.delete(playerId);
   if (!connection) return;
   if (event) sendEvent(connection, event, { playerId });
   playerConnections.delete(playerId);
   identities.delete(connection);
   window.setTimeout(() => { try { connection.close(); } catch { /* ignore */ } }, event ? 60 : 0);
+}
+function holdFinalForHost(roomCode: string): void {
+  const record = roomRecord(roomCode);
+  if (!record || record.state.phase !== 'final-review' || record.state.players.some((player) => player.finalResolved)) return;
+  record.state.phase = 'final-question';
+  engine.setHostConnected(roomCode, record.state.hostConnected);
 }
 
 async function dispatchHost(event: string, payload: Record<string, unknown>, connection?: DataConnection): Promise<unknown> {
@@ -238,12 +250,18 @@ async function dispatchHost(event: string, payload: Record<string, unknown>, con
       engine.submitFinalWager(roomCode, playerId, reconnectToken, wager);
       return null;
     }
-    case 'player:final-answer': engine.submitFinalAnswer(roomCode, String(payload.playerId ?? ''), String(payload.reconnectToken ?? ''), String(payload.answer ?? '')); return null;
+    case 'player:final-answer': {
+      engine.submitFinalAnswer(roomCode, String(payload.playerId ?? ''), String(payload.reconnectToken ?? ''), String(payload.answer ?? ''));
+      holdFinalForHost(roomCode);
+      return null;
+    }
     default: throw new Error(`Unsupported game event: ${event}`);
   }
 }
 
 async function handleHostRequest(connection: DataConnection, message: RequestMessage): Promise<void> {
+  const identity = identities.get(connection);
+  if (identity?.role === 'player' && identity.playerId) playerLastSeen.set(identity.playerId, Date.now());
   try {
     const data = await dispatchHost(message.event, message.payload, connection);
     connection.send({ kind: 'response', requestId: message.requestId, ok: true, data } satisfies ResponseMessage);
@@ -555,8 +573,26 @@ installVirtualApi();
 window.addEventListener('online', () => { if (currentMode() !== 'host' && clientRoomCode) scheduleClientReconnect(); });
 window.setInterval(() => {
   if (currentMode() !== 'host' || !hostRoomCode) return;
-  for (const changedRoom of engine.tick()) if (changedRoom === hostRoomCode) emitRoom(changedRoom);
+  for (const changedRoom of engine.tick()) {
+    holdFinalForHost(changedRoom);
+    if (changedRoom === hostRoomCode) emitRoom(changedRoom);
+  }
 }, 250);
+window.setInterval(() => {
+  if (currentMode() !== 'host' || !hostRoomCode) return;
+  const now = Date.now();
+  for (const [playerId, connection] of playerConnections) {
+    const identity = identities.get(connection);
+    if (!identity || identity.roomCode !== hostRoomCode) continue;
+    if (now - (playerLastSeen.get(playerId) ?? now) <= PLAYER_STALE_MS) continue;
+    playerConnections.delete(playerId);
+    playerLastSeen.delete(playerId);
+    identities.delete(connection);
+    try { connection.close(); } catch { /* already stale */ }
+    try { engine.setPlayerConnected(identity.roomCode, playerId, false); } catch { /* stale room */ }
+  }
+  emitRoom(hostRoomCode);
+}, 2000);
 window.setInterval(() => {
   if (currentMode() === 'host' && hostRoomCode) emitRoom(hostRoomCode);
 }, 1500);
