@@ -32,4 +32,4 @@ const generated = [
 ].join('\n');
 
 await writeFile(output, generated, 'utf8');
-console.log(`Registered ${registrations.length} built-in question pack${registrations.length === 1 ? '' : 's'}.`);
+process.stdout.write(`Registered ${registrations.length} built-in question pack${registrations.length === 1 ? '' : 's'}.\n`);
