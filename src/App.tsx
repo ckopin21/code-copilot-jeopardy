@@ -7,9 +7,23 @@ import { menuUrl, resetInstance } from './lib/resetInstance';
 import './styles.css';
 import './showcase.css';
 import './stage-polish.css';
+import './interaction-polish.css';
 
 const HOST_KEY = 'blue-stage-host-room';
+const AUDIO_75_MIGRATION_KEY = 'blue-stage-audio-default-75-v1';
 type AppMode = 'host' | 'player' | 'presentation';
+
+function applyAudioDefaults(): void {
+  try {
+    if (localStorage.getItem(AUDIO_75_MIGRATION_KEY)) return;
+    audio.setSettings({ master: 0.75, music: 0.75, effects: 0.75 });
+    localStorage.setItem(AUDIO_75_MIGRATION_KEY, '1');
+  } catch {
+    audio.settings = { ...audio.settings, master: 0.75, music: 0.75, effects: 0.75 };
+  }
+}
+
+applyAudioDefaults();
 
 function modeUrl(mode: AppMode, fresh = false): URL {
   const url = new URL('./', location.href);
@@ -27,6 +41,12 @@ export default function App() {
       const target = event.target instanceof Element ? event.target.closest('button,a') : null;
       if (!target || target.matches('button:disabled,[aria-disabled="true"]')) return;
       void audio.unlock().then(() => audio.cue('click')).catch(() => {});
+
+      const button = event.target instanceof Element ? event.target.closest('button') : null;
+      const phoneMode = new URLSearchParams(location.search).get('mode') === 'player';
+      if (phoneMode && button && !button.matches(':disabled')) {
+        try { navigator.vibrate?.(12); } catch { /* vibration is optional and unsupported on some mobile browsers */ }
+      }
     };
     window.addEventListener('popstate', onPopState);
     document.addEventListener('pointerdown', onPointerDown, { capture: true });
