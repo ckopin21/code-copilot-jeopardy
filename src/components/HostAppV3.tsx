@@ -338,8 +338,9 @@ export function HostAppV3() {
       delta: after.score - before.score,
       correct: false
     }]);
+    recordAttempt(ownerId, false);
     audio.cue('wrong');
-  }, [room]);
+  }, [room, recordAttempt]);
 
   const handleScoreImpact = useCallback((flight: ScoreFlightState) => {
     setScoreOverrides((previous) => {
@@ -408,6 +409,9 @@ export function HostAppV3() {
 
   const current = room.currentQuestion;
   const connectedPlayers = room.players.filter((player) => player.connected);
+  const activeQuestionPlayers = current?.participantIds
+    ? connectedPlayers.filter((player) => current.participantIds!.includes(player.id))
+    : connectedPlayers;
   const reservedSeatCount = room.players.length - connectedPlayers.length;
   const buzzWinner = current?.buzzWinnerId ? room.players.find((player) => player.id === current.buzzWinnerId) : null;
   const dailyPlayer = current?.dailyDoublePlayerId ? room.players.find((player) => player.id === current.dailyDoublePlayerId) : null;
@@ -421,7 +425,7 @@ export function HostAppV3() {
   const settings = room.settings;
   const updateSettings = (updates: Partial<GameSettings>) => perform('host:update-settings', { updates });
   const textResponses = current?.textResponses ?? {};
-  const textResponseCount = connectedPlayers.filter((player) => Boolean(textResponses[player.id])).length;
+  const textResponseCount = activeQuestionPlayers.filter((player) => Boolean(textResponses[player.id])).length;
   const unresolvedTextCount = Object.values(textResponses).filter((response) => response.resolvedCorrect === null).length;
   const questionMultiplier = current ? Math.max(1, Math.round(current.effectiveValue / Math.max(1, current.baseValue))) : 1;
   const finalParticipants = room.finalRound
@@ -617,7 +621,7 @@ export function HostAppV3() {
           {current.responseMode !== 'text' && current.buzzOpen && !current.buzzWinnerId && <div className="buzzer-live-banner">BUZZERS LIVE</div>}
           {buzzWinner && <div className="winner-chip" style={{ '--accent': buzzWinner.accent } as React.CSSProperties}>{buzzWinner.avatar}<span>{buzzWinner.name}</span><b>BUZZED IN</b></div>}
 
-          {current.responseMode === 'text' && !current.answerRevealed && <div className="response-progress"><strong>{textResponseCount}/{connectedPlayers.length}</strong><span>responses locked in</span><small>The answer reveals automatically when every connected player submits or the timer expires.</small></div>}
+          {current.responseMode === 'text' && !current.answerRevealed && <div className="response-progress"><strong>{textResponseCount}/{activeQuestionPlayers.length}</strong><span>responses locked in</span><small>The answer reveals automatically when every active player submits or the timer expires.</small></div>}
 
           {current.answerRevealed && <div className="answer-reveal-v2"><small>CORRECT ANSWER</small><strong>{current.acceptedAnswers?.join(' / ')}</strong></div>}
 

@@ -50,8 +50,11 @@ export function PresentationApp() {
 
   const current = room.currentQuestion;
   const active = current?.buzzWinnerId ?? current?.dailyDoublePlayerId;
-  const responseCount = Object.keys(current?.textResponses ?? {}).length;
   const connectedPlayers = room.players.filter((player) => player.connected);
+  const activeQuestionPlayers = current?.participantIds
+    ? connectedPlayers.filter((player) => current.participantIds!.includes(player.id))
+    : connectedPlayers;
+  const responseCount = activeQuestionPlayers.filter((player) => Boolean(current?.textResponses?.[player.id])).length;
   const finalPlayers = room.finalRound ? connectedPlayers.filter((player) => room.finalRound!.participantIds.includes(player.id)) : connectedPlayers;
   const reviewPlayerId = room.phase === 'final-review' && room.finalRound
     ? room.finalRound.reviewPlayerId ?? room.finalRound.participantIds[room.finalRound.reviewPlayerIndex]
@@ -74,7 +77,7 @@ export function PresentationApp() {
       <div className="question-meta-v2"><span>{current.category}</span><strong>{current.dailyDouble ? `WAGER ${current.wager}` : `${current.effectiveValue} POINTS`}</strong>{current.responseMode === 'text' && <em>FREE RESPONSE</em>}</div>
       <h1>{current.text}</h1>
       <Timer timer={room.timer} serverNow={room.serverNow}/>
-      {current.responseMode === 'text' && !current.answerRevealed && <div className="presentation-response-count"><strong>{responseCount}/{connectedPlayers.length}</strong><span>RESPONSES IN</span></div>}
+      {current.responseMode === 'text' && !current.answerRevealed && <div className="presentation-response-count"><strong>{responseCount}/{activeQuestionPlayers.length}</strong><span>RESPONSES IN</span></div>}
       {current.buzzWinnerId && <div className="winner-chip presentation-winner">{room.players.find((player) => player.id === current.buzzWinnerId)?.avatar}<span>{room.players.find((player) => player.id === current.buzzWinnerId)?.name}</span></div>}
       {current.answerRevealed && <div className="answer-reveal-v2 presentation-answer"><small>CORRECT ANSWER</small><strong>{current.acceptedAnswers?.join(' / ')}</strong></div>}
     </article></section>}
