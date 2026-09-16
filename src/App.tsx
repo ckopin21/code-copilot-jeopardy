@@ -193,29 +193,27 @@ function Menu({ onNavigate }: { onNavigate: (mode: AppMode, fresh?: boolean) => 
       <div className="brand-mark hero-brand menu-logo-v2"><span>BLUE STAGE</span><strong>TRIVIA</strong></div>
       <p className="menu-subtitle menu-subtitle-v2">A shared-screen game show with phone buzzers, wagers, streaks, and a dramatic finish.</p>
 
-      {hasSavedHost && savedHost && <article
-        className="saved-game-preview"
-        role="button"
-        tabIndex={0}
-        aria-label={`Continue saved game in room ${savedHost.roomCode}`}
-        onClick={() => void onNavigate('host')}
-        onKeyDown={(event) => {
-          if (event.key !== 'Enter' && event.key !== ' ') return;
-          event.preventDefault();
-          void onNavigate('host');
-        }}
-      >
-        <div className="saved-game-icon" aria-hidden="true">▶</div>
-        <div className="saved-game-main"><small>CONTINUE SAVED GAME</small><strong>Room {savedHost.roomCode}</strong><span>{savedPhase}</span></div>
-        <div className="saved-game-meta"><b>{savedPlayers}</b>{preview && preview.phase !== 'lobby' && preview.phase !== 'recap' && <span>{preview.remainingQuestions} questions left</span>}<small>Last played {savedActivity}</small></div>
-      </article>}
-
       <div className="menu-mode-grid">
         <section className="menu-mode-section host-menu-section">
           <header><span>HOST GAME</span><small>Run the board on this screen</small></header>
           <div className="menu-actions host-menu-actions">
-            {hasSavedHost && <button className="primary-button menu-primary menu-continue" onClick={() => void onNavigate('host')}><span>Continue Game</span><small>Return to room {savedHost?.roomCode}</small></button>}
             <button className={`${hasSavedHost ? 'secondary-button menu-secondary' : 'primary-button menu-primary'} menu-new-game`} onClick={startNewGame}><span>Start New Game</span><small>Fresh room, fresh board, zero scores</small></button>
+            {hasSavedHost && savedHost && <article
+              className="saved-game-preview saved-game-inline"
+              role="button"
+              tabIndex={0}
+              aria-label={`Continue saved game in room ${savedHost.roomCode}`}
+              onClick={() => void onNavigate('host')}
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter' && event.key !== ' ') return;
+                event.preventDefault();
+                void onNavigate('host');
+              }}
+            >
+              <div className="saved-game-icon" aria-hidden="true">▶</div>
+              <div className="saved-game-main"><small>CONTINUE SAVED GAME</small><strong>Room {savedHost.roomCode}</strong><span>{savedPhase}</span></div>
+              <div className="saved-game-meta"><b>{savedPlayers}</b>{preview && preview.phase !== 'lobby' && preview.phase !== 'recap' && <span>{preview.remainingQuestions} questions left</span>}<small>Last played {savedActivity}</small></div>
+            </article>}
           </div>
         </section>
 
