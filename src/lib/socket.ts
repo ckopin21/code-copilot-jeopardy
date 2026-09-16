@@ -226,6 +226,7 @@ async function handleHostRequest(connection: DataConnection, message: RequestMes
   const identity = identities.get(connection);
   if (identity?.role === 'player' && identity.playerId) playerLastSeen.set(identity.playerId, Date.now());
   try {
+    if (message.event.startsWith('host:')) throw new Error('Host actions are not available from remote clients');
     const data = await dispatchHost(message.event, message.payload, connection);
     connection.send({ kind: 'response', requestId: message.requestId, ok: true, data } satisfies ResponseMessage);
     const roomCode = String(message.payload.roomCode ?? '').toUpperCase();
