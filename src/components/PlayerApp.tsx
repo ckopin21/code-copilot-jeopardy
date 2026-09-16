@@ -8,6 +8,7 @@ import { Timer } from './Timer';
 import { QrScanner } from './QrScanner';
 
 const PLAYER_KEY = 'blue-stage-player';
+const FINAL_WAGER_PRESETS = [0, ...QUESTION_VALUES] as const;
 
 function terminalReconnectError(message: string): boolean {
   const normalized = message.toLowerCase();
@@ -25,7 +26,7 @@ export function PlayerApp() {
   const [error, setError] = useState('');
   const [buzzMessage, setBuzzMessage] = useState('');
   const [textAnswer, setTextAnswer] = useState('');
-  const [finalWager, setFinalWager] = useState('');
+  const [selectedFinalWager, setSelectedFinalWager] = useState<number | null>(null);
   const [finalAnswer, setFinalAnswer] = useState('');
   const [recovering, setRecovering] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
@@ -109,7 +110,7 @@ export function PlayerApp() {
         setRecovering(true);
       } finally { syncing = false; }
     };
-    const timer = window.setInterval(() => { void sync(); }, 4000);
+    const timer = window.setInterval(() => { void sync(); }, 3000);
     return () => window.clearInterval(timer);
   }, [credentials, room]);
 
@@ -123,6 +124,14 @@ export function PlayerApp() {
     setTextAnswer('');
     setBuzzMessage('');
   }, [current?.questionId]);
+
+  useEffect(() => {
+    if (room?.phase !== 'lobby') return;
+    setSelectedFinalWager(null);
+    setFinalAnswer('');
+    setTextAnswer('');
+    setBuzzMessage('');
+  }, [room?.phase, room?.gameStartedAt]);
 
   useEffect(() => {
     if (!room) return;
@@ -203,6 +212,20 @@ export function PlayerApp() {
     }
   };
 
+  const submitDailyDoubleWager = async (wager: number) => {
+    if (!credentials) return;
+    setError('');
+    try { await emitAck('player:daily-double-wager', { ...credentials, wager }); }
+    catch (err) { setError(err instanceof Error ? err.message : 'Could not lock wager'); }
+  };
+
+  const submitFinalWager = async () => {
+    if (!credentials || selectedFinalWager === null) return;
+    setError('');
+    try { await emitAck('player:final-wager', { ...credentials, wager: selectedFinalWager }); }
+    catch (err) { setError(err instanceof Error ? err.message : 'Could not lock wager'); }
+  };
+
   const leaveToMenu = () => {
     audio.stop();
     location.href = menuUrl();
@@ -238,17 +261,18 @@ export function PlayerApp() {
   const buzzerOpen = room.phase === 'question' && current?.responseMode !== 'text' && current?.buzzOpen && me.buzzEligible;
   const winner = current?.buzzWinnerId === me.id;
   const myResponse = current?.textResponses?.[me.id];
+  const showFinalWager = room.phase === 'final-wager' || room.phase === 'final-question' || room.phase === 'final-review';
 
   return <main className={`player-phone-v2 ${me.onFire?'phone-fire':''} ${me.isCold?'phone-cold':''}`} style={{'--accent':me.accent} as React.CSSProperties}>
-    <header className="phone-header-v2"><button className="phone-menu" onClick={leaveToMenu} aria-label="Leave game">←</button><span className="phone-avatar">{me.avatar}</span><div className="phone-identity"><strong>{me.name}</strong><small>{!recovering && socket.connected ? `ROOM ${room.code}` : 'RECONNECTING…'}</small></div><b>{me.score.toLocaleString()}</b></header>
+    <header className="phone-header-v2"><button className="phone-menu" onClick={leaveToMenu} aria-label="Leave game">←</button><span className="phone-avatar">{me.avatar}</span><div className="phone-identity"><strong>{me.name}</strong><small>{!recovering && socket.connected ? `ROOM ${room.code}` : 'RECONNECTING…'}</small></div><div className="phone-score-stack"><b>{me.score.toLocaleString()}</b>{showFinalWager && me.finalWagerSubmitted && me.finalWager !== null && <small className="phone-wager-pill">WAGER {me.finalWager.toLocaleString()}</small>}</div></header>
 
     {modifierReveal && <div className={`modifier-reveal-overlay x${modifierReveal}`} aria-live="polite"><div className="modifier-reveal-card"><span>{modifierReveal === 2 ? 'FINAL SIX' : 'FINAL THREE'}</span><strong>{modifierReveal === 2 ? 'DOUBLE POINTS' : 'TRIPLE POINTS'}</strong><p>{modifierReveal === 2 ? 'Every clue is now worth 2×.' : 'Every remaining clue is now worth 3×.'}</p></div></div>}
 
-    {room.phase === 'lobby' && <section className="phone-state-v2"><div className="ready-ring"><span>{me.avatar}</span></div><div className="section-kicker">CONNECTED</div><h1>You’re in.</h1><p>You can leave this screen and return from Join Game. This seat will be restored on the same phone and browser.</p></section>}
+    {room.phase === 'lobby' && <section className="phone-state-v2"><div className="ready-ring"><span>{me.avatar}</span></div><div className="section-kicker">CONNECTED</div><h1>{room.gameStartedAt === null ? 'You’re in.' : 'Game reset.'}</h1><p>Your seat is ready. Watch the host screen for the next game.</p></section>}
     {room.phase === 'paused' && <section className="phone-state-v2"><div className="section-kicker">PAUSED</div><h1>Game paused</h1><p>Waiting for the game to resume.</p></section>}
     {room.phase === 'board' && <section className="phone-state-v2"><div className="section-kicker">NEXT QUESTION</div><h1>Ready.</h1><p>Watch the main game screen.</p>{room.multiplier > 1 && <div className={`modifier-banner x${room.multiplier}`}><strong>{room.multiplier === 2 ? '2× DOUBLE POINTS' : '3× TRIPLE POINTS'}</strong></div>}{me.onFire&&<div className="status-badge fire">ON FIRE · {me.positiveStreak}</div>}{me.isCold&&<div className="status-badge cold">COLD STREAK · {me.coldStreak}</div>}</section>}
 
-    {room.phase === 'daily-double-wager' && current?.dailyDoublePlayerId === me.id && <section className="phone-state-v2"><div className="section-kicker gold">DAILY DOUBLE</div><h1>Your wager</h1><p>Choose it on the main game screen.</p></section>}
+    {room.phase === 'daily-double-wager' && current?.dailyDoublePlayerId === me.id && <section className="phone-state-v2 final-phone-v2"><div className="section-kicker gold">DAILY DOUBLE</div><h1>Choose your wager</h1><p>Pick one preset value.</p><div className="wager-grid phone fixed-wagers">{QUESTION_VALUES.map((value)=><button key={value} onClick={()=>void submitDailyDoubleWager(value)}>{value.toLocaleString()}</button>)}</div>{error && <p className="form-error">{error}</p>}</section>}
     {room.phase === 'daily-double-wager' && current?.dailyDoublePlayerId !== me.id && <section className="phone-state-v2"><div className="section-kicker gold">DAILY DOUBLE</div><h1>{room.players.find((player)=>player.id===current?.dailyDoublePlayerId)?.name}</h1><p>is choosing a wager.</p></section>}
 
     {(room.phase === 'question' || room.phase === 'daily-double-question') && current && <section className="phone-question-stage-v2">
@@ -256,7 +280,7 @@ export function PlayerApp() {
 
       {current.responseMode === 'text' && !current.dailyDouble ? <div className="text-response-panel">
         {!current.answerRevealed ? myResponse ? <div className="response-locked"><div className="lock-icon">✓</div><h3>Response locked</h3><p>{myResponse.answer}</p><small>Waiting for the other connected players.</small></div> : <><label>Your answer<textarea value={textAnswer} maxLength={200} onChange={(event)=>setTextAnswer(event.target.value)} placeholder="Type your response" autoFocus /></label><button className="primary-button giant" disabled={!textAnswer.trim()} onClick={() => void submitText()}>Lock Response</button></> : <div className="response-reveal-phone"><small>CORRECT ANSWER</small><strong>{current.acceptedAnswers?.join(' / ')}</strong>{myResponse ? <><p>Your response: {myResponse.answer}</p><div className={`ruling-badge ${myResponse.resolvedCorrect === true ? 'correct' : myResponse.resolvedCorrect === false ? 'wrong' : ''}`}>{myResponse.resolvedCorrect === true ? 'AWARDED' : myResponse.resolvedCorrect === false ? 'REJECTED' : 'HOST REVIEWING'}</div></> : <p>No response submitted.</p>}</div>}
-      </div> : current.dailyDouble ? (current.dailyDoublePlayerId === me.id ? <div className="spoken-answer-panel"><div className="section-kicker gold">YOU HAVE IT</div><h1>Answer aloud</h1><p>Wait for the host to reveal the correct answer before it is graded.</p></div> : <div className="spoken-answer-panel"><div className="section-kicker">LOCKED</div><h1>Daily Double</h1><p>{room.players.find((player)=>player.id===current.dailyDoublePlayerId)?.name} is answering.</p></div>) : <button type="button" className={`buzzer-button-v2 ${buzzerOpen?'open':''} ${winner?'winner':''}`} disabled={!buzzerOpen} onPointerDown={buzz}><span>{winner ? 'YOU’RE IN' : buzzerOpen ? 'BUZZ' : current.buzzWinnerId ? 'LOCKED' : 'GET READY'}</span></button>}
+      </div> : current.dailyDouble ? (current.dailyDoublePlayerId === me.id ? <div className="spoken-answer-panel"><div className="section-kicker gold">YOU HAVE IT</div><h1>Answer aloud</h1><p>Wager: <strong>{current.wager?.toLocaleString()}</strong>. Wait for the host to reveal the correct answer before it is graded.</p></div> : <div className="spoken-answer-panel"><div className="section-kicker">LOCKED</div><h1>Daily Double</h1><p>{room.players.find((player)=>player.id===current.dailyDoublePlayerId)?.name} is answering.</p></div>) : <button type="button" className={`buzzer-button-v2 ${buzzerOpen?'open':''} ${winner?'winner':''}`} disabled={!buzzerOpen} onPointerDown={buzz}><span>{winner ? 'YOU’RE IN' : buzzerOpen ? 'BUZZ' : current.buzzWinnerId ? 'LOCKED' : 'GET READY'}</span></button>}
 
       {buzzMessage && <div className="buzz-message-v2">{buzzMessage}</div>}
       {current.responseMode !== 'text' && current.answerRevealed && <div className="response-reveal-phone"><small>CORRECT ANSWER</small><strong>{current.acceptedAnswers?.[0]}</strong></div>}
@@ -264,9 +288,9 @@ export function PlayerApp() {
     </section>}
 
     {room.phase === 'final-category' && <section className="phone-state-v2"><div className="section-kicker gold">FINAL ROUND</div><h1>{room.finalRound?.category}</h1><p>Get ready to wager.</p></section>}
-    {room.phase === 'final-wager' && <section className="phone-state-v2 final-phone-v2"><div className="section-kicker gold">FINAL WAGER</div><h1>{room.finalRound?.category}</h1>{me.finalWagerSubmitted ? <div className="response-locked"><div className="lock-icon">✓</div><h3>Wager locked</h3></div> : <><div className="wager-grid phone">{QUESTION_VALUES.map((value)=><button key={value} onClick={()=>setFinalWager(String(value))}>{value}</button>)}</div><input inputMode="numeric" value={finalWager} onChange={(event)=>setFinalWager(event.target.value.replace(/\D/g,''))} placeholder="Wager"/><button className="primary-button giant" disabled={finalWager===''} onClick={async()=>{try{await emitAck('player:final-wager',{...credentials,wager:Number(finalWager)})}catch(err){setError(err instanceof Error?err.message:'Failed')}}}>Lock Wager</button></>}</section>}
-    {room.phase === 'final-question' && <section className="phone-state-v2 final-phone-v2"><div className="section-kicker gold">FINAL QUESTION</div><h1>{room.finalRound?.question}</h1><Timer timer={room.timer} serverNow={room.serverNow}/>{me.finalAnswerSubmitted ? <div className="response-locked"><div className="lock-icon">✓</div><h3>Answer locked</h3><p>{me.finalAnswer}</p></div> : <><textarea value={finalAnswer} maxLength={200} onChange={(event)=>setFinalAnswer(event.target.value)} placeholder="Type your answer"/><button className="primary-button giant" disabled={!finalAnswer.trim()} onClick={async()=>{try{await emitAck('player:final-answer',{...credentials,answer:finalAnswer})}catch(err){setError(err instanceof Error?err.message:'Failed')}}}>Lock Answer</button></>}</section>}
-    {room.phase === 'final-review' && <section className="phone-state-v2"><div className="section-kicker gold">ANSWER REVEAL</div><h1>{room.finalRound?.acceptedAnswers?.[0]}</h1><p>Watch the main screen for scoring.</p></section>}
+    {room.phase === 'final-wager' && <section className="phone-state-v2 final-phone-v2"><div className="section-kicker gold">FINAL WAGER</div><h1>{room.finalRound?.category}</h1>{me.finalWagerSubmitted ? <div className="response-locked"><div className="lock-icon">✓</div><h3>Wager locked</h3><strong className="locked-wager-number">{(me.finalWager ?? 0).toLocaleString()}</strong></div> : <><p>Choose one wager.</p><div className="wager-grid phone fixed-wagers">{FINAL_WAGER_PRESETS.map((value)=><button className={selectedFinalWager===value?'selected':''} key={value} onClick={()=>setSelectedFinalWager(value)}>{value.toLocaleString()}</button>)}<button className={`all-in-wager ${selectedFinalWager===me.score && me.score>0?'selected':''}`} disabled={me.score<=0} onClick={()=>setSelectedFinalWager(me.score)}>ALL IN · {Math.max(0,me.score).toLocaleString()}</button></div><button className="primary-button giant" disabled={selectedFinalWager===null} onClick={()=>void submitFinalWager()}>Lock {selectedFinalWager === null ? 'Wager' : selectedFinalWager.toLocaleString()}</button></>}{error && <p className="form-error">{error}</p>}</section>}
+    {room.phase === 'final-question' && <section className="phone-state-v2 final-phone-v2"><div className="section-kicker gold">FINAL QUESTION</div>{me.finalWagerSubmitted && <div className="locked-wager-inline">WAGER {me.finalWager?.toLocaleString()}</div>}<h1>{room.finalRound?.question}</h1><Timer timer={room.timer} serverNow={room.serverNow}/>{me.finalAnswerSubmitted ? <div className="response-locked"><div className="lock-icon">✓</div><h3>Answer locked</h3><p>{me.finalAnswer}</p></div> : <><textarea value={finalAnswer} maxLength={200} onChange={(event)=>setFinalAnswer(event.target.value)} placeholder="Type your answer"/><button className="primary-button giant" disabled={!finalAnswer.trim()} onClick={async()=>{try{await emitAck('player:final-answer',{...credentials,answer:finalAnswer})}catch(err){setError(err instanceof Error?err.message:'Failed')}}}>Lock Answer</button></>}</section>}
+    {room.phase === 'final-review' && <section className="phone-state-v2"><div className="section-kicker gold">ANSWER REVEAL</div><div className="locked-wager-inline">WAGER {(me.finalWager ?? 0).toLocaleString()}</div><h1>{room.finalRound?.acceptedAnswers?.[0]}</h1><p>Watch the main screen for scoring.</p></section>}
     {room.phase === 'recap' && <section className="phone-state-v2"><div className="section-kicker gold">FINAL SCORE</div><h1>{me.score.toLocaleString()}</h1><p>{me.stats.correct} correct · {me.stats.incorrect} incorrect</p><button className="secondary-button" onClick={leaveToMenu}>Back to menu</button></section>}
   </main>;
 }
