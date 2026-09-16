@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import type { Player } from '../shared/types';
 
 export function EndgameRecap({ players, onReset, onMenu }: { players: Player[]; onReset: () => void; onMenu: () => void }) {
-  const standings = useMemo(() => [...players].sort((a, b) => b.score - a.score), [players]);
+  const resultKey = players.map((player) => `${player.id}:${player.score}`).join('|');
+  const standings = useMemo(() => [...players].sort((a, b) => b.score - a.score), [resultKey]);
   const [revealed, setRevealed] = useState(0);
   const [showStats, setShowStats] = useState(false);
 
@@ -15,7 +16,7 @@ export function EndgameRecap({ players, onReset, onMenu }: { players: Player[]; 
     });
     timers.push(window.setTimeout(() => setShowStats(true), 420 + standings.length * 620 + 1700));
     return () => timers.forEach((timer) => window.clearTimeout(timer));
-  }, [standings]);
+  }, [resultKey, standings.length]);
 
   if (showStats) return <section className="recap-scene-v2 stats-after-podium">
     <div className="section-kicker gold">GAME STATS</div>
