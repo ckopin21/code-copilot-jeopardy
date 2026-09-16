@@ -44,17 +44,19 @@ export function EndgameRecap({ players, onReset, onMenu }: { players: Player[]; 
   const playerCount = players.length;
   const standings = useMemo(() => [...players].sort((a, b) => b.score - a.score || a.seat - b.seat), [players]);
   const awards = useMemo(() => buildAwards(players), [players]);
+  const [showPodium, setShowPodium] = useState(false);
   const [revealed, setRevealed] = useState(0);
   const [showStats, setShowStats] = useState(false);
 
   useEffect(() => {
+    setShowPodium(false);
     setRevealed(0);
     setShowStats(false);
     const timers: number[] = [];
+    timers.push(window.setTimeout(() => setShowPodium(true), 2800));
     for (let index = 0; index < playerCount; index += 1) {
-      timers.push(window.setTimeout(() => setRevealed(index + 1), 420 + index * 620));
+      timers.push(window.setTimeout(() => setRevealed(index + 1), 3300 + index * 850));
     }
-    if (playerCount > 0) timers.push(window.setTimeout(() => setShowStats(true), 420 + playerCount * 620 + 1700));
     return () => timers.forEach((timer) => window.clearTimeout(timer));
   }, [resultKey, playerCount]);
 
@@ -65,6 +67,14 @@ export function EndgameRecap({ players, onReset, onMenu }: { players: Player[]; 
     <div className="control-row-v2"><button className="primary-button" onClick={onReset}>Reset Game</button><button className="secondary-button" onClick={onMenu}>Back to Menu</button></div>
   </section>;
 
+  if (!showPodium) return <section className="podium-scene endgame-hold" aria-live="polite">
+    <div className="podium-glow" aria-hidden="true" />
+    <div className="section-kicker gold">FINAL SCORES LOCKED</div>
+    <h1>Results are in.</h1>
+    <p className="helper-copy">Get ready for the final standings.</p>
+    <div className="endgame-hold-pulse" aria-hidden="true"><i/><i/><i/></div>
+  </section>;
+
   if (showStats) return <section className={`recap-scene-v2 stats-after-podium recap-count-${playerCount}`}>
     <div className="section-kicker gold">GAME STATS</div>
     <h1>Final results</h1>
@@ -72,7 +82,7 @@ export function EndgameRecap({ players, onReset, onMenu }: { players: Player[]; 
       const player = players.find((candidate) => candidate.id === award.playerId)!;
       return <article className="recap-card-v2" key={`${award.title}-${award.playerId}`}><div className="section-kicker gold">{award.title}</div><div className="recap-player-heading"><span>{player.avatar}</span><h2>{player.name}</h2></div><strong>{award.detail}</strong></article>;
     })}</div>}
-    <div className="recap-grid-v2">{standings.map((player) => {
+    <div className="recap-grid-v2 standings-grid">{standings.map((player) => {
       const place = competitionPlace(standings, player);
       const playerAwards = awards.filter((award) => award.playerId === player.id);
       return <article className="recap-card-v2" key={player.id}>
@@ -109,6 +119,9 @@ export function EndgameRecap({ players, onReset, onMenu }: { players: Player[]; 
         <div className={`podium-pedestal place-${Math.min(place, 4)}`}>{isWinner ? tiedWinner ? 'CO-WINNER' : 'WINNER' : `${place}${place === 2 ? 'ND' : place === 3 ? 'RD' : 'TH'}`}</div>
       </article>;
     })}</div>
-    {revealed >= standings.length && <div className="podium-confetti" aria-hidden="true">{Array.from({ length: 28 }, (_, index) => <i key={index} style={{ '--i': index } as React.CSSProperties} />)}</div>}
+    {revealed >= standings.length && <>
+      <div className="podium-confetti" aria-hidden="true">{Array.from({ length: 28 }, (_, index) => <i key={index} style={{ '--i': index } as React.CSSProperties} />)}</div>
+      <button className="primary-button podium-stats-button" onClick={() => setShowStats(true)}>View Game Stats</button>
+    </>}
   </section>;
 }
