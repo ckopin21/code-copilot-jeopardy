@@ -3,9 +3,10 @@ import { DEFAULT_SETTINGS } from '../src/shared/config';
 import type { Player, RoomSnapshot } from '../src/shared/types';
 import { sanitizeRoomSnapshot } from '../src/lib/snapshotSecurity';
 
-function player(id: string, name: string): Player {
+function player(id: string, name: string, seat: number): Player {
   return {
     id,
+    seat,
     name,
     avatar: '🚀',
     accent: '#93c5fd',
@@ -35,7 +36,7 @@ function snapshot(): RoomSnapshot {
     expiresAt: Date.now() + 60_000,
     hostConnected: true,
     locked: false,
-    players: [player('one', 'One'), player('two', 'Two')],
+    players: [player('one', 'One', 1), player('two', 'Two', 2)],
     settings: { ...DEFAULT_SETTINGS },
     board: null,
     currentQuestion: null,
@@ -85,6 +86,24 @@ describe('sanitizeRoomSnapshot', () => {
     const currentOnly = sanitizeRoomSnapshot(state, 'presentation');
     expect(currentOnly.players[0].finalAnswer).toBeNull();
     expect(currentOnly.players[1].finalAnswer).toBe('Two secret');
+  });
+
+  it('keeps future Final answers hidden from the host during progressive review', () => {
+    const state = snapshot();
+    state.phase = 'final-review';
+    state.finalRound!.reviewPlayerIndex = 0;
+
+    const firstReview = sanitizeRoomSnapshot(state, 'host');
+    expect(firstReview.players[0].finalAnswer).toBe('One secret');
+    expect(firstReview.players[1].finalAnswer).toBeNull();
+    expect(firstReview.players[0].finalWager).toBe(100);
+    expect(firstReview.players[1].finalWager).toBe(100);
+
+    state.players[0].finalResolved = true;
+    state.finalRound!.reviewPlayerIndex = 1;
+    const secondReview = sanitizeRoomSnapshot(state, 'host');
+    expect(secondReview.players[0].finalAnswer).toBe('One secret');
+    expect(secondReview.players[1].finalAnswer).toBe('Two secret');
   });
 
   it('hides answers, explanations, autogrades, and other typed responses before reveal', () => {
