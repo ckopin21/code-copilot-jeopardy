@@ -106,14 +106,23 @@ export function HostEnhancements() {
       audio.cue('winner');
     }
 
-    if (!next) return;
+    if (!next || accessibility.reduceMotion) return;
     if (transitionTimerRef.current !== null) window.clearTimeout(transitionTimerRef.current);
     setTransition(next);
     transitionTimerRef.current = window.setTimeout(() => {
       setTransition(null);
       transitionTimerRef.current = null;
     }, duration);
-  }, [room?.phase, room?.gameStartedAt, room?.gameEndedAt, room?.currentQuestion?.questionId, room?.board?.categories.join('|')]);
+  }, [room?.phase, room?.gameStartedAt, room?.gameEndedAt, room?.currentQuestion?.questionId, room?.board?.categories.join('|'), accessibility.reduceMotion]);
+
+  useEffect(() => {
+    if (!accessibility.reduceMotion) return;
+    if (transitionTimerRef.current !== null) {
+      window.clearTimeout(transitionTimerRef.current);
+      transitionTimerRef.current = null;
+    }
+    setTransition(null);
+  }, [accessibility.reduceMotion]);
 
   useEffect(() => () => {
     if (transitionTimerRef.current !== null) window.clearTimeout(transitionTimerRef.current);
@@ -133,6 +142,16 @@ export function HostEnhancements() {
     } catch (error) {
       setActionMessage(error instanceof Error ? error.message : 'Action failed');
       return false;
+    }
+  };
+
+  const undoLastScore = async () => {
+    setActionMessage('');
+    try {
+      const restored = await emitAck<RoomSnapshot>('host:undo-last-score', { roomCode: credentials.roomCode, hostToken: credentials.hostToken });
+      window.dispatchEvent(new CustomEvent<RoomSnapshot>('blue-stage:score-undo', { detail: restored }));
+    } catch (error) {
+      setActionMessage(error instanceof Error ? error.message : 'Undo failed');
     }
   };
 
@@ -190,7 +209,7 @@ export function HostEnhancements() {
 
       <section className="host-command-section">
         <div className="drawer-section-title"><strong>Recovery tools</strong><small>Undo restores score, stats, streaks, and the previous scoring state.</small></div>
-        <button className="drawer-wide-button" onClick={() => void hostAction('host:undo-last-score')}>↶ Undo Last Score / Ruling</button>
+        <button className="drawer-wide-button" onClick={() => void undoLastScore()}>↶ Undo Last Score / Ruling</button>
       </section>
 
       <section className="host-command-section">

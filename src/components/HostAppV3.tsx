@@ -176,6 +176,21 @@ export function HostAppV3() {
     });
   }, [credentials]);
 
+  useEffect(() => {
+    const onScoreUndo = (event: Event) => {
+      const restored = (event as CustomEvent<RoomSnapshot>).detail;
+      const question = restored?.currentQuestion;
+      if (!question) return;
+      saveHistory((previous) => previous.map((entry) => entry.questionId === question.questionId
+        ? { ...entry, attempts: entry.attempts.slice(0, -1) }
+        : entry));
+      setScoreFlights([]);
+      setScoreOverrides({});
+    };
+    window.addEventListener('blue-stage:score-undo', onScoreUndo);
+    return () => window.removeEventListener('blue-stage:score-undo', onScoreUndo);
+  }, [saveHistory]);
+
   const recordAttempt = useCallback((playerId: string, correct: boolean) => {
     if (!room?.currentQuestion) return;
     const question = room.currentQuestion;
