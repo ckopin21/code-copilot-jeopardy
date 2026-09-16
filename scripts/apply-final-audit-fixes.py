@@ -102,13 +102,6 @@ replace(
     "  useEffect(() => {\n    if (!room) return;\n    const previous = lastPhaseRef.current;",
     "  useEffect(() => {\n    if (!room) return;\n    if (!transitionHydratedRef.current) {\n      transitionHydratedRef.current = true;\n      lastPhaseRef.current = room.phase;\n      lastGameStartedRef.current = room.gameStartedAt;\n      return;\n    }\n    const previous = lastPhaseRef.current;"
 )
-replace(p, "      audio.cue('phase');\n    } else if (room.phase === 'daily-double-wager'", "      audio.cue('category');\n    } else if (room.phase === 'daily-double-wager'")
-replace(p, "      audio.cue('phase');\n    } else if (room.phase === 'recap'", "      audio.cue('round');\n    } else if (room.phase === 'recap'")
-replace(p, "      audio.cue('reveal');\n    }", "      audio.cue('winner');\n    }")
-
-# Use the dedicated controller-diagnostic sound instead of the generic lock sound.
-p = 'src/components/PlayerEnhancements.tsx'
-replace(p, "audio.cue('locked')", "audio.cue('diagnostic')")
 
 # Regression coverage for removal during live gameplay.
 p = 'tests/browserGameEngine.test.ts'
