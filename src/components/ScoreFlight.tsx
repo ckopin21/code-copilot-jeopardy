@@ -25,7 +25,7 @@ export function ScoreFlight({ flight, onImpact, onComplete }: { flight: ScoreFli
 
     frame = window.requestAnimationFrame(() => {
       const source = findByData('questionId', flight.questionId)
-        ?? document.querySelector<HTMLElement>('.question-stage .question-card-v2, .presentation-question > article, .phone-question-stage-v2');
+        ?? document.querySelector<HTMLElement>('.question-stage .question-card-v2, .presentation-question > article, .presentation-shell > section, .phone-question-stage-v2');
       const scoreTarget = findByData('playerScore', flight.playerId);
       if (!source || !scoreTarget) {
         onImpact(flight);

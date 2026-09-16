@@ -6,6 +6,7 @@ import { emitAck, socket } from '../lib/socket';
 import { audio } from '../lib/audio';
 import { menuUrl, resetInstance } from '../lib/resetInstance';
 import { calculateComebackAward } from '../lib/comebackScoring';
+import { scoreboardWagersVisible, turnIndicatorLabel, turnIndicatorVisible } from '../lib/gameUiRules';
 import { PlayerStrip } from './PlayerStrip';
 import { Board, type BoardResultMap } from './Board';
 import { Timer } from './Timer';
@@ -438,6 +439,8 @@ export function HostAppV3() {
     ? (current.wager ?? 0) * (settings.dailyDoubleStacksWithMultiplier ? questionMultiplier : 1)
     : current.effectiveValue : 0;
   const boardResults: BoardResultMap = Object.fromEntries(historyEntries.map((entry) => [entry.questionId, entry.attempts]));
+  const showTurnIndicator = turnIndicatorVisible(room.phase);
+  const turnLabel = turnIndicatorLabel(room.phase);
 
   const prepareScoreFlight = (playerId: string, correct: boolean): ScoreFlightState | null => {
     if (!current) return null;
@@ -534,7 +537,7 @@ export function HostAppV3() {
       </header>
 
       {error && <div className="error-banner" role="alert">{error}<button onClick={() => setError('')}>×</button></div>}
-      <PlayerStrip players={room.players} activeId={current?.buzzWinnerId ?? current?.dailyDoublePlayerId} turnId={room.phase === 'lobby' || room.phase === 'recap' ? null : room.turnPlayerId} scoreOverrides={scoreOverrides} />
+      <PlayerStrip players={room.players} activeId={current?.buzzWinnerId ?? current?.dailyDoublePlayerId} turnId={showTurnIndicator ? room.turnPlayerId : null} turnLabel={turnLabel} showWagers={scoreboardWagersVisible(room.phase)} scoreOverrides={scoreOverrides} />
 
       {modifierReveal && <div className={`modifier-reveal-overlay x${modifierReveal}`} aria-live="polite"><div className="modifier-reveal-card"><span>{modifierReveal === 2 ? 'FINAL SIX' : 'FINAL THREE'}</span><strong>{modifierReveal === 2 ? 'DOUBLE POINTS' : 'TRIPLE POINTS'}</strong><p>{modifierReveal === 2 ? 'Every question is now worth 2×.' : 'Every remaining question is now worth 3×.'}</p></div></div>}
       {revealBeat > 0 && <div className={`final-reveal-spectacle beat-${revealBeat}`} aria-live="assertive"><div className="final-reveal-card"><small>FINAL ROUND</small><strong>{spectacleText}</strong><div className="reveal-pulse-dots"><i/><i/><i/></div></div></div>}
@@ -676,5 +679,5 @@ function ScoreControls({ room, onAdjust }: { room: RoomSnapshot; onAdjust: (play
 
 function SubmissionStatus({ players, field }: { players: RoomSnapshot['players']; field: 'finalWagerSubmitted' | 'finalAnswerSubmitted' }) {
   if (!players.length) return <div className="submission-list-v2"><p className="muted">No connected phone players.</p></div>;
-  return <div className="submission-list-v2">{players.map((player)=><div key={player.id} className={player[field] ? 'done' : ''}><span>{player.avatar}</span><strong>{player.name}</strong><small>{player[field] ? field === 'finalWagerSubmitted' ? `Locked · ${(player.finalWager ?? 0).toLocaleString()}` : 'Locked in' : 'Waiting'}</small></div>)}</div>;
+  return <div className="submission-list-v2">{players.map((player)=><div key={player.id} className={player[field] ? 'done' : ''}><span>{player.avatar}</span><strong>{player.name}</strong><small>{player[field] ? field === 'finalWagerSubmitted' ? 'Wager locked' : 'Answer locked' : 'Waiting'}</small></div>)}</div>;
 }

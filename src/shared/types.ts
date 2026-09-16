@@ -167,6 +167,8 @@ export interface CurrentQuestionState {
   participantIds?: string[];
   /** True when the answer window expired with no response and the turn owner was penalized. */
   timedOut?: boolean;
+  /** Spoken response already judged for the current buzz/answer attempt. Guards retries and double-clicks. */
+  resolvedPlayerId?: string | null;
   wager: number | null;
   buzzOpen: boolean;
   buzzWinnerId: string | null;

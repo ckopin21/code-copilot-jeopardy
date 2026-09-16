@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { RoomSnapshot } from '../shared/types';
 import { emitAck, socket } from '../lib/socket';
 import { Board } from './Board';
 import { PlayerStrip } from './PlayerStrip';
 import { Timer } from './Timer';
 import { audio } from '../lib/audio';
+import { scoreboardWagersVisible, turnIndicatorLabel, turnIndicatorVisible } from '../lib/gameUiRules';
+import { ScoreFlight, type ScoreFlightState } from './ScoreFlight';
 
 function musicFor(room: RoomSnapshot) {
   if (room.phase.startsWith('final')) return 'final' as const;
@@ -21,13 +23,51 @@ export function PresentationApp() {
   const [room, setRoom] = useState<RoomSnapshot | null>(null);
   const [error, setError] = useState('');
   const [audioReady, setAudioReady] = useState(false);
+  const [scoreFlights, setScoreFlights] = useState<ScoreFlightState[]>([]);
+  const [scoreOverrides, setScoreOverrides] = useState<Record<string, number>>({});
+  const latestRoomRef = useRef<RoomSnapshot | null>(null);
+
+  const applySnapshot = useCallback((snapshot: RoomSnapshot) => {
+    const previous = latestRoomRef.current;
+    if (previous && previous.code === snapshot.code && snapshot.phase !== 'lobby') {
+      const nextFlights: ScoreFlightState[] = [];
+      const nextOverrides: Record<string, number> = {};
+      for (const player of snapshot.players) {
+        const before = previous.players.find((candidate) => candidate.id === player.id);
+        if (!before || before.score === player.score) continue;
+        nextOverrides[player.id] = before.score;
+        nextFlights.push({
+          id: crypto.randomUUID(),
+          questionId: snapshot.currentQuestion?.questionId ?? previous.currentQuestion?.questionId ?? 'presentation-score-change',
+          playerId: player.id,
+          delta: player.score - before.score,
+          correct: player.score > before.score
+        });
+      }
+      if (nextFlights.length) {
+        setScoreOverrides((current) => ({ ...current, ...nextOverrides }));
+        setScoreFlights((current) => [...current, ...nextFlights]);
+      }
+    }
+    latestRoomRef.current = snapshot;
+    setRoom(snapshot);
+  }, []);
+
+  const handleScoreImpact = useCallback((flight: ScoreFlightState) => {
+    setScoreOverrides((current) => {
+      const next = { ...current };
+      delete next[flight.playerId];
+      return next;
+    });
+  }, []);
+  const handleScoreComplete = useCallback((flightId: string) => setScoreFlights((current) => current.filter((flight) => flight.id !== flightId)), []);
 
   useEffect(() => {
-    const onState = (snapshot: RoomSnapshot) => setRoom(snapshot);
+    const onState = (snapshot: RoomSnapshot) => applySnapshot(snapshot);
     socket.on('room:state', onState);
-    void emitAck<RoomSnapshot>('presentation:join', { roomCode }).then(setRoom).catch((err) => setError(err instanceof Error ? err.message : 'Could not join game'));
+    void emitAck<RoomSnapshot>('presentation:join', { roomCode }).then(applySnapshot).catch((err) => setError(err instanceof Error ? err.message : 'Could not join game'));
     return () => { socket.off('room:state', onState); audio.stop(); };
-  }, [roomCode]);
+  }, [roomCode, applySnapshot]);
 
   const musicState = room ? musicFor(room) : null;
   useEffect(() => {
@@ -60,10 +100,16 @@ export function PresentationApp() {
     ? room.finalRound.reviewPlayerId ?? room.finalRound.participantIds[room.finalRound.reviewPlayerIndex]
     : null;
   const reviewPlayer = reviewPlayerId ? room.players.find((player) => player.id === reviewPlayerId) ?? null : null;
+  const showTurnIndicator = turnIndicatorVisible(room.phase);
+  const turnLabel = turnIndicatorLabel(room.phase);
+  const questionMultiplier = current ? Math.max(1, Math.round(current.effectiveValue / Math.max(1, current.baseValue))) : 1;
+  const pointsAtStake = current?.dailyDouble
+    ? (current.wager ?? 0) * (room.settings.dailyDoubleStacksWithMultiplier ? questionMultiplier : 1)
+    : current?.effectiveValue ?? 0;
 
   return <main className="presentation-shell">
     {!audioReady && <button className="presentation-audio-gate" onClick={async () => { await audio.unlock(); setAudioReady(true); }}>Enable game audio</button>}
-    <PlayerStrip players={room.players} activeId={active} turnId={room.phase === 'lobby' || room.phase === 'recap' ? null : room.turnPlayerId}/>
+    <PlayerStrip players={room.players} activeId={active} turnId={showTurnIndicator ? room.turnPlayerId : null} turnLabel={turnLabel} showWagers={scoreboardWagersVisible(room.phase)} scoreOverrides={scoreOverrides}/>
 
     {room.phase === 'lobby' && <section className="presentation-center"><div className="brand-mark hero-brand"><span>BLUE STAGE</span><strong>TRIVIA</strong></div><div className="presentation-room"><small>ROOM CODE</small><strong>{room.code}</strong></div><p>Players join from their phones.</p></section>}
 
@@ -74,7 +120,7 @@ export function PresentationApp() {
     {room.phase === 'daily-double-wager' && <section className="presentation-center daily-double-v2"><div className="section-kicker gold">DAILY DOUBLE</div><h1>{room.players.find((player) => player.id === current?.dailyDoublePlayerId)?.name}</h1><p>is choosing a wager.</p></section>}
 
     {(room.phase === 'question' || room.phase === 'daily-double-question') && current && <section className={`presentation-question ${current.dailyDouble ? 'daily-double-v2' : ''}`}><article>
-      <div className="question-meta-v2"><span>{current.category}</span><strong>{current.dailyDouble ? `WAGER ${current.wager}` : `${current.effectiveValue} POINTS`}</strong>{current.responseMode === 'text' && <em>FREE RESPONSE</em>}</div>
+      <div className="question-meta-v2"><span>{current.category}</span><strong>{current.dailyDouble ? `${pointsAtStake.toLocaleString()} POINTS IN PLAY` : `${current.effectiveValue} POINTS`}</strong>{current.responseMode === 'text' && <em>FREE RESPONSE</em>}</div>
       <h1>{current.text}</h1>
       <Timer timer={room.timer} serverNow={room.serverNow}/>
       {current.responseMode === 'text' && !current.answerRevealed && <div className="presentation-response-count"><strong>{responseCount}/{activeQuestionPlayers.length}</strong><span>RESPONSES IN</span></div>}
@@ -88,5 +134,6 @@ export function PresentationApp() {
     {room.phase === 'final-review' && room.finalRound && reviewPlayer && <section className="presentation-question final-stage"><article><div className="section-kicker gold">FINAL ANSWER</div><div className="answer-reveal-v2 presentation-answer"><small>CORRECT ANSWER</small><strong>{room.finalRound.acceptedAnswers.join(' / ')}</strong></div><div className="presentation-final-player"><span>{reviewPlayer.avatar}</span><h1>{reviewPlayer.name}</h1><p>{reviewPlayer.finalAnswer || '(No answer)'}</p><strong>WAGER {reviewPlayer.finalWager ?? 0}</strong></div></article></section>}
 
     {room.phase === 'recap' && <section className="presentation-center presentation-recap"><div className="section-kicker gold">GAME COMPLETE</div><h1>{winners.length === 1 ? `${winners[0].avatar} ${winners[0].name}` : 'TIE GAME'}</h1><div className="presentation-scores-v2">{[...resultPlayers].sort((a,b)=>b.score-a.score).map((player)=><div key={player.id}><span>{player.avatar} {player.name}</span><strong>{player.score.toLocaleString()}</strong></div>)}</div></section>}
+    {scoreFlights[0] && <ScoreFlight flight={scoreFlights[0]} onImpact={handleScoreImpact} onComplete={handleScoreComplete} />}
   </main>;
 }

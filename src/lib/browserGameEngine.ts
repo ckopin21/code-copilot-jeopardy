@@ -75,10 +75,13 @@ export class BrowserGameEngine {
       record.state.locked = false;
       record.state.settings.lockRoomOnStart = false;
       record.state.settings.turnOrderMode ??= 'join-order';
+      // Steals are not part of the current reveal-first product flow. Keep restored legacy rooms aligned with the live UI.
+      record.state.settings.stealsEnabled = false;
       record.state.turnPlayerId ??= null;
       if (record.state.currentQuestion && !record.state.currentQuestion.participantIds) {
         record.state.currentQuestion.participantIds = record.state.players.map((player) => player.id);
       }
+      if (record.state.currentQuestion) record.state.currentQuestion.resolvedPlayerId ??= null;
       const claimedSeats = new Set<number>();
       for (const player of record.state.players) {
         const currentSeat = Number(player.seat);
@@ -238,7 +241,7 @@ export class BrowserGameEngine {
       hostConnected: true,
       locked: false,
       players: [],
-      settings: { ...DEFAULT_SETTINGS, ...settings, selectedPackIds, lockRoomOnStart: false },
+      settings: { ...DEFAULT_SETTINGS, ...settings, selectedPackIds, lockRoomOnStart: false, stealsEnabled: false },
       board: null,
       currentQuestion: null,
       timer: emptyTimer(),
@@ -438,7 +441,7 @@ export class BrowserGameEngine {
     if (room.state.phase !== 'lobby') throw new Error('Settings can only be changed in the lobby');
     const selectedPackIds = updates.selectedPackIds ?? room.state.settings.selectedPackIds;
     if (!selectedPackIds.length || selectedPackIds.some((packId) => !packMap.get(packId))) throw new Error('Select at least one valid pack');
-    room.state.settings = { ...room.state.settings, ...updates, selectedPackIds, lockRoomOnStart: false };
+    room.state.settings = { ...room.state.settings, ...updates, selectedPackIds, lockRoomOnStart: false, stealsEnabled: false };
     room.state.selectedPackIds = selectedPackIds;
     this.persist();
     return this.snapshot(roomCode);
@@ -582,7 +585,9 @@ export class BrowserGameEngine {
     if (requestedTurnPlayer) room.state.turnPlayerId = requestedTurnPlayer.id;
     const turnPlayer = this.ensureTurnPlayer(room);
     const isPlayableDailyDouble = tile.dailyDouble && connected.length > 0;
-    const responseMode = isPlayableDailyDouble ? 'buzz' : (question.responseMode ?? 'buzz');
+    const configuredResponseMode = isPlayableDailyDouble ? 'buzz' : (question.responseMode ?? 'buzz');
+    // A typed-response clue cannot make progress with no phones. Practice mode falls back to the normal reveal flow.
+    const responseMode = connected.length === 0 && configuredResponseMode === 'text' ? 'buzz' : configuredResponseMode;
     tile.used = true;
     room.state.remainingQuestions -= 1;
     room.state.currentQuestion = {
@@ -602,6 +607,7 @@ export class BrowserGameEngine {
       turnPlayerId: turnPlayer?.id ?? null,
       participantIds: connected.map((player) => player.id),
       timedOut: false,
+      resolvedPlayerId: null,
       wager: null,
       buzzOpen: false,
       buzzWinnerId: null,
@@ -689,9 +695,10 @@ export class BrowserGameEngine {
   buzz(roomCode: string, playerId: string, reconnectToken: string): { accepted: boolean; reason?: string; snapshot: RoomSnapshot } {
     const [room, player] = this.playerRoom(roomCode, playerId, reconnectToken);
     const current = room.state.currentQuestion;
-    if (!current?.buzzOpen || current.buzzWinnerId) return { accepted: false, reason: 'Buzzers are locked', snapshot: this.snapshot(roomCode) };
+    if (room.state.phase !== 'question' || !current?.buzzOpen || current.buzzWinnerId) return { accepted: false, reason: 'Buzzers are locked', snapshot: this.snapshot(roomCode) };
     if (!player.connected || !player.buzzEligible || (!room.state.settings.allowRepeatBuzzAfterMiss && current.attemptedPlayerIds.includes(player.id))) return { accepted: false, reason: 'You are not eligible to buzz', snapshot: this.snapshot(roomCode) };
     current.buzzWinnerId = player.id;
+    current.resolvedPlayerId = null;
     current.buzzOpen = false;
     current.attemptedPlayerIds.push(player.id);
     player.hasBuzzedThisQuestion = true;
@@ -707,8 +714,9 @@ export class BrowserGameEngine {
     const room = this.hostRoom(roomCode, hostToken);
     const current = room.state.currentQuestion;
     const player = room.state.players.find((item) => item.id === playerId);
-    if (!player || !player.connected || !current?.buzzOpen || current.buzzWinnerId || !player.buzzEligible) throw new Error('Local buzz is not valid');
+    if (room.state.phase !== 'question' || !player || !player.connected || !current?.buzzOpen || current.buzzWinnerId || !player.buzzEligible) throw new Error('Local buzz is not valid');
     current.buzzWinnerId = player.id;
+    current.resolvedPlayerId = null;
     current.buzzOpen = false;
     current.attemptedPlayerIds.push(player.id);
     player.hasBuzzedThisQuestion = true;
@@ -748,6 +756,8 @@ export class BrowserGameEngine {
     const current = room.state.currentQuestion;
     const player = room.state.players.find((item) => item.id === playerId);
     if (!current || !player) throw new Error('No active answer to resolve');
+    if (!current.answerRevealed) throw new Error('Reveal the answer before judging the response');
+    if (current.timedOut || current.resolvedPlayerId === playerId) throw new Error('This response is already resolved');
     if (current.responseMode === 'text') throw new Error('Use free-response grading for this question');
     if (current.dailyDouble && current.dailyDoublePlayerId !== playerId) throw new Error('Only the Daily Double player can answer');
     if (!current.dailyDouble && current.buzzWinnerId !== playerId) throw new Error('Only the buzz winner can be resolved');
@@ -762,6 +772,7 @@ export class BrowserGameEngine {
     this.addScore(player, correct ? points : -points, room.state.settings);
     if (correct) player.stats.correct += 1; else player.stats.incorrect += 1;
     this.applyStreak(player, correct, room.state.settings);
+    current.resolvedPlayerId = player.id;
     this.stopTimerInternal(room);
     if (correct || current.dailyDouble || !room.state.settings.stealsEnabled) {
       current.answerRevealed = true;
@@ -845,6 +856,11 @@ export class BrowserGameEngine {
     const room = this.hostRoom(roomCode, hostToken);
     const current = room.state.currentQuestion;
     if (!current) throw new Error('No question to finish');
+    if (!current.answerRevealed) throw new Error('Reveal and finish the question before returning to the board');
+    if (current.responseMode !== 'text' && !current.timedOut) {
+      const spokenPlayerId = current.dailyDoublePlayerId ?? current.buzzWinnerId;
+      if (spokenPlayerId && current.resolvedPlayerId !== spokenPlayerId) throw new Error('Judge the spoken response before returning to the board');
+    }
     if (current.responseMode === 'text' && current.answerRevealed) {
       const unresolved = Object.values(current.textResponses ?? {}).some((response) => response.resolvedCorrect === null);
       if (unresolved) throw new Error('Grade each submitted response before returning to the board');
@@ -922,6 +938,7 @@ export class BrowserGameEngine {
     this.addScore(player, -points, room.state.settings);
     player.stats.incorrect += 1;
     this.applyStreak(player, false, room.state.settings);
+    current.resolvedPlayerId = player.id;
     current.timedOut = true;
     current.answerRevealed = true;
     current.responsesClosed = true;

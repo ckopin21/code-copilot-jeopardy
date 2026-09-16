@@ -480,22 +480,67 @@ describe('BrowserGameEngine production state', () => {
     expect(engine.snapshot(host.roomCode).currentQuestion?.turnPlayerId).toBe(two.playerId);
   });
 
-  it('does not let a late joiner enter a reopened steal window', () => {
-    const { engine, host } = setup({ dailyDoublesEnabled: false, finalRoundEnabled: false, timerSeconds: null, stealsEnabled: true });
-    const one = addPlayer(engine, host.roomCode, 'One');
-    const two = addPlayer(engine, host.roomCode, 'Two');
+  it('normalizes the unsupported steal setting off so reveal-first judging cannot expose an answer to a reopened buzzer', () => {
+    const { engine, host } = setup({ stealsEnabled: true });
+    expect(engine.snapshot(host.roomCode).settings.stealsEnabled).toBe(false);
+    engine.updateSettings(host.roomCode, host.hostToken, { stealsEnabled: true });
+    expect(engine.snapshot(host.roomCode).settings.stealsEnabled).toBe(false);
+  });
+
+  it('rejects a duplicate spoken ruling so a double-click cannot score twice', () => {
+    const { engine, host } = setup({ dailyDoublesEnabled: false, finalRoundEnabled: false });
+    const player = addPlayer(engine, host.roomCode, 'Double Click');
     engine.startGame(host.roomCode, host.hostToken);
     const tile = firstUnused(engine, host.roomCode);
     engine.selectQuestion(host.roomCode, host.hostToken, tile.questionId);
-    const late = addPlayer(engine, host.roomCode, 'Late');
     engine.openBuzzers(host.roomCode, host.hostToken);
-    expect(engine.buzz(host.roomCode, one.playerId, one.reconnectToken).accepted).toBe(true);
-    engine.resolveAnswer(host.roomCode, host.hostToken, one.playerId, false);
-    const state = engine.snapshot(host.roomCode);
-    expect(state.currentQuestion?.buzzOpen).toBe(true);
-    expect(state.players.find((player) => player.id === two.playerId)?.buzzEligible).toBe(true);
-    expect(state.players.find((player) => player.id === late.playerId)?.buzzEligible).toBe(false);
-    expect(engine.buzz(host.roomCode, late.playerId, late.reconnectToken).accepted).toBe(false);
+    engine.localBuzz(host.roomCode, host.hostToken, player.playerId);
+    engine.revealAnswer(host.roomCode, host.hostToken);
+    engine.resolveAnswer(host.roomCode, host.hostToken, player.playerId, true);
+    const afterFirst = engine.snapshot(host.roomCode).players.find((candidate) => candidate.id === player.playerId)!.score;
+    expect(() => engine.resolveAnswer(host.roomCode, host.hostToken, player.playerId, true)).toThrow(/already resolved/i);
+    expect(engine.snapshot(host.roomCode).players.find((candidate) => candidate.id === player.playerId)!.score).toBe(afterFirst);
+  });
+
+  it('does not accept a buzz while the game is paused, then restores it after resume', () => {
+    const { engine, host } = setup({ dailyDoublesEnabled: false, finalRoundEnabled: false, timerSeconds: null });
+    const player = addPlayer(engine, host.roomCode, 'Paused');
+    engine.startGame(host.roomCode, host.hostToken);
+    const tile = firstUnused(engine, host.roomCode);
+    engine.selectQuestion(host.roomCode, host.hostToken, tile.questionId);
+    engine.openBuzzers(host.roomCode, host.hostToken);
+    engine.pause(host.roomCode, host.hostToken);
+    expect(engine.buzz(host.roomCode, player.playerId, player.reconnectToken).accepted).toBe(false);
+    expect(() => engine.localBuzz(host.roomCode, host.hostToken, player.playerId)).toThrow(/not valid/i);
+    engine.resume(host.roomCode, host.hostToken);
+    expect(engine.buzz(host.roomCode, player.playerId, player.reconnectToken).accepted).toBe(true);
+  });
+
+  it('keeps zero-player practice playable when a source clue is configured as typed response', () => {
+    const { engine, host } = setup({ dailyDoublesEnabled: false, finalRoundEnabled: false, timerSeconds: null });
+    engine.startGame(host.roomCode, host.hostToken);
+    const tile = firstUnused(engine, host.roomCode);
+    const rooms = (engine as unknown as { rooms: Map<string, { questions: Record<string, { responseMode?: 'buzz' | 'text' }> }> }).rooms;
+    rooms.get(host.roomCode)!.questions[tile.questionId].responseMode = 'text';
+    engine.selectQuestion(host.roomCode, host.hostToken, tile.questionId);
+    expect(engine.snapshot(host.roomCode).currentQuestion?.responseMode).toBe('buzz');
+    engine.revealAnswer(host.roomCode, host.hostToken);
+    expect(() => engine.advanceToBoard(host.roomCode, host.hostToken)).not.toThrow();
+  });
+
+  it('will not leave an unfinished or unjudged spoken clue', () => {
+    const { engine, host } = setup({ dailyDoublesEnabled: false, finalRoundEnabled: false });
+    const player = addPlayer(engine, host.roomCode, 'Judge Me');
+    engine.startGame(host.roomCode, host.hostToken);
+    const rooms = (engine as unknown as { rooms: Map<string, { questions: Record<string, { responseMode?: 'buzz' | 'text' }> }> }).rooms;
+    const record = rooms.get(host.roomCode)!;
+    const tile = engine.snapshot(host.roomCode).board!.questions.find((candidate) => !candidate.used && (record.questions[candidate.questionId].responseMode ?? 'buzz') === 'buzz')!;
+    engine.selectQuestion(host.roomCode, host.hostToken, tile.questionId);
+    expect(() => engine.advanceToBoard(host.roomCode, host.hostToken)).toThrow(/reveal and finish/i);
+    engine.openBuzzers(host.roomCode, host.hostToken);
+    engine.localBuzz(host.roomCode, host.hostToken, player.playerId);
+    engine.revealAnswer(host.roomCode, host.hostToken);
+    expect(() => engine.advanceToBoard(host.roomCode, host.hostToken)).toThrow(/judge the spoken response/i);
   });
 
   it('keeps exact late-game multiplier windows', () => {

@@ -4,6 +4,7 @@ import type { PlayerJoinCredentials, RoomSnapshot } from '../shared/types';
 import { emitAck, resumeClientSession, socket, suspendClientSession } from '../lib/socket';
 import { audio } from '../lib/audio';
 import { menuUrl } from '../lib/resetInstance';
+import { turnIndicatorVisible } from '../lib/gameUiRules';
 import { Timer } from './Timer';
 import { QrScanner } from './QrScanner';
 
@@ -343,9 +344,10 @@ export function PlayerApp() {
     : current.effectiveValue : 0;
   const dailyDoublePlayer = current?.dailyDoublePlayerId ? room.players.find((player) => player.id === current.dailyDoublePlayerId) : null;
   const accuracy = Math.round(me.stats.correct / Math.max(1, me.stats.correct + me.stats.incorrect) * 100);
+  const showTurnIndicator = turnIndicatorVisible(room.phase);
 
   return <main className={`player-phone-v2 ${me.onFire?'phone-fire':''} ${me.isCold?'phone-cold':''}`} style={{'--accent':me.accent} as React.CSSProperties}>
-    <header className="phone-header-v2"><button className="phone-menu" onClick={leaveToMenu} aria-label="Leave game">←</button><span className="phone-avatar">{me.avatar}</span><div className="phone-identity"><strong>{me.name}</strong><small className={room.turnPlayerId === me.id && room.phase !== 'lobby' && room.phase !== 'recap' ? 'phone-turn-line' : ''}>{!recovering && socket.connected ? `${room.turnPlayerId === me.id && room.phase !== 'lobby' && room.phase !== 'recap' ? 'YOUR TURN · ' : ''}ROOM ${room.code}` : 'RECONNECTING…'}</small></div><div className="phone-score-stack"><b>{me.score.toLocaleString()}</b>{me.onFire && <small className="phone-header-streak fire">🔥 ON FIRE</small>}{me.isCold && <small className="phone-header-streak cold">❄ COLD</small>}{showFinalWager && me.finalWagerSubmitted && me.finalWager !== null && <small className="phone-wager-pill">WAGER {me.finalWager.toLocaleString()}</small>}</div></header>
+    <header className="phone-header-v2"><button className="phone-menu" onClick={leaveToMenu} aria-label="Leave game">←</button><span className="phone-avatar">{me.avatar}</span><div className="phone-identity"><strong>{me.name}</strong><small className={showTurnIndicator && room.turnPlayerId === me.id ? 'phone-turn-line' : ''}>{!recovering && socket.connected ? `${showTurnIndicator && room.turnPlayerId === me.id ? 'YOUR TURN · ' : ''}ROOM ${room.code}` : 'RECONNECTING…'}</small></div><div className="phone-score-stack"><b>{me.score.toLocaleString()}</b>{me.onFire && <small className="phone-header-streak fire">🔥 ON FIRE</small>}{me.isCold && <small className="phone-header-streak cold">❄ COLD</small>}{showFinalWager && me.finalWagerSubmitted && me.finalWager !== null && <small className="phone-wager-pill">WAGER {me.finalWager.toLocaleString()}</small>}</div></header>
 
     {modifierReveal && <div className={`modifier-reveal-overlay x${modifierReveal}`} aria-live="polite"><div className="modifier-reveal-card"><span>{modifierReveal === 2 ? 'FINAL SIX' : 'FINAL THREE'}</span><strong>{modifierReveal === 2 ? 'DOUBLE POINTS' : 'TRIPLE POINTS'}</strong><p>{modifierReveal === 2 ? 'Every question is now worth 2×.' : 'Every remaining question is now worth 3×.'}</p></div></div>}
 
