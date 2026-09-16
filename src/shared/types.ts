@@ -42,6 +42,14 @@ export interface QuestionPack {
   description: string;
   difficulty: Difficulty;
   approximateMinutes: number;
+  /** Optional visual accent used by pack cards and future themed presentation surfaces. */
+  accentColor?: string;
+  /** Optional image URL/data URL for pack art. Pack logic never depends on this field. */
+  titleArt?: string;
+  /** Optional preferred category order. Unlisted categories follow afterward. */
+  categoryOrder?: string[];
+  /** Optional explicit Final question. It must reference a question inside this pack. */
+  finalQuestionId?: string;
   questions: Question[];
 }
 
@@ -83,6 +91,8 @@ export interface PlayerStats {
 
 export interface Player {
   id: string;
+  /** Stable Player 1–5 seat. Disconnecting never changes it; removal frees it. */
+  seat: number;
   name: string;
   avatar: string;
   accent: string;
@@ -207,4 +217,6 @@ export interface PackSummary {
   questionCount: number;
   difficulty: Difficulty;
   approximateMinutes: number;
+  accentColor?: string;
+  titleArt?: string;
 }
