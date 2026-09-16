@@ -20,14 +20,12 @@ export function ScoreFlight({ flight, onImpact, onComplete }: { flight: ScoreFli
     let finishTimer = 0;
     let impactTimer = 0;
     let token: HTMLDivElement | null = null;
-    let burst: HTMLDivElement | null = null;
     let animation: Animation | null = null;
 
     frame = window.requestAnimationFrame(() => {
       const source = findByData('questionId', flight.questionId);
       const scoreTarget = findByData('playerScore', flight.playerId);
-      const cardTarget = findByData('playerId', flight.playerId);
-      if (!source || !scoreTarget || !cardTarget) {
+      if (!source || !scoreTarget) {
         onImpact(flight);
         onComplete(flight.id);
         return;
@@ -59,18 +57,11 @@ export function ScoreFlight({ flight, onImpact, onComplete }: { flight: ScoreFli
       const impact = () => {
         if (cancelled) return;
         onImpact(flight);
-        cardTarget.classList.remove('score-impact-correct', 'score-impact-wrong');
-        void cardTarget.offsetWidth;
-        cardTarget.classList.add(flight.correct ? 'score-impact-correct' : 'score-impact-wrong');
-        burst = document.createElement('div');
-        burst.className = `score-impact-burst ${flight.correct ? 'correct' : 'wrong'}`;
-        burst.style.left = `${endX}px`;
-        burst.style.top = `${endY}px`;
-        document.body.appendChild(burst);
+        scoreTarget.classList.remove('score-impact-pulse-correct', 'score-impact-pulse-wrong');
+        void scoreTarget.offsetWidth;
+        scoreTarget.classList.add(flight.correct ? 'score-impact-pulse-correct' : 'score-impact-pulse-wrong');
         impactTimer = window.setTimeout(() => {
-          cardTarget.classList.remove('score-impact-correct', 'score-impact-wrong');
-          burst?.remove();
-          burst = null;
+          scoreTarget.classList.remove('score-impact-pulse-correct', 'score-impact-pulse-wrong');
         }, 520);
         token?.remove();
         token = null;
@@ -103,7 +94,6 @@ export function ScoreFlight({ flight, onImpact, onComplete }: { flight: ScoreFli
       window.clearTimeout(impactTimer);
       animation?.cancel();
       token?.remove();
-      burst?.remove();
     };
   }, [flight, onComplete, onImpact]);
 
