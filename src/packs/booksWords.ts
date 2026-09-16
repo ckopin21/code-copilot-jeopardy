@@ -15,15 +15,15 @@ const categories: CategoryData[] = [
     ['Which novel follows Elizabeth Bennet and Mr. Darcy?', 'Pride and Prejudice'],
     ['Which George Orwell novel features the slogan “Big Brother is watching you”?', ['1984', 'Nineteen Eighty-Four']],
     ['Which novel by F. Scott Fitzgerald features Jay Gatsby?', 'The Great Gatsby'],
-    ['Which novel centers on Victor Frankenstein and the creature he brings to life?', 'Frankenstein']
+    ['Which John Steinbeck novel follows the Joad family during the Great Depression?', ['The Grapes of Wrath', 'Grapes of Wrath']]
   ]},
   { name: 'Authors', questions: [
     ['Who wrote The Cat in the Hat?', ['Dr. Seuss', 'Doctor Seuss']],
     ['Who wrote The Hobbit?', ['J. R. R. Tolkien', 'JRR Tolkien', 'Tolkien']],
     ['Who wrote The Adventures of Tom Sawyer?', ['Mark Twain', 'Samuel Clemens']],
     ['Who wrote Jane Eyre?', 'Charlotte Brontë'],
-    ['Who wrote One Hundred Years of Solitude?', ['Gabriel García Márquez', 'Gabriel Garcia Marquez']],
-    ['Who wrote The Old Man and the Sea?', 'Ernest Hemingway']
+    ['Who wrote The Old Man and the Sea?', 'Ernest Hemingway'],
+    ['Who wrote One Hundred Years of Solitude?', ['Gabriel García Márquez', 'Gabriel Garcia Marquez']]
   ]},
   { name: 'Shakespeare', questions: [
     ['Which Shakespeare play features the characters Romeo and Juliet?', 'Romeo and Juliet'],
@@ -31,7 +31,7 @@ const categories: CategoryData[] = [
     ['In Macbeth, what title does Macbeth hold at the start of the play?', ['Thane of Glamis', 'Glamis']],
     ['Which Shakespeare comedy includes the fairy king Oberon?', ['A Midsummer Night’s Dream', 'Midsummer Night’s Dream']],
     ['Which Shakespeare play features the villain Iago?', 'Othello'],
-    ['Which Shakespeare play opens with three witches planning to meet Macbeth?', 'Macbeth']
+    ['Which Shakespeare comedy features the twins Viola and Sebastian?', 'Twelfth Night']
   ]},
   { name: 'Vocabulary', questions: [
     ['What word means the opposite of “maximum”?', 'Minimum'],
@@ -47,7 +47,7 @@ const categories: CategoryData[] = [
     ['If someone “hits the nail on the head,” what have they done?', ['Said exactly the right thing', 'Identified the exact point']],
     ['What does “once in a blue moon” mean?', ['Very rarely', 'Rarely']],
     ['If you “spill the beans,” what have you done?', ['Revealed a secret', 'Told a secret']],
-    ['What does “bite the bullet” mean?', ['Face a difficult situation', 'Accept something difficult']]
+    ['If someone “throws down the gauntlet,” what have they done?', ['Issued a challenge', 'Challenged someone', 'Made a challenge']]
   ]},
   { name: 'Myths & Legends', questions: [
     ['In Greek mythology, who is the king of the gods?', 'Zeus'],
@@ -55,7 +55,7 @@ const categories: CategoryData[] = [
     ['In Greek mythology, which hero has a famous vulnerable heel?', 'Achilles'],
     ['What creature in Greek mythology has the body of a lion and the head and wings of an eagle?', 'Griffin'],
     ['Which Norse god is known for wielding the hammer Mjölnir?', 'Thor'],
-    ['In Greek mythology, who flew too close to the Sun with wings made using wax?', 'Icarus']
+    ['In Greek mythology, who solved the riddle of the Sphinx?', 'Oedipus']
   ]},
   { name: 'Literary Terms', questions: [
     ['What is the main character of a story commonly called?', 'Protagonist'],
