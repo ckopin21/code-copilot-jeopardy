@@ -48,8 +48,10 @@ export function sanitizeRoomSnapshot(snapshot: RoomSnapshot, role: SnapshotRole,
   if (copy.phase === 'daily-double-wager' && copy.currentQuestion) copy.currentQuestion.text = '';
 
   if (copy.finalRound) {
-    const finalVisible = copy.phase === 'final-review' || revealAllFinal;
-    if (!finalVisible) {
+    const finalQuestionVisible = copy.phase === 'final-question' || copy.phase === 'final-review' || revealAllFinal;
+    if (!finalQuestionVisible) copy.finalRound.question = '';
+    const finalAnswerVisible = copy.phase === 'final-review' || revealAllFinal;
+    if (!finalAnswerVisible) {
       copy.finalRound.acceptedAnswers = [];
       copy.finalRound.explanation = undefined;
     }
