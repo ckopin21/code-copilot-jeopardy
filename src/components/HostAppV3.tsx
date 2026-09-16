@@ -6,11 +6,12 @@ import { emitAck, socket } from '../lib/socket';
 import { audio } from '../lib/audio';
 import { menuUrl, resetInstance } from '../lib/resetInstance';
 import { PlayerStrip } from './PlayerStrip';
-import { Board } from './Board';
+import { Board, type BoardResultMap } from './Board';
 import { Timer } from './Timer';
 import { AudioMixer } from './AudioMixer';
 import { BoardPresentation } from './BoardPresentation';
 import { EndgameRecap } from './EndgameRecap';
+import { ScoreFlight, type ScoreFlightState } from './ScoreFlight';
 
 const HOST_KEY = 'blue-stage-host-room';
 type HostStored = HostRoomCredentials;
@@ -49,6 +50,8 @@ export function HostAppV3() {
   const [historyEntries, setHistoryEntries] = useState<QuestionHistoryEntry[]>([]);
   const [buzzerCountdown, setBuzzerCountdown] = useState<number | null>(null);
   const [modifierReveal, setModifierReveal] = useState<2 | 3 | null>(null);
+  const [scoreFlights, setScoreFlights] = useState<ScoreFlightState[]>([]);
+  const [scoreOverrides, setScoreOverrides] = useState<Record<string, number>>({});
   const autoBuzzQuestionRef = useRef('');
   const lastMultiplierRef = useRef<1 | 2 | 3 | null>(null);
   const modifierTimerRef = useRef<number | null>(null);
@@ -302,6 +305,18 @@ export function HostAppV3() {
     return () => cancelAnimationFrame(frame);
   }, [room, perform]);
 
+  const handleScoreImpact = useCallback((flight: ScoreFlightState) => {
+    setScoreOverrides((previous) => {
+      const next = { ...previous };
+      delete next[flight.playerId];
+      return next;
+    });
+  }, []);
+
+  const handleScoreComplete = useCallback((flightId: string) => {
+    setScoreFlights((previous) => previous.filter((flight) => flight.id !== flightId));
+  }, []);
+
   const goMenu = () => { audio.stop(); location.href = menuUrl(); };
   const resetGame = async () => {
     if (!credentials || !confirm('Reset this game? Players stay in the room, but the board, scores, and history will reset.')) return;
@@ -309,6 +324,8 @@ export function HostAppV3() {
     setHistoryEntries([]);
     setReviewId(null);
     setPresentationMode(false);
+    setScoreFlights([]);
+    setScoreOverrides({});
     autoBuzzQuestionRef.current = '';
     lastMultiplierRef.current = 1;
     await perform('host:reset-game');
@@ -340,11 +357,43 @@ export function HostAppV3() {
   const unresolvedTextCount = Object.values(textResponses).filter((response) => response.resolvedCorrect === null).length;
   const questionMultiplier = current ? Math.max(1, Math.round(current.effectiveValue / Math.max(1, current.baseValue))) : 1;
   const pendingFinalWagers = connectedPlayers.filter((player) => !player.finalWagerSubmitted).length;
+  const pointsAtStake = current ? current.dailyDouble
+    ? (current.wager ?? 0) * (settings.dailyDoubleStacksWithMultiplier ? questionMultiplier : 1)
+    : current.effectiveValue : 0;
+  const boardResults: BoardResultMap = Object.fromEntries(historyEntries.map((entry) => [entry.questionId, entry.attempts]));
+
+  const prepareScoreFlight = (playerId: string, correct: boolean): ScoreFlightState | null => {
+    if (!current) return null;
+    const player = room.players.find((item) => item.id === playerId);
+    if (!player) return null;
+    const signedDelta = correct ? pointsAtStake : settings.allowNegativeScores ? -pointsAtStake : -Math.min(Math.max(0, player.score), pointsAtStake);
+    setScoreOverrides((previous) => ({ ...previous, [player.id]: player.score }));
+    return {
+      id: crypto.randomUUID(),
+      questionId: current.questionId,
+      playerId: player.id,
+      delta: signedDelta,
+      correct
+    };
+  };
+
+  const cancelPreparedScore = (playerId: string) => {
+    setScoreOverrides((previous) => {
+      const next = { ...previous };
+      delete next[playerId];
+      return next;
+    });
+  };
 
   const resolveSpoken = async (correct: boolean) => {
     if (!spokenPlayer || !current?.answerRevealed) return;
+    const flight = prepareScoreFlight(spokenPlayer.id, correct);
     const ok = await perform('host:resolve-answer', { playerId: spokenPlayer.id, correct });
-    if (!ok) return;
+    if (!ok) {
+      cancelPreparedScore(spokenPlayer.id);
+      return;
+    }
+    if (flight) setScoreFlights((previous) => [...previous, flight]);
     recordAttempt(spokenPlayer.id, correct);
     setControllerId(spokenPlayer.id);
     audio.cue(correct ? 'correct' : 'wrong');
@@ -353,8 +402,13 @@ export function HostAppV3() {
 
   const resolveText = async (playerId: string, correct: boolean) => {
     const shouldAdvance = unresolvedTextCount <= 1;
+    const flight = prepareScoreFlight(playerId, correct);
     const ok = await perform('host:resolve-text', { playerId, correct });
-    if (!ok) return;
+    if (!ok) {
+      cancelPreparedScore(playerId);
+      return;
+    }
+    if (flight) setScoreFlights((previous) => [...previous, flight]);
     recordAttempt(playerId, correct);
     audio.cue(correct ? 'correct' : 'wrong');
     if (shouldAdvance) await perform('host:advance-board');
@@ -366,6 +420,10 @@ export function HostAppV3() {
     if (!ok) return;
     audio.cue('reveal');
     if (noSpokenResponse) await perform('host:advance-board');
+  };
+
+  const selectBoardQuestion = (questionId: string) => {
+    void perform('host:select-question', { questionId, dailyDoublePlayerId: controllerId || undefined });
   };
 
   return (
@@ -382,7 +440,7 @@ export function HostAppV3() {
       </header>
 
       {error && <div className="error-banner" role="alert">{error}<button onClick={() => setError('')}>×</button></div>}
-      <PlayerStrip players={room.players} activeId={current?.buzzWinnerId ?? current?.dailyDoublePlayerId} />
+      <PlayerStrip players={room.players} activeId={current?.buzzWinnerId ?? current?.dailyDoublePlayerId} scoreOverrides={scoreOverrides} />
 
       {modifierReveal && <div className={`modifier-reveal-overlay x${modifierReveal}`} aria-live="polite"><div className="modifier-reveal-card"><span>{modifierReveal === 2 ? 'FINAL SIX' : 'FINAL THREE'}</span><strong>{modifierReveal === 2 ? 'DOUBLE POINTS' : 'TRIPLE POINTS'}</strong><p>{modifierReveal === 2 ? 'Every clue is now worth 2×.' : 'Every remaining clue is now worth 3×.'}</p></div></div>}
 
@@ -436,7 +494,7 @@ export function HostAppV3() {
           </div>
         </div>
         {room.multiplier > 1 && <div className={`modifier-banner x${room.multiplier}`}><span>{room.multiplier === 2 ? 'FINAL SIX' : 'FINAL THREE'}</span><strong>{room.multiplier === 2 ? 'DOUBLE POINTS' : 'TRIPLE POINTS'}</strong></div>}
-        <Board board={room.board} multiplier={room.multiplier} onSelect={(questionId) => void perform('host:select-question', { questionId, dailyDoublePlayerId: controllerId || undefined })} onReview={(questionId) => setReviewId(questionId)} />
+        <Board board={room.board} multiplier={room.multiplier} onSelect={selectBoardQuestion} onReview={(questionId) => setReviewId(questionId)} results={boardResults} />
         <ScoreControls room={room} onAdjust={(playerId, delta) => void perform('host:adjust-score', { playerId, delta })} />
       </section>}
 
@@ -448,10 +506,11 @@ export function HostAppV3() {
         <article className="question-card-v2 showcase-question-card">
           <div className="question-meta-v2">
             <span>{current.category}</span>
-            {current.dailyDouble ? <strong>{questionMultiplier > 1 && settings.dailyDoubleStacksWithMultiplier ? `WAGER ${current.wager} × ${questionMultiplier}` : `WAGER ${current.wager}`}</strong> : questionMultiplier > 1 ? <strong className={`inline-modifier x${questionMultiplier}`}>{current.baseValue} × {questionMultiplier} = {current.effectiveValue} POINTS</strong> : <strong>{current.effectiveValue} POINTS</strong>}
+            {current.dailyDouble ? <strong>{questionMultiplier > 1 && settings.dailyDoubleStacksWithMultiplier ? `WAGER ${(current.wager ?? 0).toLocaleString()} × ${questionMultiplier}` : `WAGER ${(current.wager ?? 0).toLocaleString()}`}</strong> : questionMultiplier > 1 ? <strong className={`inline-modifier x${questionMultiplier}`}>{current.baseValue} × {questionMultiplier} = {current.effectiveValue} POINTS</strong> : <strong>{current.effectiveValue} POINTS</strong>}
             {current.responseMode === 'text' && <em>FREE RESPONSE</em>}
           </div>
           {questionMultiplier > 1 && <div className={`question-modifier-strip x${questionMultiplier}`}>{questionMultiplier === 2 ? 'DOUBLE POINT QUESTION' : 'TRIPLE POINT QUESTION'}</div>}
+          {current.dailyDouble && current.wager !== null && <div className="stake-banner-v2 daily-double-stake"><small>{dailyPlayer?.avatar} {dailyPlayer?.name} LOCKED IN</small><strong>{current.wager.toLocaleString()} WAGER</strong><span>{settings.dailyDoubleStacksWithMultiplier && questionMultiplier > 1 ? `${current.wager.toLocaleString()} × ${questionMultiplier} = ` : ''}{pointsAtStake.toLocaleString()} POINTS IN PLAY</span></div>}
           <h1>{current.text}</h1>
           <Timer timer={room.timer} serverNow={room.serverNow} />
 
@@ -498,7 +557,8 @@ export function HostAppV3() {
         return <><div className="section-kicker">{entry.category} · {entry.value} POINTS</div><h2>{entry.text}</h2><div className="review-answer-v2"><small>ANSWER</small><strong>{entry.answer || 'Not revealed'}</strong></div><div className="attempt-list">{entry.attempts.length ? entry.attempts.map((attempt) => <div className={`attempt-row ${attempt.correct ? 'correct' : 'wrong'}`} key={attempt.playerId}><span>{attempt.playerAvatar}</span><strong>{attempt.playerName}</strong><b>{attempt.correct ? 'CORRECT' : 'INCORRECT'}</b></div>) : <p className="muted">No player response recorded.</p>}</div></>;
       })()}</section></div>}
 
-      {presentationMode && room.phase === 'board' && <BoardPresentation room={room} onBack={() => setPresentationMode(false)} />}
+      {presentationMode && room.phase === 'board' && <BoardPresentation room={room} onBack={() => setPresentationMode(false)} onSelect={selectBoardQuestion} onReview={(questionId) => setReviewId(questionId)} results={boardResults} />}
+      {room.phase === 'board' && scoreFlights[0] && <ScoreFlight flight={scoreFlights[0]} onImpact={handleScoreImpact} onComplete={handleScoreComplete} />}
     </main>
   );
 }
