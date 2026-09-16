@@ -1,0 +1,40 @@
+name: Apply full game audit fixes
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/apply-full-game-audit.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Apply audit fixes
+        run: python scripts/apply-full-game-audit-fixes.py
+      - run: npm ci --no-audit --no-fund
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+      - run: git diff --check
+      - name: Commit validated audit fixes
+        shell: bash
+        run: |
+          rm .github/workflows/apply-full-game-audit.yml
+          rm scripts/apply-full-game-audit-fixes.py
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "fix: harden full game flow after audit"
+          git push origin HEAD:main
