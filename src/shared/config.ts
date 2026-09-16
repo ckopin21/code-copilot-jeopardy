@@ -8,7 +8,7 @@ export const DEFAULT_SETTINGS: GameSettings = {
   randomizeCategories: true,
   dailyDoublesEnabled: true,
   dailyDoubleCount: 3,
-  stealsEnabled: true,
+  stealsEnabled: false,
   allowNegativeScores: true,
   timerSeconds: 15,
   autoCloseBuzzersAtZero: true,
