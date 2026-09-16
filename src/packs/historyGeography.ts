@@ -39,7 +39,7 @@ const categories: CategoryData[] = [
     ['Which country shares the longest southern land border with the contiguous United States?', 'Mexico'],
     ['Spain and Portugal occupy most of which peninsula?', 'Iberian Peninsula'],
     ['Which country completely surrounds the nation of Lesotho?', 'South Africa'],
-    ['What is the smallest independent country in the world by area?', ['Vatican City', 'Vatican']]
+    ['Which two countries share the world’s longest international land border?', ['Canada and the United States', 'United States and Canada', 'Canada and US', 'US and Canada']]
   ]},
   { name: 'Famous Places', questions: [
     ['In which city would you find the Eiffel Tower?', 'Paris'],
