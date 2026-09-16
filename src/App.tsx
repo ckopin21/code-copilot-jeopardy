@@ -9,6 +9,7 @@ import './styles.css';
 import './showcase.css';
 import './stage-polish.css';
 import './interaction-polish.css';
+import './bugfix-polish.css';
 
 const HOST_KEY = 'blue-stage-host-room';
 const AUDIO_75_MIGRATION_KEY = 'blue-stage-audio-default-75-v1';
