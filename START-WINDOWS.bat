@@ -22,9 +22,14 @@ if errorlevel 1 goto :fail
 echo Starting game...
 start "Blue Stage Trivia" cmd /k "npm start"
 timeout /t 3 /nobreak >nul
-start "" "http://localhost:3000"
 
-echo Game launched at http://localhost:3000
+set "HOST_ADDR=localhost"
+for /f "usebackq delims=" %%I in (`powershell -NoProfile -Command "$c=Get-NetIPConfiguration ^| Where-Object {$_.IPv4DefaultGateway -ne $null -and $_.NetAdapter.Status -eq 'Up'} ^| Select-Object -First 1; if($c -and $c.IPv4Address){$c.IPv4Address.IPAddress}else{'localhost'}"`) do set "HOST_ADDR=%%I"
+set "GAME_URL=http://%HOST_ADDR%:3000"
+start "" "%GAME_URL%"
+
+echo Game launched at %GAME_URL%
+echo Opening the LAN address lets phone QR links point back to this computer.
 exit /b 0
 
 :fail
