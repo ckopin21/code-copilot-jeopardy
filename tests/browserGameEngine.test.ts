@@ -262,12 +262,17 @@ describe('BrowserGameEngine production state', () => {
     expect(engine.snapshot(host.roomCode).players[0].connected).toBe(false);
   });
 
-  it('honors room locking while reserved players can still reconnect', () => {
+  it('keeps rooms open even when a legacy lock setting is requested', () => {
     const { engine, host } = setup({ lockRoomOnStart: true });
     const player = addPlayer(engine, host.roomCode, 'One');
     engine.startGame(host.roomCode, host.hostToken);
 
-    expect(() => addPlayer(engine, host.roomCode, 'Two')).toThrow(/locked/i);
+    const joined = addPlayer(engine, host.roomCode, 'Two');
+    const open = engine.snapshot(host.roomCode);
+    expect(open.locked).toBe(false);
+    expect(open.settings.lockRoomOnStart).toBe(false);
+    expect(open.players.some((candidate) => candidate.id === joined.playerId)).toBe(true);
+
     engine.setPlayerConnected(host.roomCode, player.playerId, false);
     expect(() => engine.reconnectPlayer(host.roomCode, player.playerId, player.reconnectToken)).not.toThrow();
   });

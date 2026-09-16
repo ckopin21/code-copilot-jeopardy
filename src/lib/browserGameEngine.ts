@@ -65,6 +65,9 @@ export class BrowserGameEngine {
     const now = Date.now();
     for (const record of loadRooms()) {
       if (record.state.expiresAt <= now) continue;
+      // Session locking was removed from the product. Normalize older persisted rooms so they remain joinable.
+      record.state.locked = false;
+      record.state.settings.lockRoomOnStart = false;
       const claimedSeats = new Set<number>();
       for (const player of record.state.players) {
         const currentSeat = Number(player.seat);
@@ -161,7 +164,7 @@ export class BrowserGameEngine {
       hostConnected: true,
       locked: false,
       players: [],
-      settings: { ...DEFAULT_SETTINGS, ...settings, selectedPackIds },
+      settings: { ...DEFAULT_SETTINGS, ...settings, selectedPackIds, lockRoomOnStart: false },
       board: null,
       currentQuestion: null,
       timer: emptyTimer(),
@@ -330,7 +333,7 @@ export class BrowserGameEngine {
     if (room.state.phase !== 'lobby') throw new Error('Settings can only be changed in the lobby');
     const selectedPackIds = updates.selectedPackIds ?? room.state.settings.selectedPackIds;
     if (!selectedPackIds.length || selectedPackIds.some((packId) => !packMap.get(packId))) throw new Error('Select at least one valid pack');
-    room.state.settings = { ...room.state.settings, ...updates, selectedPackIds };
+    room.state.settings = { ...room.state.settings, ...updates, selectedPackIds, lockRoomOnStart: false };
     room.state.selectedPackIds = selectedPackIds;
     this.persist();
     return this.snapshot(roomCode);
@@ -440,7 +443,7 @@ export class BrowserGameEngine {
     room.state.remainingQuestions = generated.board!.questions.length;
     room.state.multiplier = this.multiplierForRemaining(room.state.remainingQuestions, room.state.settings.lateGameModifiers);
     room.state.phase = 'board';
-    room.state.locked = room.state.settings.lockRoomOnStart;
+    room.state.locked = false;
     room.state.gameStartedAt = Date.now();
     room.state.gameEndedAt = null;
     room.state.finalRound = null;
