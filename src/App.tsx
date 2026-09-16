@@ -40,6 +40,11 @@ export default function App() {
   useEffect(() => {
     const onPopState = () => setRouteHref(location.href);
     const onPointerDown = (event: PointerEvent) => {
+      if (event.target instanceof Element && event.target.classList.contains('modal-backdrop') && event.target.querySelector('.expanded-qr-modal')) {
+        event.target.querySelector<HTMLButtonElement>('.modal-close')?.click();
+        return;
+      }
+
       const target = event.target instanceof Element ? event.target.closest('button,a') : null;
       if (!target || target.matches('button:disabled,[aria-disabled="true"]')) return;
       void audio.unlock().then(() => audio.cue('click')).catch(() => {});
