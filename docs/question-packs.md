@@ -41,11 +41,25 @@ export const geographyPack = buildPack({
   theme: 'Places, maps, capitals, and landmarks',
   description: 'A general geography pack.',
   difficulty: 'mixed',
-  approximateMinutes: 35
+  approximateMinutes: 35,
+  accentColor: '#5eead4',
+  categoryOrder: ['World Capitals'],
+  finalQuestionId: 'geography-final-world-capitals'
 }, categories);
 ```
 
 The older tuple-array format used by the original built-in packs remains supported for compatibility, but the explicit value-map format above is preferred for new work.
+
+## Optional pack presentation/control metadata
+
+A pack may define:
+
+- `accentColor`: CSS-compatible color for pack/presentation theming
+- `titleArt`: optional image URL/data URL for future/pack-specific title art
+- `categoryOrder`: preferred category sequence when category randomization is disabled
+- `finalQuestionId`: preferred Final question from the same pack
+
+All fields are optional. `finalQuestionId` is validated against questions in that pack and is only used if the question was not already consumed by the board.
 
 ## `question()` options
 
@@ -68,7 +82,7 @@ The older tuple-array format used by the original built-in packs remains support
 - a category does not contain all six supported point values
 - question text or an accepted answer is blank
 
-The catalog additionally rejects duplicate pack IDs, duplicate question IDs, and questions whose `packId` does not match their pack.
+The catalog additionally rejects duplicate pack IDs, duplicate question IDs, questions whose `packId` does not match their pack, and invalid `finalQuestionId` references.
 
 These checks run during normal typecheck/test/build flows because the generated registry is imported by the application.
 
@@ -80,11 +94,13 @@ Supported board values are:
 100, 200, 300, 400, 500, 1000
 ```
 
-Difficulty is inferred from the position/value tier inside a built-in category:
+Pack builders infer difficulty by tier, and board generation prefers the expected difficulty when multiple same-value candidates are available:
 
 - 100/200: easy
-- 300/400: medium
-- 500/1000: hard
+- 300: medium
+- 400/500/1000: hard
+
+The board generator still falls back to any valid same-value candidate rather than failing if a preferred-difficulty variant is unavailable.
 
 ## Adding questions to an existing pack
 
