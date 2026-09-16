@@ -6,6 +6,7 @@ import { audio } from './lib/audio';
 import { menuUrl, resetInstance } from './lib/resetInstance';
 import './styles.css';
 import './showcase.css';
+import './stage-polish.css';
 
 const HOST_KEY = 'blue-stage-host-room';
 
