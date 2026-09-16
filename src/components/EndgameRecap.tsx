@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { Player } from '../shared/types';
 
 export function EndgameRecap({ players, onReset, onMenu }: { players: Player[]; onReset: () => void; onMenu: () => void }) {
   const resultKey = players.map((player) => `${player.id}:${player.score}`).join('|');
-  const standings = useMemo(() => [...players].sort((a, b) => b.score - a.score), [resultKey]);
+  const playerCount = players.length;
+  const standings = [...players].sort((a, b) => b.score - a.score);
   const [revealed, setRevealed] = useState(0);
   const [showStats, setShowStats] = useState(false);
 
@@ -11,12 +12,12 @@ export function EndgameRecap({ players, onReset, onMenu }: { players: Player[]; 
     setRevealed(0);
     setShowStats(false);
     const timers: number[] = [];
-    standings.forEach((_, index) => {
+    for (let index = 0; index < playerCount; index += 1) {
       timers.push(window.setTimeout(() => setRevealed(index + 1), 420 + index * 620));
-    });
-    timers.push(window.setTimeout(() => setShowStats(true), 420 + standings.length * 620 + 1700));
+    }
+    timers.push(window.setTimeout(() => setShowStats(true), 420 + playerCount * 620 + 1700));
     return () => timers.forEach((timer) => window.clearTimeout(timer));
-  }, [resultKey, standings.length]);
+  }, [resultKey, playerCount]);
 
   if (showStats) return <section className="recap-scene-v2 stats-after-podium">
     <div className="section-kicker gold">GAME STATS</div>
