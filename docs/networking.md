@@ -84,6 +84,8 @@ The phone displays a paused-seat screen with a deliberate **Reconnect to Seat** 
 
 **Remove** is destructive. It deletes the player object and reconnect token from the host engine, frees the P1-P5 seat, and closes the current data channel if one exists. A connected phone is told that its seat was removed and clears its saved seat. A phone that was already offline will fail authorization when it later tries the stale token and must join as a new player.
 
+Removal is reconciled against live gameplay so the room cannot retain references to a deleted player. If the removed player currently owns the buzzer, the winner is cleared and eligible remaining players are reopened; a removed free-response submission is discarded and completion is recalculated; Final participation/completion is recalculated against the remaining participants. The active Daily Double owner cannot be permanently removed until that Daily Double is finished or exited, preventing a stranded wager/question state.
+
 ## Reserved seats
 
 When a current player connection closes, the host marks that player `connected=false` but does not delete the player object, score, statistics, permanent seat, or token. The visible player strip hides disconnected players while preserving their seat for reconnection. The host management drawer still shows the reserved seat so the host can distinguish it from a permanently removed player.
