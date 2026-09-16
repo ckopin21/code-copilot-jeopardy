@@ -20,7 +20,7 @@ call npm run build
 if errorlevel 1 goto :fail
 
 echo Starting game...
-start "Blue Stage Trivia Server" cmd /k "cd /d "%~dp0" && npm start"
+start "Blue Stage Trivia Server" cmd /k "npm start"
 timeout /t 3 /nobreak >nul
 start "" "http://localhost:3000"
 
