@@ -124,7 +124,8 @@ export function HostAppV3() {
 
   useEffect(() => {
     if (!room) return;
-    if (!controllerId && room.players[0]) setControllerId(room.players[0].id);
+    const connected = room.players.filter((player) => player.connected);
+    if (!connected.some((player) => player.id === controllerId)) setControllerId(connected[0]?.id ?? '');
   }, [room, controllerId]);
 
   const musicState = phaseMusic(room);
@@ -260,8 +261,9 @@ export function HostAppV3() {
     if (!room || !room.settings.localBuzzersEnabled) return;
     const onKey = (event: KeyboardEvent) => {
       if (event.repeat || !room.currentQuestion?.buzzOpen) return;
+      const activePlayers = room.players.filter((player) => player.connected);
       const index = Number(event.key) - 1;
-      if (index >= 0 && index < room.players.length) void perform('host:local-buzz', { playerId: room.players[index].id });
+      if (index >= 0 && index < activePlayers.length) void perform('host:local-buzz', { playerId: activePlayers[index].id });
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -271,13 +273,14 @@ export function HostAppV3() {
     if (!room?.settings.controllerBuzzersEnabled || !room.currentQuestion?.buzzOpen) return;
     let frame = 0;
     const previous = new Map<number, boolean[]>();
+    const activePlayers = room.players.filter((player) => player.connected);
     const poll = () => {
       navigator.getGamepads?.().forEach((pad, index) => {
-        if (!pad || !room.players[index]) return;
+        if (!pad || !activePlayers[index]) return;
         const prev = previous.get(index) ?? [];
         const pressed = pad.buttons.some((button, buttonIndex) => button.pressed && !prev[buttonIndex]);
         previous.set(index, pad.buttons.map((button) => button.pressed));
-        if (pressed) void perform('host:local-buzz', { playerId: room.players[index].id });
+        if (pressed) void perform('host:local-buzz', { playerId: activePlayers[index].id });
       });
       frame = requestAnimationFrame(poll);
     };
@@ -312,6 +315,8 @@ export function HostAppV3() {
   }
 
   const current = room.currentQuestion;
+  const connectedPlayers = room.players.filter((player) => player.connected);
+  const reservedSeatCount = room.players.length - connectedPlayers.length;
   const buzzWinner = current?.buzzWinnerId ? room.players.find((player) => player.id === current.buzzWinnerId) : null;
   const dailyPlayer = current?.dailyDoublePlayerId ? room.players.find((player) => player.id === current.dailyDoublePlayerId) : null;
   const spokenPlayer = buzzWinner ?? dailyPlayer ?? null;
@@ -322,9 +327,10 @@ export function HostAppV3() {
   const updateSettings = (updates: Partial<GameSettings>) => perform('host:update-settings', { updates });
   const showJoinControl = room.phase === 'lobby' || room.phase === 'board';
   const textResponses = current?.textResponses ?? {};
-  const textResponseCount = Object.keys(textResponses).length;
+  const textResponseCount = connectedPlayers.filter((player) => Boolean(textResponses[player.id])).length;
   const unresolvedTextCount = Object.values(textResponses).filter((response) => response.resolvedCorrect === null).length;
   const questionMultiplier = current ? Math.max(1, Math.round(current.effectiveValue / Math.max(1, current.baseValue))) : 1;
+  const pendingFinalWagers = connectedPlayers.filter((player) => !player.finalWagerSubmitted).length;
 
   const resolveSpoken = async (correct: boolean) => {
     if (!spokenPlayer || !current?.answerRevealed) return;
@@ -341,6 +347,11 @@ export function HostAppV3() {
     if (!ok) return;
     recordAttempt(playerId, correct);
     audio.cue(correct ? 'correct' : 'wrong');
+  };
+
+  const revealAnswer = async () => {
+    const ok = await perform('host:reveal-answer');
+    if (ok) audio.cue('reveal');
   };
 
   const canReturnToBoard = Boolean(current?.answerRevealed) && (
@@ -376,9 +387,10 @@ export function HostAppV3() {
             {qr && <img src={qr} alt="QR code to join the game" />}
             <div><small>SCAN TO JOIN</small><strong>{room.code}</strong><a href={credentials.joinUrl}>{credentials.joinUrl}</a></div>
           </div>
-          <div className="player-roster-title"><span>Players</span><b>{room.players.length}/5</b></div>
+          <div className="player-roster-title"><span>Players</span><b>{connectedPlayers.length}/5</b></div>
           <div className="lobby-players-v2">
-            {room.players.length ? room.players.map((player, index) => <div className="roster-row" key={player.id}><span className="roster-avatar">{player.avatar}</span><div><strong>{player.name}</strong><small>{player.connected ? 'Connected' : 'Disconnected'} · key {index + 1}</small></div><button className="icon-button danger" onClick={() => void perform('host:remove-player', { playerId: player.id })} aria-label={`Remove ${player.name}`}>×</button></div>) : <div className="empty-roster">No phone players yet. Practice mode still works.</div>}
+            {connectedPlayers.length ? connectedPlayers.map((player, index) => <div className="roster-row" key={player.id}><span className="roster-avatar">{player.avatar}</span><div><strong>{player.name}</strong><small>Connected · key {index + 1}</small></div><button className="icon-button danger" onClick={() => void perform('host:remove-player', { playerId: player.id })} aria-label={`Remove ${player.name}`}>×</button></div>) : <div className="empty-roster">No phone players connected. Practice mode still works.</div>}
+            {reservedSeatCount > 0 && <div className="reserved-seat-note">{reservedSeatCount} seat{reservedSeatCount === 1 ? '' : 's'} reserved for reconnect.</div>}
           </div>
           <button className="primary-button giant start-button" disabled={busy} onClick={() => void perform('host:start-game')}>Start Game</button>
         </article>
@@ -409,14 +421,14 @@ export function HostAppV3() {
         <div className="board-header-v2">
           <div><div className="section-kicker">ROUND IN PROGRESS</div><strong>{room.remainingQuestions} questions left</strong></div>
           <div className="board-actions">
-            {room.players.length > 0 && <label>Daily Double player<select value={controllerId} onChange={(event) => setControllerId(event.target.value)}>{room.players.map((player)=><option value={player.id} key={player.id}>{player.name}</option>)}</select></label>}
+            {connectedPlayers.length > 0 && <label>Daily Double player<select value={controllerId} onChange={(event) => setControllerId(event.target.value)}>{connectedPlayers.map((player)=><option value={player.id} key={player.id}>{player.name}</option>)}</select></label>}
             <button className="nav-button" onClick={() => void perform('host:pause')}>Pause</button>
             <button className="nav-button" onClick={() => setShowJoin(true)}>Join QR</button>
             <a className="nav-button" href={credentials.presentationUrl} target="_blank" rel="noreferrer">Presentation</a>
           </div>
         </div>
         {room.multiplier > 1 && <div className={`modifier-banner x${room.multiplier}`}><span>{room.multiplier === 2 ? 'FINAL SIX' : 'FINAL THREE'}</span><strong>{room.multiplier === 2 ? 'DOUBLE POINTS' : 'TRIPLE POINTS'}</strong></div>}
-        <Board board={room.board} onSelect={(questionId) => void perform('host:select-question', { questionId, dailyDoublePlayerId: controllerId || undefined })} onReview={(questionId) => setReviewId(questionId)} />
+        <Board board={room.board} multiplier={room.multiplier} onSelect={(questionId) => void perform('host:select-question', { questionId, dailyDoublePlayerId: controllerId || undefined })} onReview={(questionId) => setReviewId(questionId)} />
         <ScoreControls room={room} onAdjust={(playerId, delta) => void perform('host:adjust-score', { playerId, delta })} />
       </section>}
 
@@ -439,7 +451,7 @@ export function HostAppV3() {
           {current.responseMode !== 'text' && current.buzzOpen && !current.buzzWinnerId && <div className="buzzer-live-banner">BUZZERS LIVE</div>}
           {buzzWinner && <div className="winner-chip" style={{ '--accent': buzzWinner.accent } as React.CSSProperties}>{buzzWinner.avatar}<span>{buzzWinner.name}</span><b>BUZZED IN</b></div>}
 
-          {current.responseMode === 'text' && !current.answerRevealed && <div className="response-progress"><strong>{textResponseCount}/{room.players.length}</strong><span>responses locked in</span><small>The answer reveals automatically when everyone submits or the timer expires.</small></div>}
+          {current.responseMode === 'text' && !current.answerRevealed && <div className="response-progress"><strong>{textResponseCount}/{connectedPlayers.length}</strong><span>responses locked in</span><small>The answer reveals automatically when every connected player submits or the timer expires.</small></div>}
 
           {current.answerRevealed && <div className="answer-reveal-v2"><small>CORRECT ANSWER</small><strong>{current.acceptedAnswers?.join(' / ')}</strong></div>}
 
@@ -457,7 +469,7 @@ export function HostAppV3() {
 
           <div className="control-row-v2">
             {current.responseMode !== 'text' && !current.dailyDouble && !current.buzzWinnerId && !current.answerRevealed && <button className="primary-button" onClick={() => { audio.cue('open'); void perform(current.buzzOpen ? 'host:close-buzzers' : 'host:open-buzzers'); }}>{current.buzzOpen ? 'Lock Buzzers' : 'Open Buzzers Now'}</button>}
-            {current.responseMode !== 'text' && !current.answerRevealed && <button className="secondary-button reveal-button" onClick={() => void perform('host:reveal-answer')}>Reveal Answer</button>}
+            {current.responseMode !== 'text' && !current.answerRevealed && <button className="secondary-button reveal-button" onClick={() => void revealAnswer()}>Reveal Answer</button>}
             {!current.answerRevealed && current.attemptedPlayerIds.length === 0 && Object.keys(current.textResponses ?? {}).length === 0 && current.wager === null && <button className="secondary-button" onClick={() => { autoBuzzQuestionRef.current = ''; void perform('host:cancel-question'); }}>Exit Without Answering</button>}
             {canReturnToBoard && <button className="primary-button" onClick={() => void perform('host:advance-board')}>{room.remainingQuestions ? 'Back to Board' : 'Finish Board'}</button>}
           </div>
@@ -465,13 +477,13 @@ export function HostAppV3() {
       </section>}
 
       {room.phase === 'final-category' && room.finalRound && <section className="question-stage final-stage"><article className="question-card-v2"><div className="section-kicker gold">FINAL ROUND</div><h1>{room.finalRound.category}</h1><button className="primary-button giant" onClick={() => void perform('host:begin-final-wagers')}>Open Secret Wagers</button></article></section>}
-      {room.phase === 'final-wager' && <section className="question-stage final-stage"><article className="question-card-v2"><div className="section-kicker gold">FINAL ROUND</div><h1>Lock in your wagers</h1><SubmissionStatus players={room.players} field="finalWagerSubmitted" /><button className="primary-button" disabled={!room.players.every((player)=>player.finalWagerSubmitted)} onClick={() => void perform('host:open-final-question')}>Reveal Final Question</button></article></section>}
-      {room.phase === 'final-question' && room.finalRound && <section className="question-stage final-stage"><article className="question-card-v2"><div className="section-kicker gold">FINAL QUESTION · {room.finalRound.category}</div><h1>{room.finalRound.question}</h1><Timer timer={room.timer} serverNow={room.serverNow}/><SubmissionStatus players={room.players} field="finalAnswerSubmitted"/><p className="helper-copy">The answer reveals automatically when every response is in or the timer expires.</p></article></section>}
+      {room.phase === 'final-wager' && <section className="question-stage final-stage"><article className="question-card-v2"><div className="section-kicker gold">FINAL ROUND</div><h1>Lock in your wagers</h1><SubmissionStatus players={connectedPlayers} field="finalWagerSubmitted" />{pendingFinalWagers > 0 && <p className="helper-copy">{pendingFinalWagers} connected player{pendingFinalWagers === 1 ? '' : 's'} still waiting. You can start anyway; missing wagers become 0.</p>}<button className="primary-button giant" disabled={busy} onClick={() => void perform('host:open-final-question')}>Start Final Question</button></article></section>}
+      {room.phase === 'final-question' && room.finalRound && <section className="question-stage final-stage"><article className="question-card-v2"><div className="section-kicker gold">FINAL QUESTION · {room.finalRound.category}</div><h1>{room.finalRound.question}</h1><Timer timer={room.timer} serverNow={room.serverNow}/><SubmissionStatus players={connectedPlayers} field="finalAnswerSubmitted"/><p className="helper-copy">The answer reveals automatically when every connected response is in or the timer expires.</p><button className="secondary-button" disabled={busy} onClick={() => void perform('host:begin-final-review')}>Start Review Now</button></article></section>}
       {room.phase === 'final-review' && reviewPlayer && room.finalRound && <section className="question-stage final-stage"><article className="question-card-v2"><div className="section-kicker gold">FINAL REVIEW {room.finalRound.reviewPlayerIndex + 1}/{room.players.length}</div><div className="answer-reveal-v2"><small>CORRECT ANSWER</small><strong>{room.finalRound.acceptedAnswers.join(' / ')}</strong></div><h1 className="review-player-title">{reviewPlayer.avatar} {reviewPlayer.name}</h1><div className="final-response-v2"><span><small>WAGER</small><strong>{reviewPlayer.finalWager ?? 0}</strong></span><span><small>RESPONSE</small><strong>{reviewPlayer.finalAnswer || '(No answer)'}</strong></span></div>{(() => { const suggestion = autoGradeAnswer(reviewPlayer.finalAnswer ?? '', room.finalRound!.acceptedAnswers); return <div className={`auto-grade ${suggestion.correct ? 'suggest-correct' : 'suggest-wrong'}`}>Auto grade: {suggestion.correct ? 'likely correct' : 'likely incorrect'} · {suggestion.confidence} confidence</div>; })()}<p className="helper-copy">Auto grade is a suggestion. The host has final scoring authority.</p><div className="control-row-v2"><button className="correct-button" onClick={()=>void perform('host:resolve-final',{playerId:reviewPlayer.id,correct:true})}>Award</button><button className="wrong-button" onClick={()=>void perform('host:resolve-final',{playerId:reviewPlayer.id,correct:false})}>Reject</button></div></article></section>}
 
       {room.phase === 'recap' && <section className="recap-scene-v2"><div className="section-kicker gold">GAME COMPLETE</div><h1>{winner?.length === 1 ? `${winner[0].avatar} ${winner[0].name} wins` : 'Tie game'}</h1><div className="recap-grid-v2">{[...room.players].sort((a,b)=>b.score-a.score).map((player)=><article className="recap-card-v2" key={player.id}><span>{player.avatar}</span><h2>{player.name}</h2><strong>{player.score.toLocaleString()}</strong><dl><dt>Correct</dt><dd>{player.stats.correct}</dd><dt>Incorrect</dt><dd>{player.stats.incorrect}</dd><dt>Accuracy</dt><dd>{Math.round(player.stats.correct / Math.max(1, player.stats.correct + player.stats.incorrect) * 100)}%</dd><dt>Longest streak</dt><dd>{player.stats.longestStreak}</dd><dt>Fastest buzz</dt><dd>{player.stats.fastestBuzzMs == null ? '—' : `${player.stats.fastestBuzzMs}ms`}</dd></dl></article>)}</div><div className="control-row-v2"><button className="primary-button" onClick={() => void resetGame()}>Reset Game</button><button className="secondary-button" onClick={goMenu}>Back to Menu</button></div></section>}
 
-      {showJoin && <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Join game"><section className="modal-card join-modal-v2"><button className="modal-close" onClick={() => setShowJoin(false)} aria-label="Close">×</button><div className="section-kicker">JOIN GAME</div>{qr && <img src={qr} alt="QR code to join or reconnect to the game" />}<strong className="modal-room-code">{room.code}</strong><a href={credentials.joinUrl}>{credentials.joinUrl}</a><p>Returning players can reconnect with the same phone and browser.</p></section></div>}
+      {showJoin && <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Join game"><section className="modal-card join-modal-v2"><button className="modal-close" onClick={() => setShowJoin(false)} aria-label="Close">×</button><div className="section-kicker">JOIN GAME</div>{qr && <img src={qr} alt="QR code to join or reconnect to the game" />}<strong className="modal-room-code">{room.code}</strong><a href={credentials.joinUrl}>{credentials.joinUrl}</a><p>Returning players reconnect to the same reserved seat on the same phone and browser.</p></section></div>}
 
       {reviewId && <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Question review"><section className="modal-card review-modal-v2"><button className="modal-close" onClick={() => setReviewId(null)} aria-label="Close">×</button>{(() => {
         const entry = historyEntries.find((item) => item.questionId === reviewId);
@@ -484,10 +496,12 @@ export function HostAppV3() {
 }
 
 function ScoreControls({ room, onAdjust }: { room: RoomSnapshot; onAdjust: (playerId: string, delta: number) => void }) {
-  if (!room.players.length) return null;
-  return <div className="score-controls-v2">{room.players.map((player)=><div key={player.id}><span>{player.avatar} {player.name}</span><button onClick={()=>onAdjust(player.id,-100)}>-100</button><button onClick={()=>onAdjust(player.id,100)}>+100</button></div>)}</div>;
+  const players = room.players.filter((player) => player.connected);
+  if (!players.length) return null;
+  return <div className="score-controls-v2">{players.map((player)=><div key={player.id}><span>{player.avatar} {player.name}</span><button onClick={()=>onAdjust(player.id,-100)}>-100</button><button onClick={()=>onAdjust(player.id,100)}>+100</button></div>)}</div>;
 }
 
 function SubmissionStatus({ players, field }: { players: RoomSnapshot['players']; field: 'finalWagerSubmitted' | 'finalAnswerSubmitted' }) {
+  if (!players.length) return <div className="submission-list-v2"><p className="muted">No connected phone players.</p></div>;
   return <div className="submission-list-v2">{players.map((player)=><div key={player.id} className={player[field] ? 'done' : ''}><span>{player.avatar}</span><strong>{player.name}</strong><small>{player[field] ? 'Locked in' : 'Waiting'}</small></div>)}</div>;
 }
