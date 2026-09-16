@@ -17,12 +17,6 @@ replace_once(
 )
 
 replace_once(
-    "src/interaction-polish.css",
-    ".board-actions > label {\n  display: none;\n}",
-    ".board-actions > label:not(.turn-selector) {\n  display: none;\n}\n\n.board-actions > .turn-selector {\n  display: inline-flex;\n  align-items: center;\n  gap: 8px;\n}",
-)
-
-replace_once(
     "src/lib/browserGameEngine.ts",
     "      current.buzzWinnerId = null;\n      room.state.players.forEach((candidate) => { candidate.buzzEligible = candidate.connected && (room.state.settings.allowRepeatBuzzAfterMiss || !current.attemptedPlayerIds.includes(candidate.id)); });",
     "      current.buzzWinnerId = null;\n      const participants = new Set(current.participantIds ?? room.state.players.map((candidate) => candidate.id));\n      room.state.players.forEach((candidate) => { candidate.buzzEligible = candidate.connected && participants.has(candidate.id) && (room.state.settings.allowRepeatBuzzAfterMiss || !current.attemptedPlayerIds.includes(candidate.id)); });",
