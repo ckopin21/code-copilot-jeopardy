@@ -1,4 +1,5 @@
 import { resumeClientSession } from './socket';
+// Install the global sound-caption listener once for every app mode.
 import './soundCaptions';
 
 // A phone page restored from the browser back/forward cache keeps its React tree,
