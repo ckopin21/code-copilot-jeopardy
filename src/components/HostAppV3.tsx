@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { GameSettings, HostRoomCredentials, PackSummary, RoomSnapshot } from '../shared/types';
 import { DEFAULT_SETTINGS, QUESTION_VALUES } from '../shared/config';
 import { autoGradeAnswer } from '../shared/validation';
@@ -9,6 +9,8 @@ import { PlayerStrip } from './PlayerStrip';
 import { Board } from './Board';
 import { Timer } from './Timer';
 import { AudioMixer } from './AudioMixer';
+import { BoardPresentation } from './BoardPresentation';
+import { EndgameRecap } from './EndgameRecap';
 
 const HOST_KEY = 'blue-stage-host-room';
 type HostStored = HostRoomCredentials;
@@ -41,9 +43,9 @@ export function HostAppV3() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [controllerId, setControllerId] = useState('');
-  const [customWager, setCustomWager] = useState('');
   const [showJoin, setShowJoin] = useState(false);
   const [reviewId, setReviewId] = useState<string | null>(null);
+  const [presentationMode, setPresentationMode] = useState(false);
   const [historyEntries, setHistoryEntries] = useState<QuestionHistoryEntry[]>([]);
   const [buzzerCountdown, setBuzzerCountdown] = useState<number | null>(null);
   const [modifierReveal, setModifierReveal] = useState<2 | 3 | null>(null);
@@ -128,13 +130,18 @@ export function HostAppV3() {
     if (!connected.some((player) => player.id === controllerId)) setControllerId(connected[0]?.id ?? '');
   }, [room, controllerId]);
 
+  useEffect(() => {
+    if (room?.phase !== 'board') setPresentationMode(false);
+  }, [room?.phase]);
+
   const musicState = phaseMusic(room);
   useEffect(() => { void audio.setMusic(musicState); }, [musicState]);
 
   useEffect(() => {
-    if (!room || room.phase !== 'lobby' || !room.settings.stealsEnabled || !credentials) return;
-    void perform('host:update-settings', { updates: { stealsEnabled: false } });
-  }, [room?.phase, room?.settings.stealsEnabled, credentials, perform]);
+    if (!room || room.phase !== 'lobby' || !credentials) return;
+    if (!room.settings.stealsEnabled && !room.settings.lockRoomOnStart) return;
+    void perform('host:update-settings', { updates: { stealsEnabled: false, lockRoomOnStart: false } });
+  }, [room?.phase, room?.settings.stealsEnabled, room?.settings.lockRoomOnStart, credentials, perform]);
 
   useEffect(() => {
     if (!credentials?.roomCode) return;
@@ -258,6 +265,13 @@ export function HostAppV3() {
   }, []);
 
   useEffect(() => {
+    const question = room?.currentQuestion;
+    if (!question || question.responseMode !== 'text' || !question.answerRevealed) return;
+    if (Object.keys(question.textResponses ?? {}).length > 0) return;
+    void perform('host:advance-board');
+  }, [room?.currentQuestion?.questionId, room?.currentQuestion?.answerRevealed, room?.currentQuestion?.responseMode, room?.currentQuestion?.textResponses, perform]);
+
+  useEffect(() => {
     if (!room || !room.settings.localBuzzersEnabled) return;
     const onKey = (event: KeyboardEvent) => {
       if (event.repeat || !room.currentQuestion?.buzzOpen) return;
@@ -288,18 +302,13 @@ export function HostAppV3() {
     return () => cancelAnimationFrame(frame);
   }, [room, perform]);
 
-  const winner = useMemo(() => {
-    if (!room?.players.length) return null;
-    const max = Math.max(...room.players.map((player) => player.score));
-    return room.players.filter((player) => player.score === max);
-  }, [room]);
-
   const goMenu = () => { audio.stop(); location.href = menuUrl(); };
   const resetGame = async () => {
     if (!credentials || !confirm('Reset this game? Players stay in the room, but the board, scores, and history will reset.')) return;
     localStorage.removeItem(`blue-stage-history-${credentials.roomCode}`);
     setHistoryEntries([]);
     setReviewId(null);
+    setPresentationMode(false);
     autoBuzzQuestionRef.current = '';
     lastMultiplierRef.current = 1;
     await perform('host:reset-game');
@@ -339,26 +348,25 @@ export function HostAppV3() {
     recordAttempt(spokenPlayer.id, correct);
     setControllerId(spokenPlayer.id);
     audio.cue(correct ? 'correct' : 'wrong');
-    if (!correct && !current.dailyDouble && room.settings.stealsEnabled) await perform('host:close-buzzers');
+    await perform('host:advance-board');
   };
 
   const resolveText = async (playerId: string, correct: boolean) => {
+    const shouldAdvance = unresolvedTextCount <= 1;
     const ok = await perform('host:resolve-text', { playerId, correct });
     if (!ok) return;
     recordAttempt(playerId, correct);
     audio.cue(correct ? 'correct' : 'wrong');
+    if (shouldAdvance) await perform('host:advance-board');
   };
 
   const revealAnswer = async () => {
+    const noSpokenResponse = current?.responseMode !== 'text' && !spokenPlayer;
     const ok = await perform('host:reveal-answer');
-    if (ok) audio.cue('reveal');
+    if (!ok) return;
+    audio.cue('reveal');
+    if (noSpokenResponse) await perform('host:advance-board');
   };
-
-  const canReturnToBoard = Boolean(current?.answerRevealed) && (
-    current?.responseMode === 'text'
-      ? unresolvedTextCount === 0
-      : !spokenPlayer || Boolean(judgedAttempt)
-  );
 
   return (
     <main className="host-shell showcase-host">
@@ -412,8 +420,8 @@ export function HostAppV3() {
             <label>Daily Doubles<input type="number" min="0" max="6" value={settings.dailyDoubleCount} onChange={(event) => void updateSettings({ dailyDoubleCount: Number(event.target.value), dailyDoublesEnabled: Number(event.target.value) > 0 })} /></label>
             <label>Cold streak<input type="number" min="2" max="8" value={settings.coldStreakThreshold} onChange={(event) => void updateSettings({ coldStreakThreshold: Number(event.target.value) })} /></label>
           </div>
-          <div className="toggle-grid-v2">{([['Negative scores', 'allowNegativeScores'], ['Double / Triple finale', 'lateGameModifiers'], ['Stack Daily Double', 'dailyDoubleStacksWithMultiplier'], ['Streaks', 'streaksEnabled'], ['Final Round', 'finalRoundEnabled'], ['Lock room on start', 'lockRoomOnStart'], ['Keyboard buzzers', 'localBuzzersEnabled'], ['Gamepad buzzers', 'controllerBuzzersEnabled']] as [string, keyof GameSettings][]).map(([label, key]) => <label className="toggle-v2" key={key}><input type="checkbox" checked={Boolean(settings[key])} onChange={(event) => void updateSettings({ [key]: event.target.checked } as Partial<GameSettings>)} /><span>{label}</span></label>)}</div>
-          <p className="reveal-first-note">Spoken answers use reveal-first judging: reveal the answer, then award or reject the player.</p>
+          <div className="toggle-grid-v2">{([['Negative scores', 'allowNegativeScores'], ['Double / Triple finale', 'lateGameModifiers'], ['Stack Daily Double', 'dailyDoubleStacksWithMultiplier'], ['Streaks', 'streaksEnabled'], ['Final Round', 'finalRoundEnabled'], ['Keyboard buzzers', 'localBuzzersEnabled'], ['Gamepad buzzers', 'controllerBuzzersEnabled']] as [string, keyof GameSettings][]).map(([label, key]) => <label className="toggle-v2" key={key}><input type="checkbox" checked={Boolean(settings[key])} onChange={(event) => void updateSettings({ [key]: event.target.checked } as Partial<GameSettings>)} /><span>{label}</span></label>)}</div>
+          <p className="reveal-first-note">The room stays open throughout the game so disconnected phones can reclaim their reserved seats.</p>
         </article>
       </section>}
 
@@ -424,7 +432,7 @@ export function HostAppV3() {
             {connectedPlayers.length > 0 && <label>Daily Double player<select value={controllerId} onChange={(event) => setControllerId(event.target.value)}>{connectedPlayers.map((player)=><option value={player.id} key={player.id}>{player.name}</option>)}</select></label>}
             <button className="nav-button" onClick={() => void perform('host:pause')}>Pause</button>
             <button className="nav-button" onClick={() => setShowJoin(true)}>Join QR</button>
-            <a className="nav-button" href={credentials.presentationUrl} target="_blank" rel="noreferrer">Presentation</a>
+            <button className="nav-button" onClick={() => setPresentationMode(true)}>Presentation</button>
           </div>
         </div>
         {room.multiplier > 1 && <div className={`modifier-banner x${room.multiplier}`}><span>{room.multiplier === 2 ? 'FINAL SIX' : 'FINAL THREE'}</span><strong>{room.multiplier === 2 ? 'DOUBLE POINTS' : 'TRIPLE POINTS'}</strong></div>}
@@ -434,7 +442,7 @@ export function HostAppV3() {
 
       {room.phase === 'paused' && <section className="full-state"><div className="state-card"><div className="section-kicker">PAUSED</div><h1>Game paused</h1><button className="primary-button giant" onClick={() => void perform('host:resume')}>Resume</button></div></section>}
 
-      {room.phase === 'daily-double-wager' && current && <section className="question-stage daily-double-v2"><div className="question-card-v2"><div className="daily-double-burst">DAILY DOUBLE</div><h1>{dailyPlayer?.avatar} {dailyPlayer?.name}, choose your wager</h1><div className="wager-grid">{QUESTION_VALUES.map((value) => <button key={value} onClick={() => void perform('host:daily-double-wager', { wager: value })}>{value}</button>)}</div><div className="custom-wager"><input inputMode="numeric" value={customWager} onChange={(event)=>setCustomWager(event.target.value.replace(/\D/g,''))} placeholder="Custom wager" /><button className="primary-button" onClick={() => void perform('host:daily-double-wager', { wager: Number(customWager) })}>Lock In</button></div><button className="text-button" onClick={() => void perform('host:cancel-question')}>Exit question</button></div></section>}
+      {room.phase === 'daily-double-wager' && current && <section className="question-stage daily-double-v2"><div className="question-card-v2"><div className="daily-double-burst">DAILY DOUBLE</div><h1>{dailyPlayer?.avatar} {dailyPlayer?.name}, choose your wager</h1><p className="helper-copy">Choose a preset here, or let {dailyPlayer?.name ?? 'the player'} choose on their phone.</p><div className="wager-grid fixed-wagers">{QUESTION_VALUES.map((value) => <button key={value} onClick={() => void perform('host:daily-double-wager', { wager: value })}>{value.toLocaleString()}</button>)}</div><button className="text-button" onClick={() => void perform('host:cancel-question')}>Exit question</button></div></section>}
 
       {(room.phase === 'question' || room.phase === 'daily-double-question') && current && <section className={`question-stage ${current.dailyDouble ? 'daily-double-v2' : ''}`}>
         <article className="question-card-v2 showcase-question-card">
@@ -465,13 +473,11 @@ export function HostAppV3() {
           </div>}
 
           {current.responseMode !== 'text' && current.answerRevealed && spokenPlayer && !judgedAttempt && <div className="judge-after-reveal"><small>NOW JUDGE THE RESPONSE</small><strong>{spokenPlayer.avatar} {spokenPlayer.name}</strong><div><button className="correct-button judge-big" onClick={() => void resolveSpoken(true)}>Correct</button><button className="wrong-button judge-big" onClick={() => void resolveSpoken(false)}>Incorrect</button></div></div>}
-          {current.responseMode !== 'text' && judgedAttempt && <div className={`judged-result ${judgedAttempt.correct ? 'correct' : 'wrong'}`}>{judgedAttempt.correct ? '✓ CORRECT' : '✕ INCORRECT'} · {judgedAttempt.playerAvatar} {judgedAttempt.playerName}</div>}
 
           <div className="control-row-v2">
             {current.responseMode !== 'text' && !current.dailyDouble && !current.buzzWinnerId && !current.answerRevealed && <button className="primary-button" onClick={() => { audio.cue('open'); void perform(current.buzzOpen ? 'host:close-buzzers' : 'host:open-buzzers'); }}>{current.buzzOpen ? 'Lock Buzzers' : 'Open Buzzers Now'}</button>}
             {current.responseMode !== 'text' && !current.answerRevealed && <button className="secondary-button reveal-button" onClick={() => void revealAnswer()}>Reveal Answer</button>}
             {!current.answerRevealed && current.attemptedPlayerIds.length === 0 && Object.keys(current.textResponses ?? {}).length === 0 && current.wager === null && <button className="secondary-button" onClick={() => { autoBuzzQuestionRef.current = ''; void perform('host:cancel-question'); }}>Exit Without Answering</button>}
-            {canReturnToBoard && <button className="primary-button" onClick={() => void perform('host:advance-board')}>{room.remainingQuestions ? 'Back to Board' : 'Finish Board'}</button>}
           </div>
         </article>
       </section>}
@@ -481,7 +487,7 @@ export function HostAppV3() {
       {room.phase === 'final-question' && room.finalRound && <section className="question-stage final-stage"><article className="question-card-v2"><div className="section-kicker gold">FINAL QUESTION · {room.finalRound.category}</div><h1>{room.finalRound.question}</h1><Timer timer={room.timer} serverNow={room.serverNow}/><SubmissionStatus players={connectedPlayers} field="finalAnswerSubmitted"/><p className="helper-copy">The answer reveals automatically when every connected response is in or the timer expires.</p><button className="secondary-button" disabled={busy} onClick={() => void perform('host:begin-final-review')}>Start Review Now</button></article></section>}
       {room.phase === 'final-review' && reviewPlayer && room.finalRound && <section className="question-stage final-stage"><article className="question-card-v2"><div className="section-kicker gold">FINAL REVIEW {room.finalRound.reviewPlayerIndex + 1}/{room.players.length}</div><div className="answer-reveal-v2"><small>CORRECT ANSWER</small><strong>{room.finalRound.acceptedAnswers.join(' / ')}</strong></div><h1 className="review-player-title">{reviewPlayer.avatar} {reviewPlayer.name}</h1><div className="final-response-v2"><span><small>WAGER</small><strong>{reviewPlayer.finalWager ?? 0}</strong></span><span><small>RESPONSE</small><strong>{reviewPlayer.finalAnswer || '(No answer)'}</strong></span></div>{(() => { const suggestion = autoGradeAnswer(reviewPlayer.finalAnswer ?? '', room.finalRound!.acceptedAnswers); return <div className={`auto-grade ${suggestion.correct ? 'suggest-correct' : 'suggest-wrong'}`}>Auto grade: {suggestion.correct ? 'likely correct' : 'likely incorrect'} · {suggestion.confidence} confidence</div>; })()}<p className="helper-copy">Auto grade is a suggestion. The host has final scoring authority.</p><div className="control-row-v2"><button className="correct-button" onClick={()=>void perform('host:resolve-final',{playerId:reviewPlayer.id,correct:true})}>Award</button><button className="wrong-button" onClick={()=>void perform('host:resolve-final',{playerId:reviewPlayer.id,correct:false})}>Reject</button></div></article></section>}
 
-      {room.phase === 'recap' && <section className="recap-scene-v2"><div className="section-kicker gold">GAME COMPLETE</div><h1>{winner?.length === 1 ? `${winner[0].avatar} ${winner[0].name} wins` : 'Tie game'}</h1><div className="recap-grid-v2">{[...room.players].sort((a,b)=>b.score-a.score).map((player)=><article className="recap-card-v2" key={player.id}><span>{player.avatar}</span><h2>{player.name}</h2><strong>{player.score.toLocaleString()}</strong><dl><dt>Correct</dt><dd>{player.stats.correct}</dd><dt>Incorrect</dt><dd>{player.stats.incorrect}</dd><dt>Accuracy</dt><dd>{Math.round(player.stats.correct / Math.max(1, player.stats.correct + player.stats.incorrect) * 100)}%</dd><dt>Longest streak</dt><dd>{player.stats.longestStreak}</dd><dt>Fastest buzz</dt><dd>{player.stats.fastestBuzzMs == null ? '—' : `${player.stats.fastestBuzzMs}ms`}</dd></dl></article>)}</div><div className="control-row-v2"><button className="primary-button" onClick={() => void resetGame()}>Reset Game</button><button className="secondary-button" onClick={goMenu}>Back to Menu</button></div></section>}
+      {room.phase === 'recap' && <EndgameRecap players={room.players} onReset={() => void resetGame()} onMenu={goMenu} />}
 
       {showJoin && <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Join game"><section className="modal-card join-modal-v2"><button className="modal-close" onClick={() => setShowJoin(false)} aria-label="Close">×</button><div className="section-kicker">JOIN GAME</div>{qr && <img src={qr} alt="QR code to join or reconnect to the game" />}<strong className="modal-room-code">{room.code}</strong><a href={credentials.joinUrl}>{credentials.joinUrl}</a><p>Returning players reconnect to the same reserved seat on the same phone and browser.</p></section></div>}
 
@@ -491,6 +497,8 @@ export function HostAppV3() {
         if (!entry) return <><div className="section-kicker">USED QUESTION</div><h2>{tile?.category}</h2><p>No answer history was recorded for this question.</p></>;
         return <><div className="section-kicker">{entry.category} · {entry.value} POINTS</div><h2>{entry.text}</h2><div className="review-answer-v2"><small>ANSWER</small><strong>{entry.answer || 'Not revealed'}</strong></div><div className="attempt-list">{entry.attempts.length ? entry.attempts.map((attempt) => <div className={`attempt-row ${attempt.correct ? 'correct' : 'wrong'}`} key={attempt.playerId}><span>{attempt.playerAvatar}</span><strong>{attempt.playerName}</strong><b>{attempt.correct ? 'CORRECT' : 'INCORRECT'}</b></div>) : <p className="muted">No player response recorded.</p>}</div></>;
       })()}</section></div>}
+
+      {presentationMode && room.phase === 'board' && <BoardPresentation room={room} onBack={() => setPresentationMode(false)} />}
     </main>
   );
 }
@@ -503,5 +511,5 @@ function ScoreControls({ room, onAdjust }: { room: RoomSnapshot; onAdjust: (play
 
 function SubmissionStatus({ players, field }: { players: RoomSnapshot['players']; field: 'finalWagerSubmitted' | 'finalAnswerSubmitted' }) {
   if (!players.length) return <div className="submission-list-v2"><p className="muted">No connected phone players.</p></div>;
-  return <div className="submission-list-v2">{players.map((player)=><div key={player.id} className={player[field] ? 'done' : ''}><span>{player.avatar}</span><strong>{player.name}</strong><small>{player[field] ? 'Locked in' : 'Waiting'}</small></div>)}</div>;
+  return <div className="submission-list-v2">{players.map((player)=><div key={player.id} className={player[field] ? 'done' : ''}><span>{player.avatar}</span><strong>{player.name}</strong><small>{player[field] ? field === 'finalWagerSubmitted' ? `Locked · ${(player.finalWager ?? 0).toLocaleString()}` : 'Locked in' : 'Waiting'}</small></div>)}</div>;
 }
