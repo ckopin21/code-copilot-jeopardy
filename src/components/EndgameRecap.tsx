@@ -19,12 +19,12 @@ export function EndgameRecap({ players, onReset, onMenu }: { players: Player[]; 
     return () => timers.forEach((timer) => window.clearTimeout(timer));
   }, [resultKey, playerCount]);
 
-  if (showStats) return <section className="recap-scene-v2 stats-after-podium">
+  if (showStats) return <section className={`recap-scene-v2 stats-after-podium recap-count-${playerCount}`}>
     <div className="section-kicker gold">GAME STATS</div>
     <h1>Final results</h1>
     <div className="recap-grid-v2">{standings.map((player, index) => <article className="recap-card-v2" key={player.id}>
-      <div className="stats-place">#{index + 1}</div><span>{player.avatar}</span><h2>{player.name}</h2><strong>{player.score.toLocaleString()}</strong>
-      <dl><dt>Correct</dt><dd>{player.stats.correct}</dd><dt>Incorrect</dt><dd>{player.stats.incorrect}</dd><dt>Accuracy</dt><dd>{Math.round(player.stats.correct / Math.max(1, player.stats.correct + player.stats.incorrect) * 100)}%</dd><dt>Longest streak</dt><dd>{player.stats.longestStreak}</dd><dt>Fastest buzz</dt><dd>{player.stats.fastestBuzzMs == null ? '—' : `${player.stats.fastestBuzzMs}ms`}</dd><dt>Points gained</dt><dd>{player.stats.pointsGained.toLocaleString()}</dd><dt>Points lost</dt><dd>{player.stats.pointsLost.toLocaleString()}</dd></dl>
+      <div className="recap-player-heading"><div className="stats-place">#{index + 1}</div><span>{player.avatar}</span><h2>{player.name}</h2><strong>{player.score.toLocaleString()}</strong></div>
+      <dl className="recap-stats-list"><dt>Correct</dt><dd>{player.stats.correct}</dd><dt>Incorrect</dt><dd>{player.stats.incorrect}</dd><dt>Accuracy</dt><dd>{Math.round(player.stats.correct / Math.max(1, player.stats.correct + player.stats.incorrect) * 100)}%</dd><dt>Longest streak</dt><dd>{player.stats.longestStreak}</dd><dt>Fastest buzz</dt><dd>{player.stats.fastestBuzzMs == null ? '—' : `${player.stats.fastestBuzzMs}ms`}</dd><dt>Points gained</dt><dd>{player.stats.pointsGained.toLocaleString()}</dd><dt>Points lost</dt><dd>{player.stats.pointsLost.toLocaleString()}</dd></dl>
     </article>)}</div>
     <div className="control-row-v2"><button className="primary-button" onClick={onReset}>Reset Game</button><button className="secondary-button" onClick={onMenu}>Back to Menu</button></div>
   </section>;
