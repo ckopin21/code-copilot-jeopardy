@@ -1,5 +1,5 @@
 import { resumeClientSession } from './socket';
-// Load sound captions globally so host, player, and presentation modes share the same accessibility behavior.
+// Load sound captions once for host, player, and presentation modes so accessibility behavior stays consistent.
 import './soundCaptions';
 
 // A phone page restored from the browser back/forward cache keeps its React tree,
