@@ -3,6 +3,7 @@ import type { BoardQuestion, GameSettings, HostRoomCredentials, Player, PlayerJo
 import { QUESTION_VALUES } from '../shared/types';
 import { autoGradeAnswer } from '../shared/validation';
 import { packMap } from '../packs';
+import { calculateComebackAward } from './comebackScoring';
 
 export interface RoomRecord {
   state: RoomState;
@@ -709,6 +710,8 @@ export class BrowserGameEngine {
     if (current.dailyDouble) {
       const multiplier = room.state.settings.dailyDoubleStacksWithMultiplier ? this.multiplierForRemaining(room.state.remainingQuestions + 1, room.state.settings.lateGameModifiers) : 1;
       points = (current.wager ?? 0) * multiplier;
+    } else if (correct) {
+      points = calculateComebackAward(room.state, player, points).points;
     }
     this.addScore(player, correct ? points : -points, room.state.settings);
     if (correct) player.stats.correct += 1; else player.stats.incorrect += 1;
@@ -756,7 +759,8 @@ export class BrowserGameEngine {
     if (response.resolvedCorrect !== null) throw new Error('Response is already graded');
     this.checkpointScore(room);
     response.resolvedCorrect = correct;
-    this.addScore(player, correct ? current.effectiveValue : -current.effectiveValue, room.state.settings);
+    const points = correct ? calculateComebackAward(room.state, player, current.effectiveValue).points : current.effectiveValue;
+    this.addScore(player, correct ? points : -points, room.state.settings);
     if (correct) player.stats.correct += 1; else player.stats.incorrect += 1;
     this.applyStreak(player, correct, room.state.settings);
     this.persist();
