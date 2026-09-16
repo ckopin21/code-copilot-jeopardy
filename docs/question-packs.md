@@ -1,11 +1,8 @@
 # Question packs
 
-Blue Stage has two pack paths:
+Blue Stage uses built-in TypeScript packs under `src/packs/`. These packs are bundled into the static application and work with the authoritative browser game engine.
 
-1. **Built-in packs** in `src/packs/` work in the primary GitHub Pages/P2P game and the Node runtime.
-2. **Imported JSON packs** are a Node/Express feature stored by the server. They are not loaded by the static GitHub Pages deployment.
-
-## Fastest way to add a built-in pack
+## Fastest way to add a pack
 
 1. Copy `src/packs/_pack.template.ts.example` to a new `.ts` file in `src/packs/`, for example `src/packs/geography.ts`.
 2. Change the metadata and questions.
@@ -55,7 +52,7 @@ The older tuple-array format used by the original built-in packs remains support
 `question(text, answers, options)` supports:
 
 - `answers`: one accepted answer string or an array of accepted alternatives
-- `explanation`: optional host-facing context
+- `explanation`: optional context that remains hidden from player/presentation snapshots until answer reveal
 - `tags`: arbitrary tags; `typed` or `free-response` implies text response unless `responseMode` is supplied
 - `responseMode`: `buzz` or `text`
 - `dailyDoubleEligible`: defaults to `true`
@@ -89,40 +86,12 @@ Difficulty is inferred from the position/value tier inside a built-in category:
 - 300/400: medium
 - 500/1000: hard
 
-## Adding questions to an existing built-in pack
+## Adding questions to an existing pack
 
 For a full six-row category, replace or add the question under the exact value key. A complete category must always have all six values so any game length can safely generate it.
 
-If you want more total questions without changing existing categories, add another complete category. The board generator selects complete categories from the selected packs and tries to favor question IDs not recently used by that browser engine.
+If you want more total questions without changing existing categories, add another complete category. The board generator selects complete categories from the selected pack and tries to favor question IDs not recently used by that browser engine.
 
-## Imported JSON packs (Node runtime only)
+## Custom pack support
 
-The Node/Express runtime accepts JSON objects at `POST /api/packs/import` and validates them before storage.
-
-```json
-{
-  "id": "my-pack",
-  "title": "My Pack",
-  "theme": "A short theme",
-  "description": "What this pack covers.",
-  "difficulty": "mixed",
-  "approximateMinutes": 35,
-  "questions": [
-    {
-      "id": "my-pack-history-100",
-      "packId": "my-pack",
-      "category": "History",
-      "text": "Which year did ...?",
-      "acceptedAnswers": ["1901"],
-      "value": 100,
-      "difficulty": "easy",
-      "explanation": "Optional explanation.",
-      "dailyDoubleEligible": true,
-      "responseMode": "buzz",
-      "tags": ["history"]
-    }
-  ]
-}
-```
-
-Server-imported packs are persisted to `.data/custom-packs.json`. Keep `.data` on persistent storage when using the Node runtime if imports should survive instance replacement.
+There is currently no runtime JSON upload endpoint. The old Node/Express custom-pack import path was removed with the duplicate server runtime. New packs should be added under `src/packs/`, validated by the existing pack builder/tests, and deployed with the application.
