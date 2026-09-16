@@ -253,14 +253,48 @@ export class BrowserGameEngine {
 
   removePlayer(roomCode: string, hostToken: string, playerId: string): void {
     const room = this.hostRoom(roomCode, hostToken);
+    const player = room.state.players.find((candidate) => candidate.id === playerId);
+    if (!player) throw new Error('Player not found');
+    const current = room.state.currentQuestion;
+    if (current?.dailyDoublePlayerId === playerId && (room.state.phase === 'daily-double-wager' || room.state.phase === 'daily-double-question')) {
+      throw new Error('Finish or exit the active Daily Double before removing this player');
+    }
+
     this.clearUndo(room);
-    room.state.players = room.state.players.filter((player) => player.id !== playerId);
+    const removedBuzzWinner = current?.buzzWinnerId === playerId && !current.answerRevealed;
+    if (current?.textResponses?.[playerId]) delete current.textResponses[playerId];
+    room.state.players = room.state.players.filter((candidate) => candidate.id !== playerId);
     delete room.playerTokens[playerId];
+
+    if (current && room.state.phase === 'question' && !current.answerRevealed) {
+      if (current.responseMode === 'text') {
+        const active = this.connectedPlayers(room);
+        if (active.length === 0 || active.every((candidate) => Boolean(current.textResponses?.[candidate.id]))) this.closeTextResponsesInternal(room);
+      } else if (removedBuzzWinner) {
+        current.buzzWinnerId = null;
+        room.state.players.forEach((candidate) => {
+          candidate.buzzEligible = candidate.connected && (room.state.settings.allowRepeatBuzzAfterMiss || !current.attemptedPlayerIds.includes(candidate.id));
+        });
+        const someoneEligible = room.state.players.some((candidate) => candidate.buzzEligible);
+        current.buzzOpen = someoneEligible;
+        current.buzzOpenedAt = someoneEligible ? Date.now() : null;
+        if (someoneEligible) this.startTimerInternal(room);
+        else {
+          current.answerRevealed = true;
+          this.stopTimerInternal(room);
+        }
+      }
+    }
+
     if (room.state.finalRound) {
       room.state.finalRound.participantIds = room.state.finalRound.participantIds.filter((idValue) => idValue !== playerId);
+      if (room.state.phase === 'final-question' && !room.state.finalRound.responsesClosed) {
+        const active = this.activeFinalParticipants(room);
+        if (active.length === 0 || active.every((candidate) => candidate.finalAnswerSubmitted)) this.closeFinalResponsesInternal(room);
+      }
       if (room.state.phase === 'final-review') {
         const participants = new Set(room.state.finalRound.participantIds);
-        const nextIndex = room.state.players.findIndex((player) => participants.has(player.id) && !player.finalResolved);
+        const nextIndex = room.state.players.findIndex((candidate) => participants.has(candidate.id) && !candidate.finalResolved);
         if (nextIndex === -1) this.finishGame(room);
         else room.state.finalRound.reviewPlayerIndex = nextIndex;
       }

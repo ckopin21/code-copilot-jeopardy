@@ -38,6 +38,7 @@ export function HostEnhancements() {
   const [actionMessage, setActionMessage] = useState('');
   const lastPhaseRef = useRef<RoomSnapshot['phase'] | null>(null);
   const lastGameStartedRef = useRef<number | null>(null);
+  const transitionHydratedRef = useRef(false);
   const transitionTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -74,6 +75,12 @@ export function HostEnhancements() {
 
   useEffect(() => {
     if (!room) return;
+    if (!transitionHydratedRef.current) {
+      transitionHydratedRef.current = true;
+      lastPhaseRef.current = room.phase;
+      lastGameStartedRef.current = room.gameStartedAt;
+      return;
+    }
     const previous = lastPhaseRef.current;
     const gameChanged = room.gameStartedAt !== lastGameStartedRef.current;
     lastPhaseRef.current = room.phase;

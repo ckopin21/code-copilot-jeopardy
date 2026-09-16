@@ -74,6 +74,34 @@ describe('BrowserGameEngine production state', () => {
     expect(state.players.map((player) => player.seat)).toEqual([1, 2, 3]);
   });
 
+  it('reopens buzzers for remaining players when the current buzz winner is removed', () => {
+    const { engine, host } = setup({ dailyDoublesEnabled: false, finalRoundEnabled: false });
+    const one = addPlayer(engine, host.roomCode, 'One');
+    const two = addPlayer(engine, host.roomCode, 'Two');
+    engine.startGame(host.roomCode, host.hostToken);
+    const tile = firstUnused(engine, host.roomCode);
+    engine.selectQuestion(host.roomCode, host.hostToken, tile.questionId);
+    engine.openBuzzers(host.roomCode, host.hostToken);
+    engine.localBuzz(host.roomCode, host.hostToken, one.playerId);
+
+    engine.removePlayer(host.roomCode, host.hostToken, one.playerId);
+    const state = engine.snapshot(host.roomCode);
+    expect(state.currentQuestion?.buzzWinnerId).toBeNull();
+    expect(state.currentQuestion?.buzzOpen).toBe(true);
+    expect(state.players.find((player) => player.id === two.playerId)?.buzzEligible).toBe(true);
+    expect(() => engine.localBuzz(host.roomCode, host.hostToken, two.playerId)).not.toThrow();
+  });
+
+  it('prevents deleting the active Daily Double owner mid-question', () => {
+    const { engine, host } = setup({ gameLength: 'quick', dailyDoublesEnabled: true, dailyDoubleCount: 16 });
+    const player = addPlayer(engine, host.roomCode, 'Daily');
+    engine.startGame(host.roomCode, host.hostToken);
+    const daily = engine.snapshot(host.roomCode).board!.questions.find((question) => question.dailyDouble)!;
+    engine.selectQuestion(host.roomCode, host.hostToken, daily.questionId, player.playerId);
+    expect(() => engine.removePlayer(host.roomCode, host.hostToken, player.playerId)).toThrow(/Daily Double/i);
+    expect(engine.snapshot(host.roomCode).players.some((candidate) => candidate.id === player.playerId)).toBe(true);
+  });
+
   it('renames a player without changing identity or seat', () => {
     const { engine, host } = setup();
     const player = addPlayer(engine, host.roomCode, 'Before');
