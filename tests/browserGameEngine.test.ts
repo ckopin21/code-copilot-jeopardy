@@ -712,12 +712,13 @@ describe('BrowserGameEngine production state', () => {
     });
     const player = addPlayer(engine, host.roomCode, 'Late Buzz');
     engine.startGame(host.roomCode, host.hostToken);
-    const tile = firstUnused(engine, host.roomCode);
+    const rooms = (engine as unknown as { rooms: Map<string, { questions: Record<string, { responseMode?: 'buzz' | 'text' }>; state: { timer: { endsAt: number | null } } }> }).rooms;
+    const record = rooms.get(host.roomCode)!;
+    const tile = engine.snapshot(host.roomCode).board!.questions.find((candidate) => !candidate.used && (record.questions[candidate.questionId].responseMode ?? 'buzz') === 'buzz')!;
     engine.selectQuestion(host.roomCode, host.hostToken, tile.questionId);
     engine.openBuzzers(host.roomCode, host.hostToken);
     const before = engine.snapshot(host.roomCode);
 
-    const rooms = (engine as unknown as { rooms: Map<string, { state: { timer: { endsAt: number | null } } }> }).rooms;
     rooms.get(host.roomCode)!.state.timer.endsAt = Date.now() - 1;
 
     const result = engine.buzz(
