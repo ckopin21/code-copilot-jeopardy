@@ -1,9 +1,41 @@
 /* Small presentation-only alignment and impact refinements. Loaded after presentation-readability.css. */
 
-/* Optical alignment: compact modifier pills sit slightly high beside the large played value. */
+/* Keep the played value geometrically centered. Modifier labels live beside it without affecting centering. */
+.presentation-board .used-tile-topline,
+.board-presentation-mode .used-tile-topline {
+  position: relative;
+  min-height: clamp(20px, 2.2vh, 28px);
+  width: 100%;
+}
+
+.presentation-board .question-tile.used.has-result .used-tile-value,
+.board-presentation-mode .question-tile.used.has-result .used-tile-value {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  margin: 0;
+  z-index: 1;
+}
+
+.presentation-board .used-question-modifiers,
+.board-presentation-mode .used-question-modifiers {
+  position: absolute;
+  left: calc(50% + clamp(30px, 2.7vw, 46px));
+  right: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+  justify-content: flex-start;
+  flex-wrap: nowrap;
+  overflow: hidden;
+  z-index: 2;
+}
+
 .presentation-board .used-question-modifiers > span,
 .board-presentation-mode .used-question-modifiers > span {
-  transform: translateY(1.5px);
+  transform: translateY(1px);
+  flex: 0 1 auto;
+  min-width: 0;
 }
 
 /* A score token landing should create one decisive impact, not a repeated heartbeat. */
