@@ -224,23 +224,49 @@ body:has(.audio-drawer) .comeback-host { visibility: hidden; }
 }
 
 
-/* In presentation mode, streak and turn badges occupy separate zones so their borders/glow cannot collide. */
-.presentation-shell .showcase-player-card.is-turn:is(.is-fire,.is-cold) {
-  padding-right: 92px !important;
+/* Combined player statuses use one flow layout so streak and turn badges cannot overlap on any surface. */
+.showcase-player-card.is-turn:is(.is-fire,.is-cold) {
+  padding-right: 112px !important;
 }
-.presentation-shell .showcase-player-card.is-turn:is(.is-fire,.is-cold) .streak-ribbon {
-  left: 56px !important;
-  right: auto !important;
-  top: -14px !important;
+.showcase-player-card .player-status-stack {
+  position: absolute;
+  top: -12px;
+  right: 8px;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  max-width: calc(100% - 64px);
+  pointer-events: none;
+}
+.showcase-player-card .player-status-stack .streak-ribbon,
+.showcase-player-card .player-status-stack .turn-beacon {
+  position: static !important;
+  inset: auto !important;
+  margin: 0 !important;
   transform: none !important;
-  animation-name: presentationStreakRibbonPulse !important;
 }
-.presentation-shell .showcase-player-card.is-turn:is(.is-fire,.is-cold) .turn-beacon {
-  top: auto !important;
-  right: 8px !important;
-  bottom: 6px !important;
+.showcase-player-card .player-status-stack .streak-ribbon {
+  max-width: 100%;
+  animation-name: stackedStreakRibbonPulse !important;
 }
-@keyframes presentationStreakRibbonPulse {
+.showcase-player-card .player-status-stack .turn-beacon {
+  max-width: 100%;
+}
+@keyframes stackedStreakRibbonPulse {
   from { transform: scale(1); filter: brightness(1); }
   to { transform: scale(1.04); filter: brightness(1.12); }
+}
+
+@media (max-width: 760px) {
+  .showcase-player-card.is-turn:is(.is-fire,.is-cold) {
+    padding-right: 96px !important;
+  }
+  .showcase-player-card .player-status-stack {
+    top: -9px;
+    right: 6px;
+    gap: 4px;
+    max-width: calc(100% - 54px);
+  }
 }
