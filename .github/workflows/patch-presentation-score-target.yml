@@ -1,0 +1,37 @@
+name: Patch presentation score target
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/patch-presentation-score-target.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: python scripts/patch-presentation-score-target.py
+      - run: npm run typecheck
+      - run: npm run lint -- --max-warnings=0
+      - run: npm test
+      - run: npm run build
+      - run: git diff --check
+      - name: Commit validated patch
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/components/HostAppV3.tsx
+          git commit -m "fix: animate score on visible presentation card"
+          git push origin HEAD:main
