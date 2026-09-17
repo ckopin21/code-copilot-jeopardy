@@ -1,0 +1,94 @@
+.comeback-boost-notice {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1700;
+  width: min(760px, calc(100vw - 32px));
+  padding: 10px 14px;
+  border: 2px solid rgba(255, 215, 90, .78);
+  border-radius: 16px;
+  background: rgba(8, 18, 46, .96);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, .34), inset 0 0 22px rgba(255, 211, 70, .08);
+  color: #fff;
+  pointer-events: none;
+}
+
+.comeback-host { top: 76px; }
+.comeback-player { top: 82px; width: min(520px, calc(100vw - 20px)); }
+
+.comeback-boost-notice.x3 {
+  border-color: rgba(255, 151, 65, .92);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, .34), inset 0 0 24px rgba(255, 123, 50, .14);
+}
+
+.comeback-boost-title,
+.comeback-boost-values {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.comeback-boost-title span {
+  font-size: .68rem;
+  font-weight: 900;
+  letter-spacing: .14em;
+  color: #ffd95e;
+}
+
+.comeback-boost-title strong {
+  font-size: .88rem;
+  letter-spacing: .08em;
+}
+
+.comeback-boost-values {
+  margin-top: 5px;
+  padding: 7px 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .08);
+  font-variant-numeric: tabular-nums;
+}
+
+.comeback-boost-values span { opacity: .78; font-weight: 800; }
+.comeback-boost-values b { color: #ffd95e; font-size: 1.1rem; }
+.comeback-boost-values strong { color: #fff0a6; text-align: right; }
+
+.comeback-boost-note {
+  margin-top: 6px;
+  font-size: .76rem;
+  line-height: 1.25;
+  color: rgba(255, 255, 255, .82);
+}
+
+.comeback-boost-notice > small {
+  display: block;
+  margin-top: 4px;
+  color: #ffd95e;
+  font-size: .68rem;
+  font-weight: 800;
+}
+
+.comeback-rules-card p {
+  margin: 7px 0 0;
+  font-size: .78rem;
+  line-height: 1.35;
+  color: rgba(255, 255, 255, .78);
+}
+
+.comeback-rules-card p b { color: #ffe07a; }
+
+@media (max-width: 700px) {
+  .comeback-player {
+    top: 74px;
+    padding: 8px 10px;
+    border-radius: 12px;
+  }
+
+  .comeback-boost-values {
+    display: grid;
+    grid-template-columns: auto 18px 1fr;
+    font-size: .78rem;
+  }
+
+  .comeback-boost-note { font-size: .69rem; }
+}
