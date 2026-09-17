@@ -11,6 +11,7 @@ import './turn-rules-polish.css';
 import './pack-library.css';
 import './gameplay-regression-fixes.css';
 import './lobby-setup-fixes.css';
+import './round-start-result-fixes.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(<React.StrictMode><App/></React.StrictMode>);
 
