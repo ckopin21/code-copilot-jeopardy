@@ -3,7 +3,7 @@ import { analyzeDevScenario, type DevScenarioInput } from '../src/lib/devModeSce
 
 const base: DevScenarioInput = {
   playerCount: 2,
-  scores: [300, 0],
+  scores: [1000, 0],
   selectedSeat: 2,
   clueValue: 100,
   lateMultiplier: 1,
@@ -22,22 +22,22 @@ describe('dev mode scenario calculator', () => {
   });
 
   it('uses the production 3x comeback calculation', () => {
-    const result = analyzeDevScenario({ ...base, scores: [500, 0] });
+    const result = analyzeDevScenario({ ...base, scores: [2000, 0] });
     expect(result.comeback.multiplier).toBe(3);
     expect(result.correctValue).toBe(300);
     expect(result.comeback.tripleUsesRemaining).toBe(1);
   });
 
   it('respects spent boost limits', () => {
-    const result = analyzeDevScenario({ ...base, scores: [500, 0], tripleBoostsSpent: 1, doubleBoostsSpent: 2 });
+    const result = analyzeDevScenario({ ...base, scores: [2000, 0], tripleBoostsSpent: 1, doubleBoostsSpent: 2 });
     expect(result.comeback.multiplier).toBe(1);
     expect(result.correctValue).toBe(100);
     expect(result.comeback.tripleUsesRemaining).toBe(0);
     expect(result.comeback.doubleUsesRemaining).toBe(0);
   });
 
-  it('uses the late-game effective value for comeback thresholds', () => {
-    const result = analyzeDevScenario({ ...base, scores: [500, 0], lateMultiplier: 2 });
+  it('stacks the comeback multiplier on the late-game effective value', () => {
+    const result = analyzeDevScenario({ ...base, lateMultiplier: 2 });
     expect(result.normalValue).toBe(200);
     expect(result.comeback.multiplier).toBe(2);
     expect(result.correctValue).toBe(400);
@@ -45,7 +45,7 @@ describe('dev mode scenario calculator', () => {
   });
 
   it('does not activate a comeback boost when the selected player is not last', () => {
-    const result = analyzeDevScenario({ ...base, playerCount: 3, scores: [500, 300, 0], selectedSeat: 2 });
+    const result = analyzeDevScenario({ ...base, playerCount: 3, scores: [1000, 300, 0], selectedSeat: 2 });
     expect(result.isLastPlace).toBe(false);
     expect(result.comeback.multiplier).toBe(1);
   });
