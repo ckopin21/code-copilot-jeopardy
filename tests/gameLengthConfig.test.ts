@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DAILY_DOUBLE_COUNT_BY_LENGTH, GAME_LENGTH_CONFIG, settingsForGameLength } from '../src/shared/config';
+import { clampDailyDoubleCount, DAILY_DOUBLE_COUNT_BY_LENGTH, GAME_LENGTH_CONFIG, settingsForGameLength } from '../src/shared/config';
 import { QUESTION_VALUES } from '../src/shared/types';
 
 describe('game length configuration', () => {
@@ -23,6 +23,14 @@ describe('game length configuration', () => {
     expect(settingsForGameLength('quick')).toEqual({ gameLength: 'quick', dailyDoubleCount: 2, dailyDoublesEnabled: true });
     expect(settingsForGameLength('standard')).toEqual({ gameLength: 'standard', dailyDoubleCount: 4, dailyDoublesEnabled: true });
     expect(settingsForGameLength('marathon')).toEqual({ gameLength: 'marathon', dailyDoubleCount: 6, dailyDoublesEnabled: true });
+  });
+
+
+  it('clamps manually entered Daily Doubles to the selected pack question count', () => {
+    expect(clampDailyDoubleCount(99, 24)).toBe(24);
+    expect(clampDailyDoubleCount(12, 24)).toBe(12);
+    expect(clampDailyDoubleCount(-3, 24)).toBe(0);
+    expect(clampDailyDoubleCount(7.9, 24)).toBe(7);
   });
 
 });
