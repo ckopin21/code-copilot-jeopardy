@@ -100,10 +100,10 @@ describe('limited comeback scoring', () => {
     expect(comebackBoostsUnlocked(state)).toBe(false);
   });
 
-  it('gives the sole last-place turn owner 3x when trailing by at least 4x the clue value', () => {
+  it('gives the sole last-place turn owner 3x when trailing by at least 4x the board reference', () => {
     const { engine, host, leader, chaser } = setup();
     unlockComebacks(engine, host.roomCode, host.hostToken, [leader.playerId, chaser.playerId]);
-    engine.adjustScore(host.roomCode, host.hostToken, leader.playerId, 1000);
+    engine.adjustScore(host.roomCode, host.hostToken, leader.playerId, 2000);
     const before = engine.snapshot(host.roomCode).players.find((player) => player.id === chaser.playerId)!;
     selectValue(engine, host.roomCode, host.hostToken, chaser.playerId, 100);
     engine.openBuzzers(host.roomCode, host.hostToken);
@@ -116,10 +116,10 @@ describe('limited comeback scoring', () => {
     expect(after.stats.pointsGained - before.stats.pointsGained).toBe(300);
   });
 
-  it('gives the sole last-place turn owner 2x when trailing by at least 2x but less than 4x', () => {
+  it('gives the sole last-place turn owner 2x when trailing by at least 2x but less than 4x the board reference', () => {
     const { engine, host, leader, chaser } = setup();
     unlockComebacks(engine, host.roomCode, host.hostToken, [leader.playerId, chaser.playerId]);
-    engine.adjustScore(host.roomCode, host.hostToken, leader.playerId, 300);
+    engine.adjustScore(host.roomCode, host.hostToken, leader.playerId, 1000);
     const beforeScore = engine.snapshot(host.roomCode).players.find((player) => player.id === chaser.playerId)!.score;
     selectValue(engine, host.roomCode, host.hostToken, chaser.playerId, 100);
     engine.openBuzzers(host.roomCode, host.hostToken);
@@ -128,6 +128,38 @@ describe('limited comeback scoring', () => {
     const resolved = engine.resolveAnswer(host.roomCode, host.hostToken, chaser.playerId, true);
 
     expect(resolved.players.find((player) => player.id === chaser.playerId)!.score - beforeScore).toBe(200);
+  });
+
+  it('uses the same comeback tier for every clue value on the board', () => {
+    const { engine, leader, chaser, host } = setup();
+    const state = engine.snapshot(host.roomCode);
+    unlockStateComebacks(state);
+    const leaderState = state.players.find((player) => player.id === leader.playerId)!;
+    const chaserState = state.players.find((player) => player.id === chaser.playerId)!;
+    leaderState.score = 1000;
+    chaserState.score = 0;
+    state.turnPlayerId = chaserState.id;
+    state.phase = 'board';
+
+    expect(calculateComebackAward(state, chaserState, 100).multiplier).toBe(2);
+    expect(calculateComebackAward(state, chaserState, 500).multiplier).toBe(2);
+    expect(calculateComebackAward(state, chaserState, 500).points).toBe(1000);
+  });
+
+  it('stacks comeback scoring on top of an already-modified effective clue value', () => {
+    const { engine, leader, chaser, host } = setup();
+    const state = engine.snapshot(host.roomCode);
+    unlockStateComebacks(state);
+    const leaderState = state.players.find((player) => player.id === leader.playerId)!;
+    const chaserState = state.players.find((player) => player.id === chaser.playerId)!;
+    leaderState.score = 1000;
+    chaserState.score = 0;
+    state.turnPlayerId = chaserState.id;
+    state.phase = 'board';
+
+    const award = calculateComebackAward(state, chaserState, 1000);
+    expect(award.multiplier).toBe(2);
+    expect(award.points).toBe(2000);
   });
 
   it('does not activate when multiple players are tied for last place', () => {
@@ -197,7 +229,7 @@ describe('limited comeback scoring', () => {
     unlockStateComebacks(state);
     const leaderState = state.players.find((player) => player.id === leader.playerId)!;
     const chaserState = state.players.find((player) => player.id === chaser.playerId)!;
-    leaderState.score = 1000;
+    leaderState.score = 3000;
     chaserState.score = 0;
     state.turnPlayerId = chaserState.id;
     state.phase = 'board';
@@ -229,7 +261,7 @@ describe('limited comeback scoring', () => {
     unlockStateComebacks(state);
     const leaderState = state.players.find((player) => player.id === leader.playerId)!;
     const chaserState = state.players.find((player) => player.id === chaser.playerId)!;
-    leaderState.score = 300;
+    leaderState.score = 1000;
     chaserState.score = 0;
     chaserState.positiveStreak = 5;
     state.turnPlayerId = chaserState.id;
