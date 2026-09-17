@@ -205,10 +205,10 @@ export function HostEnhancements() {
 
       <section className="host-command-section comeback-rules-card">
         <div className="drawer-section-title"><strong>Comeback boosts</strong><small>Last-place help, only on that player’s turn.</small></div>
-        <p><b>2× boost:</b> trail the leader by at least 2× the normal clue value. Each player gets two successful uses per game.</p>
-        <p><b>3× boost:</b> trail by at least 4× the normal clue value. Each player gets one successful use per game.</p>
-        <p><b>A use is spent only when that player answers correctly.</b> A miss or no answer loses only the normal value. If someone else buzzes, they score normally and the boost stays available.</p>
-        <p>Daily Doubles and Final do not use comeback boosts. A boost also disappears whenever the player’s score no longer meets the trailing requirement.</p>
+        <p><b>2× boost:</b> if the sole last-place player trails the leader by at least 2× the board’s highest base clue value, every ordinary clue on that player’s turn scores 2× for them. Each player gets two successful uses per game.</p>
+        <p><b>3× boost:</b> if that deficit reaches 4× the same board reference, every ordinary clue on that player’s turn scores 3× while the one triple use remains.</p>
+        <p><b>A use is spent only when that player answers correctly.</b> A miss or no answer loses only the normal effective value. If someone else buzzes, they score normally and the boost stays available.</p>
+        <p><b>Other score modifiers stack.</b> A late-game 2× clue plus a 2× comeback boost pays 4× the original base clue. Daily Doubles and Final do not use comeback boosts.</p>
       </section>
 
       <section className="host-command-section">

@@ -49,6 +49,19 @@ function activePlayers(state: RoomState): Player[] {
 }
 
 /**
+ * Comeback thresholds use one stable board reference instead of the selected
+ * clue value. That keeps the active comeback tier identical for every clue on
+ * the player's turn. The actual award still multiplies the effective clue value,
+ * so late-game 2x/3x modifiers stack normally with comeback boosts.
+ */
+export function comebackReferenceValue(state: RoomState): number {
+  const values = (state.board?.questions ?? [])
+    .map((tile) => tile.value)
+    .filter((value) => Number.isFinite(value) && value > 0);
+  return values.length ? Math.max(...values) : 0;
+}
+
+/**
  * Comeback help starts only after every active player has individually completed
  * at least two turns. Turn ownership is stored on each played board tile. The
  * currently open clue is excluded, so a player's second turn must be fully
@@ -89,14 +102,18 @@ function inactiveAward(basePoints: number, doubleUsesRemaining: number, tripleUs
  *
  * - Boosts stay disabled until every active player has completed two turns.
  * - Exactly one active player must be alone in last place; a tie for last gets no boost.
- * - Trailing the leader by at least 2x the normal clue value unlocks a 2x award.
- * - Trailing by at least 4x unlocks a 3x award while that one-time boost remains.
+ * - Trailing the leader by at least 2x the board's highest base clue value unlocks
+ *   a 2x award on every ordinary clue while that condition remains true.
+ * - Trailing by at least 4x that same stable reference unlocks a 3x award on every
+ *   ordinary clue while the one-time triple boost remains.
  * - Each player may successfully use two 2x boosts and one 3x boost per game.
- * - A failed/no-answer attempt still risks only the normal clue value because this
- *   helper is only used for correct ordinary answers.
- * - Other players always receive the normal value, even when they answer a clue
- *   selected on the boosted player's turn.
+ * - A failed/no-answer attempt still risks only the normal effective clue value because
+ *   this helper is only used for correct ordinary answers.
+ * - Other players always receive the normal effective value, even when they answer a
+ *   clue selected on the boosted player's turn.
  * - Daily Doubles and Final intentionally bypass this system.
+ * - The comeback multiplier is applied to basePoints, which is already the effective
+ *   clue value. This intentionally stacks with late-game 2x/3x modifiers.
  *
  * Uses are derived from authoritative board-result history so reconnects and Undo
  * do not need a second counter that can drift out of sync.
@@ -106,8 +123,9 @@ export function calculateComebackAward(state: RoomState, player: Player, basePoi
   const doubleUsesRemaining = Math.max(0, MAX_DOUBLE_BOOSTS - spent.doubles);
   const tripleUsesRemaining = Math.max(0, MAX_TRIPLE_BOOSTS - spent.triples);
   const eligiblePlayers = activePlayers(state);
+  const referenceValue = comebackReferenceValue(state);
 
-  if (!Number.isFinite(basePoints) || basePoints <= 0 || eligiblePlayers.length < 2 || !comebackBoostsUnlocked(state)) {
+  if (!Number.isFinite(basePoints) || basePoints <= 0 || referenceValue <= 0 || eligiblePlayers.length < 2 || !comebackBoostsUnlocked(state)) {
     return inactiveAward(basePoints, doubleUsesRemaining, tripleUsesRemaining);
   }
 
@@ -125,7 +143,7 @@ export function calculateComebackAward(state: RoomState, player: Player, basePoi
     return inactiveAward(basePoints, doubleUsesRemaining, tripleUsesRemaining);
   }
 
-  if (deficit >= basePoints * 4 && tripleUsesRemaining > 0) {
+  if (deficit >= referenceValue * 4 && tripleUsesRemaining > 0) {
     return {
       points: basePoints * 3,
       bonus: basePoints * 2,
@@ -139,7 +157,7 @@ export function calculateComebackAward(state: RoomState, player: Player, basePoi
     };
   }
 
-  if (deficit >= basePoints * 2 && doubleUsesRemaining > 0) {
+  if (deficit >= referenceValue * 2 && doubleUsesRemaining > 0) {
     return {
       points: basePoints * 2,
       bonus: basePoints,

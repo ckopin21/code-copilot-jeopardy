@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { audio } from '../lib/audio';
 import { musicGainToSlider, musicSliderToGain } from '../lib/musicVolumePolicy';
 import { MusicTrackSelect } from './BackgroundMusicPicker';
@@ -6,12 +6,26 @@ import { MusicTrackSelect } from './BackgroundMusicPicker';
 export function AudioMixer() {
   const [open, setOpen] = useState(false);
   const [settings, setSettings] = useState(audio.settings);
+  const toggleRef = useRef<HTMLButtonElement | null>(null);
+  const drawerRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     const sync = () => setSettings({ ...audio.settings });
     window.addEventListener('blue-stage:audio-settings', sync);
     return () => window.removeEventListener('blue-stage:audio-settings', sync);
   }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (toggleRef.current?.contains(target) || drawerRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+    document.addEventListener('pointerdown', closeOnOutsidePointer, true);
+    return () => document.removeEventListener('pointerdown', closeOnOutsidePointer, true);
+  }, [open]);
 
   const update = (key: 'master' | 'music' | 'effects', value: number) => {
     const storedValue = key === 'music' ? musicSliderToGain(value) : value;
@@ -26,8 +40,8 @@ export function AudioMixer() {
   };
 
   return <Fragment>
-    <button type="button" className="nav-button audio-toggle-button" aria-expanded={open} onClick={() => setOpen((value) => !value)}>{settings.muted ? '🔇 Audio' : '🔊 Audio'}</button>
-    {open && <section className="audio-drawer" aria-label="Audio controls">
+    <button ref={toggleRef} type="button" className="nav-button audio-toggle-button" aria-expanded={open} onClick={() => setOpen((value) => !value)}>{settings.muted ? '🔇 Audio' : '🔊 Audio'}</button>
+    {open && <section ref={drawerRef} className="audio-drawer" aria-label="Audio controls">
       <div className="audio-drawer-head"><div><strong>Audio Controls</strong><small>Adjust game music and sound effects.</small></div><button type="button" className="audio-close-button" onClick={() => setOpen(false)} aria-label="Close audio controls">×</button></div>
       <MusicTrackSelect className="audio-music-select" />
       <div className="audio-slider-grid">

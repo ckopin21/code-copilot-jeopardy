@@ -1,0 +1,108 @@
+/* Final regression pass for menu audio, host overlays, player-card badges, and board centering. */
+
+/* Main-menu music should be adjustable without entering a game. */
+.menu-music-volume {
+  min-height: 38px;
+  display: grid;
+  grid-template-columns: auto minmax(90px, 140px) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 11px;
+  border: 1px solid rgba(255,255,255,.17);
+  border-radius: 999px;
+  background: rgba(3,26,43,.66);
+  color: #cce5f3;
+  font-size: .7rem;
+  font-weight: 900;
+}
+.menu-music-volume input { width: 100%; accent-color: #ffd166; }
+.menu-music-volume b { min-width: 34px; color: #ffd166; text-align: right; font-variant-numeric: tabular-nums; }
+.menu-music-select { min-width: 190px; }
+
+/* The host comeback notice uses a reserved band beneath the top bar instead of covering the board/player cards. */
+.comeback-host {
+  top: 76px !important;
+  width: min(900px, calc(100vw - 36px)) !important;
+  padding: 7px 11px !important;
+  border-radius: 13px !important;
+}
+.comeback-host .comeback-boost-title { justify-content: center; gap: 14px; }
+.comeback-host .comeback-boost-values {
+  justify-content: center;
+  margin-top: 4px;
+  padding: 5px 8px;
+  text-align: center;
+  font-size: .76rem;
+}
+.comeback-host .comeback-boost-note { display: none; }
+.comeback-host > small {
+  margin-top: 3px;
+  text-align: center;
+  font-size: .62rem;
+  line-height: 1.18;
+}
+body:has(.comeback-host):not(:has(.audio-drawer)) .showcase-host .showcase-player-strip {
+  margin-top: 88px !important;
+}
+body:has(.audio-drawer) .comeback-host { visibility: hidden; }
+
+/* Turn ownership belongs away from streak ribbons. */
+.showcase-player-card.is-turn .turn-beacon {
+  top: auto !important;
+  right: 10px !important;
+  bottom: 8px !important;
+}
+
+/* Keep late-game board UI centered as banners/results appear. */
+.showcase-board-stage.game-stage {
+  width: min(1540px, 100%);
+  margin-inline: auto !important;
+}
+.showcase-board-stage > .board-header-v2,
+.showcase-board-stage > .modifier-banner,
+.showcase-board-stage > .board,
+.showcase-board-stage > .score-controls-v2 {
+  width: 100%;
+  margin-inline: auto !important;
+  box-sizing: border-box;
+}
+.showcase-board-stage > .modifier-banner {
+  justify-content: center !important;
+  text-align: center;
+}
+.showcase-board-stage .question-tile.used .used-tile-result,
+.showcase-board-stage .question-tile.used .used-result-list {
+  width: 100%;
+  margin-inline: auto;
+  text-align: center;
+}
+.showcase-board-stage .question-tile.used .used-result-list {
+  justify-items: center;
+  align-items: center;
+}
+.showcase-board-stage .question-tile.used .used-result-chip {
+  width: calc(100% - 8px);
+  margin-inline: auto;
+}
+
+/* Manual score controls should sit clearly below the board, never clip into the final row. */
+.showcase-board-stage .score-controls-v2 {
+  position: relative;
+  z-index: 2;
+  margin-top: 18px !important;
+  padding-top: 4px;
+}
+
+/* Daily Double count is intentionally editable in setup. */
+.showcase-lobby .settings-grid-v2 label:has(input[type="number"]) input:not([readonly]) {
+  cursor: text;
+  border-color: rgba(255,209,102,.34);
+}
+
+@media (max-width: 760px) {
+  .menu-music-volume { width: 100%; grid-template-columns: 56px minmax(0,1fr) 36px; }
+  .menu-music-select { width: 100%; min-width: 0; }
+  .comeback-host { top: 68px !important; width: calc(100vw - 18px) !important; }
+  body:has(.comeback-host):not(:has(.audio-drawer)) .showcase-host .showcase-player-strip { margin-top: 92px !important; }
+  .showcase-player-card.is-turn .turn-beacon { right: 7px !important; bottom: 6px !important; }
+}

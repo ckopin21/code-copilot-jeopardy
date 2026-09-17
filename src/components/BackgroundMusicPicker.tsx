@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useState } from 'react';
 import { audio, BACKGROUND_TRACKS, type BackgroundTrackId } from '../lib/audio';
-import { MUSIC_GAIN_MAX } from '../lib/musicVolumePolicy';
+import { MUSIC_GAIN_MAX, musicGainToSlider, musicSliderToGain } from '../lib/musicVolumePolicy';
 
 const MENU_MUSIC_RESTORE_KEY = 'blue-stage-menu-music-before-mute';
 
@@ -14,13 +14,14 @@ function savedMusicRestoreGain(): number {
 
 export function MusicTrackSelect({ className = '' }: { className?: string }) {
   const [track, setTrack] = useState<BackgroundTrackId>(audio.settings.backgroundTrack);
-  const [musicMuted, setMusicMuted] = useState(audio.settings.music <= 0);
-  const showMenuMute = className.split(/\s+/).includes('menu-music-select');
+  const [musicGain, setMusicGain] = useState(audio.settings.music);
+  const musicMuted = musicGain <= 0;
+  const showMenuControls = className.split(/\s+/).includes('menu-music-select');
 
   useEffect(() => {
     const sync = () => {
       setTrack(audio.settings.backgroundTrack);
-      setMusicMuted(audio.settings.music <= 0);
+      setMusicGain(audio.settings.music);
     };
     window.addEventListener('blue-stage:audio-settings', sync);
     return () => window.removeEventListener('blue-stage:audio-settings', sync);
@@ -29,6 +30,15 @@ export function MusicTrackSelect({ className = '' }: { className?: string }) {
   const changeTrack = (next: BackgroundTrackId) => {
     setTrack(next);
     audio.setBackgroundTrack(next);
+  };
+
+  const setMenuMusicVolume = (sliderValue: number) => {
+    const nextGain = musicSliderToGain(sliderValue);
+    if (nextGain > 0) {
+      try { localStorage.setItem(MENU_MUSIC_RESTORE_KEY, String(nextGain)); } catch { /* optional preference storage */ }
+    }
+    audio.setSettings({ music: nextGain });
+    if (nextGain > 0) void audio.unlock().then(() => audio.setMusic('lobby')).catch(() => {});
   };
 
   const toggleMenuMusic = () => {
@@ -49,10 +59,16 @@ export function MusicTrackSelect({ className = '' }: { className?: string }) {
     </select>
   </label>;
 
-  if (!showMenuMute) return selector;
+  if (!showMenuControls) return selector;
 
+  const sliderValue = musicGainToSlider(musicGain);
   return <Fragment>
     {selector}
+    <label className="menu-music-volume">
+      <span>Music</span>
+      <input type="range" min="0" max="1" step="0.05" value={sliderValue} onChange={(event) => setMenuMusicVolume(Number(event.target.value))} />
+      <b>{Math.round(sliderValue * 100)}%</b>
+    </label>
     <button type="button" className={`menu-tool-button menu-music-mute${musicMuted ? ' active' : ''}`} aria-pressed={musicMuted} onClick={toggleMenuMusic}>
       <span aria-hidden="true">{musicMuted ? '🔇' : '♫'}</span>{musicMuted ? 'Unmute Music' : 'Mute Music'}
     </button>

@@ -1,4 +1,3 @@
-import { DAILY_DOUBLE_COUNT_BY_LENGTH } from '../shared/config';
 import type { PackSummary, Player, RoomSnapshot } from '../shared/types';
 import { readActiveHostCredentials } from './hostCredentials';
 import { emitAck, socket } from './socket';
@@ -98,10 +97,7 @@ function nextConnectedAfter(snapshot: RoomSnapshot, playerId: string | null | un
 
 function enforceAutomaticRules(snapshot: RoomSnapshot): void {
   if (snapshot.phase !== 'lobby' || settingsUpdatePending) return;
-  const dailyDoubleCount = DAILY_DOUBLE_COUNT_BY_LENGTH[snapshot.settings.gameLength];
   const updates: Record<string, unknown> = {};
-  if (snapshot.settings.dailyDoubleCount !== dailyDoubleCount) updates.dailyDoubleCount = dailyDoubleCount;
-  if (!snapshot.settings.dailyDoublesEnabled) updates.dailyDoublesEnabled = true;
   if (snapshot.settings.coldStreakThreshold !== 3) updates.coldStreakThreshold = 3;
   if (!Object.keys(updates).length) return;
 
@@ -280,13 +276,13 @@ function enhanceExistingControls(settingsCard: HTMLElement): void {
   turnLabel?.setAttribute('data-tooltip', 'Join order rotates by seat. Manual lets you drag players into a custom rotation order.');
 
   if (dailyLabel) {
-    dailyLabel.classList.add('automatic-daily-double-control');
-    dailyLabel.setAttribute('data-tooltip', 'Automatic by game length: Quick 2, Standard 4, Marathon 6.');
+    dailyLabel.classList.remove('automatic-daily-double-control');
+    dailyLabel.setAttribute('data-tooltip', 'Choose how many hidden Daily Doubles appear on this board. Set 0 to disable them.');
     const input = dailyLabel.querySelector<HTMLInputElement>('input');
     if (input) {
-      input.readOnly = true;
-      input.setAttribute('aria-readonly', 'true');
-      input.title = 'Set automatically by game length';
+      input.readOnly = false;
+      input.removeAttribute('aria-readonly');
+      input.title = 'Daily Double count';
     }
   }
   coldLabel?.classList.add('cold-streak-hidden-control');

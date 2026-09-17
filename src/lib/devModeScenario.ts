@@ -127,6 +127,21 @@ export function buildDevScenario(input: DevScenarioInput): RoomSnapshot {
     results: []
   });
 
+  // The production comeback tier uses the board's highest base clue as one stable
+  // reference. Standard boards top out at 500; the 1000 row represents Marathon.
+  // Include that board context so changing the inspected clue does not accidentally
+  // change the comeback tier in the developer calculator.
+  const boardReferenceValue = input.clueValue === 1000 ? 1000 : 500;
+  history.push({
+    questionId: 'dev-board-reference',
+    category: 'DEV REFERENCE',
+    value: boardReferenceValue as QuestionValue,
+    used: false,
+    dailyDouble: false,
+    turnPlayerId: null,
+    results: []
+  });
+
   return {
     code: 'DEV00',
     phase: 'question',
@@ -137,7 +152,7 @@ export function buildDevScenario(input: DevScenarioInput): RoomSnapshot {
     hostConnected: true,
     locked: false,
     players,
-    settings: { ...DEFAULT_SETTINGS },
+    settings: { ...DEFAULT_SETTINGS, gameLength: boardReferenceValue === 1000 ? 'marathon' : 'standard' },
     board: { categories: ['DEV QUESTION'], questions: history },
     currentQuestion: {
       questionId: 'dev-question',
