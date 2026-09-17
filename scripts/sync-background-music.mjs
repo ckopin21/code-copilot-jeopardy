@@ -1,5 +1,4 @@
 import { Buffer } from 'node:buffer';
-import { execFileSync } from 'node:child_process';
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -36,74 +35,9 @@ const tracks = [
 
 const headers = {
   'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/140 Safari/537.36',
-  accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+  accept: 'audio/mpeg,audio/*;q=0.9,*/*;q=0.8',
   'accept-language': 'en-US,en;q=0.9'
 };
-
-function decodeHtmlUrls(html) {
-  return html
-    .replaceAll('\\u002F', '/')
-    .replaceAll('\\/', '/')
-    .replaceAll('&amp;', '&')
-    .replaceAll('&#x26;', '&');
-}
-
-function findAudioUrl(html, contentId) {
-  const normalized = decodeHtmlUrls(html);
-  const contentUrl = normalized.match(/"contentUrl"\s*:\s*"([^"]+\.mp3[^"]*)"/i)?.[1];
-  if (contentUrl) return contentUrl.replaceAll('\\u002F', '/').replaceAll('\\/', '/');
-
-  const matches = [...normalized.matchAll(/https:\/\/cdn\.pixabay\.com\/(?:download\/)?audio\/[^\s"'<>]+/g)]
-    .map((match) => match[0].replace(/[),;]+$/, ''));
-  const mp3s = matches.filter((url) => /\.mp3(?:\?|$)/i.test(url));
-  return mp3s.find((url) => url.includes(contentId)) ?? mp3s[0] ?? null;
-}
-
-function loadWithHeadlessChrome(url) {
-  for (const executable of ['google-chrome', 'chromium', 'chromium-browser']) {
-    try {
-      return execFileSync(executable, [
-        '--headless=new',
-        '--no-sandbox',
-        '--disable-gpu',
-        '--disable-dev-shm-usage',
-        '--virtual-time-budget=5000',
-        '--dump-dom',
-        url
-      ], { encoding: 'utf8', maxBuffer: 25 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] });
-    } catch { /* try the next browser executable */ }
-  }
-  return '';
-}
-
-async function loadTrackPage(track) {
-  const direct = await globalThis.fetch(track.page, { headers, redirect: 'follow' }).catch(() => null);
-  if (direct?.ok) {
-    const html = await direct.text();
-    if (findAudioUrl(html, track.contentId)) return html;
-  }
-
-  const proxyUrl = `https://r.jina.ai/${track.page}`;
-  const proxied = await globalThis.fetch(proxyUrl, {
-    headers: {
-      'x-respond-with': 'html',
-      'x-wait-for-selector': 'script[type="application/ld+json"]',
-      'x-timeout': '45'
-    },
-    redirect: 'follow'
-  }).catch(() => null);
-  if (proxied?.ok) {
-    const html = await proxied.text();
-    if (findAudioUrl(html, track.contentId)) return html;
-  }
-
-  // GitHub-hosted runners include Chrome. A real browser is the final fallback when Pixabay
-  // rejects a plain datacenter request or requires the page to render before JSON-LD appears.
-  const browserHtml = loadWithHeadlessChrome(track.page);
-  if (findAudioUrl(browserHtml, track.contentId)) return browserHtml;
-
-  throw new Error(`Could not resolve the public audio URL for ${track.id}`);
-}
 
 async function validExistingFile(path) {
   try {
@@ -113,6 +47,24 @@ async function validExistingFile(path) {
   }
 }
 
+async function downloadTrack(track) {
+  const downloadUrl = `https://pixabay.com/music/download/id-${track.contentId}.mp3`;
+  const response = await globalThis.fetch(downloadUrl, {
+    headers: { ...headers, referer: track.page },
+    redirect: 'follow'
+  });
+  if (!response.ok) throw new Error(`Could not download ${track.id}: ${response.status}`);
+
+  const bytes = Buffer.from(await response.arrayBuffer());
+  const contentType = response.headers.get('content-type') ?? '';
+  const prefix = bytes.subarray(0, 64).toString('utf8').toLowerCase();
+  const looksHtml = prefix.includes('<html') || prefix.includes('<!doctype');
+  if (bytes.length < 100_000 || looksHtml || (!contentType.includes('audio') && !contentType.includes('octet-stream'))) {
+    throw new Error(`Downloaded content for ${track.id} is not a valid audio file (${contentType || 'unknown type'}, ${bytes.length} bytes)`);
+  }
+  return bytes;
+}
+
 async function syncTrack(track) {
   const target = join(outDir, track.file);
   if (await validExistingFile(target)) {
@@ -120,20 +72,7 @@ async function syncTrack(track) {
     return;
   }
 
-  const html = await loadTrackPage(track);
-  const audioUrl = findAudioUrl(html, track.contentId);
-  if (!audioUrl) throw new Error(`Could not locate the MP3 URL for ${track.id}`);
-
-  const audioResponse = await globalThis.fetch(audioUrl, {
-    headers: { ...headers, referer: track.page },
-    redirect: 'follow'
-  });
-  if (!audioResponse.ok) throw new Error(`Could not download ${track.id}: ${audioResponse.status}`);
-  const bytes = Buffer.from(await audioResponse.arrayBuffer());
-  const contentType = audioResponse.headers.get('content-type') ?? '';
-  if (bytes.length < 100_000 || (!contentType.includes('audio') && bytes.subarray(0, 32).toString('utf8').includes('<html'))) {
-    throw new Error(`Downloaded content for ${track.id} is not a valid audio file`);
-  }
+  const bytes = await downloadTrack(track);
   await writeFile(target, bytes);
   globalThis.console.log(`music: downloaded ${track.id} (${Math.round(bytes.length / 1024)} KiB)`);
 }
@@ -141,7 +80,6 @@ async function syncTrack(track) {
 await mkdir(outDir, { recursive: true });
 await Promise.all(tracks.map(syncTrack));
 
-// Keep source/licensing provenance alongside the generated assets without checking binaries into git.
 const notice = `Background music sources\n\nThese tracks are fetched at build/dev time from Pixabay and are used under the Pixabay Content License.\n\n${tracks.map((track) => `- ${track.file}: ${track.page}`).join('\n')}\n`;
 const noticePath = join(outDir, 'SOURCES.txt');
 let currentNotice = '';
