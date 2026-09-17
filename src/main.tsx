@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './lib/roomStorageRecovery';
 import './lib/lobbySetupEnhancements';
+import './lib/hostFullscreenControl';
 import App from './App';
 import './responsive-player-cards.css';
 import './endgame-menu-fixes.css';
