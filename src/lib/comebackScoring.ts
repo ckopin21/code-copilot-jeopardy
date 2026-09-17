@@ -18,6 +18,7 @@ export interface ComebackAward {
 
 const MAX_DOUBLE_BOOSTS = 2;
 const MAX_TRIPLE_BOOSTS = 1;
+const MIN_COMPLETED_TURNS_PER_PLAYER = 2;
 
 function spentComebackBoosts(state: RoomState, playerId: string): { doubles: number; triples: number } {
   let doubles = 0;
@@ -37,6 +38,27 @@ function spentComebackBoosts(state: RoomState, playerId: string): { doubles: num
   return { doubles, triples };
 }
 
+function activePlayerCount(state: RoomState): number {
+  const participantIds = state.currentQuestion?.participantIds;
+  if (participantIds?.length) return participantIds.length;
+  const connected = state.players.filter((player) => player.connected).length;
+  return connected || state.players.length;
+}
+
+/**
+ * Comeback help starts only after two complete rounds of turns have finished.
+ * With the normal rotating turn order, this means every active player has completed
+ * at least two turns before anyone can receive a boost. The currently open clue is
+ * excluded so the final player's second turn cannot unlock a boost mid-question.
+ */
+export function comebackBoostsUnlocked(state: RoomState): boolean {
+  const players = activePlayerCount(state);
+  if (players < 2) return false;
+  const activeQuestionId = state.currentQuestion?.questionId;
+  const completedQuestions = (state.board?.questions ?? []).filter((tile) => tile.used && tile.questionId !== activeQuestionId).length;
+  return completedQuestions >= players * MIN_COMPLETED_TURNS_PER_PLAYER;
+}
+
 function inactiveAward(basePoints: number, doubleUsesRemaining: number, tripleUsesRemaining: number): ComebackAward {
   return {
     points: basePoints,
@@ -54,7 +76,8 @@ function inactiveAward(basePoints: number, doubleUsesRemaining: number, tripleUs
 /**
  * Limited comeback boosts for the player whose turn selected the clue.
  *
- * - The player must currently be tied for last place.
+ * - Boosts stay disabled until two complete rounds of turns have finished.
+ * - Exactly one player must be alone in last place; a tie for last gets no boost.
  * - Trailing the leader by at least 2x the normal clue value unlocks a 2x award.
  * - Trailing by at least 4x unlocks a 3x award while that one-time boost remains.
  * - Each player may successfully use two 2x boosts and one 3x boost per game.
@@ -72,7 +95,7 @@ export function calculateComebackAward(state: RoomState, player: Player, basePoi
   const doubleUsesRemaining = Math.max(0, MAX_DOUBLE_BOOSTS - spent.doubles);
   const tripleUsesRemaining = Math.max(0, MAX_TRIPLE_BOOSTS - spent.triples);
 
-  if (!Number.isFinite(basePoints) || basePoints <= 0 || state.players.length < 2) {
+  if (!Number.isFinite(basePoints) || basePoints <= 0 || state.players.length < 2 || !comebackBoostsUnlocked(state)) {
     return inactiveAward(basePoints, doubleUsesRemaining, tripleUsesRemaining);
   }
 
@@ -84,8 +107,9 @@ export function calculateComebackAward(state: RoomState, player: Player, basePoi
   const scores = state.players.map((candidate) => candidate.score);
   const leaderScore = Math.max(...scores);
   const lastPlaceScore = Math.min(...scores);
+  const lastPlacePlayers = state.players.filter((candidate) => candidate.score === lastPlaceScore);
   const deficit = leaderScore - player.score;
-  if (deficit <= 0 || player.score !== lastPlaceScore) {
+  if (deficit <= 0 || lastPlacePlayers.length !== 1 || lastPlacePlayers[0].id !== player.id) {
     return inactiveAward(basePoints, doubleUsesRemaining, tripleUsesRemaining);
   }
 
