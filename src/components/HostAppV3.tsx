@@ -566,7 +566,7 @@ export function HostAppV3() {
   const spectacleText = revealBeat === 1 ? 'LOCK IT IN' : revealBeat === 2 ? 'NO MORE CHANGES' : revealBeat === 3 ? 'THE ANSWER IS…' : 'REVEALED';
 
   return (
-    <main className="host-shell showcase-host">
+    <main className={`host-shell showcase-host ${presentationMode ? 'host-presentation-mode' : ''}`}>
       <header className="topbar new-topbar showcase-topbar">
         <button className="nav-button" onClick={goMenu}>← Menu</button>
         <div className="mini-brand"><span>BLUE STAGE</span><strong>TRIVIA</strong></div>
