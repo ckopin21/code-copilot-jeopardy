@@ -5,6 +5,8 @@ import './lib/lobbySetupEnhancements';
 import './lib/hostFullscreenControl';
 import './lib/defaultBackgroundTrack';
 import App from './App';
+import { applyMusicVolumePolicy } from './lib/musicVolumePolicy';
+import { installModeAwareAudioPolicy } from './lib/audioModePolicy';
 import { DevModeOverlay } from './components/DevModeOverlay';
 import { DevPresentationLab } from './components/DevPresentationLab';
 import './responsive-player-cards.css';
@@ -20,6 +22,9 @@ import './background-music.css';
 import './comeback-boosts.css';
 import './dev-mode.css';
 import './dev-presentation-lab.css';
+
+applyMusicVolumePolicy();
+installModeAwareAudioPolicy();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(<React.StrictMode><App/><DevModeOverlay/><DevPresentationLab/></React.StrictMode>);
 
