@@ -2,7 +2,7 @@
 
 /* Normal host mode gets a compact scoreboard. Presentation mode keeps its larger cards. */
 @media (min-width: 760px) {
-  .showcase-host .showcase-player-strip.player-strip[data-player-count] {
+  .showcase-host:not(.host-presentation-mode) .showcase-player-strip.player-strip[data-player-count] {
     width: 100%;
     max-width: 100% !important;
     min-height: 0 !important;
@@ -12,23 +12,23 @@
     justify-content: center;
   }
 
-  .showcase-host .showcase-player-strip.player-strip[data-player-count="1"] {
+  .showcase-host:not(.host-presentation-mode) .showcase-player-strip.player-strip[data-player-count="1"] {
     grid-template-columns: minmax(250px, 320px) !important;
   }
-  .showcase-host .showcase-player-strip.player-strip[data-player-count="2"] {
+  .showcase-host:not(.host-presentation-mode) .showcase-player-strip.player-strip[data-player-count="2"] {
     grid-template-columns: repeat(2, minmax(230px, 320px)) !important;
   }
-  .showcase-host .showcase-player-strip.player-strip[data-player-count="3"] {
+  .showcase-host:not(.host-presentation-mode) .showcase-player-strip.player-strip[data-player-count="3"] {
     grid-template-columns: repeat(3, minmax(190px, 280px)) !important;
   }
-  .showcase-host .showcase-player-strip.player-strip[data-player-count="4"] {
+  .showcase-host:not(.host-presentation-mode) .showcase-player-strip.player-strip[data-player-count="4"] {
     grid-template-columns: repeat(4, minmax(170px, 245px)) !important;
   }
-  .showcase-host .showcase-player-strip.player-strip[data-player-count="5"] {
+  .showcase-host:not(.host-presentation-mode) .showcase-player-strip.player-strip[data-player-count="5"] {
     grid-template-columns: repeat(5, minmax(150px, 220px)) !important;
   }
 
-  .showcase-host .showcase-player-strip.player-strip[data-player-count] .showcase-player-card.player-card {
+  .showcase-host:not(.host-presentation-mode) .showcase-player-strip.player-strip[data-player-count] .showcase-player-card.player-card {
     min-height: 52px !important;
     height: 52px !important;
     grid-template-columns: 34px minmax(0, 1fr) auto !important;
@@ -39,36 +39,36 @@
     transform: none;
   }
 
-  .showcase-host .showcase-player-strip.player-strip[data-player-count] .showcase-player-card.player-card.is-active {
+  .showcase-host:not(.host-presentation-mode) .showcase-player-strip.player-strip[data-player-count] .showcase-player-card.player-card.is-active {
     transform: translateY(-1px) scale(1.01) !important;
   }
 
-  .showcase-host .showcase-player-strip.player-strip[data-player-count] .player-avatar-large {
+  .showcase-host:not(.host-presentation-mode) .showcase-player-strip.player-strip[data-player-count] .player-avatar-large {
     width: 34px !important;
     height: 34px !important;
     font-size: 1.1rem !important;
     border-width: 1px !important;
   }
 
-  .showcase-host .showcase-player-strip.player-strip[data-player-count] .showcase-player-card .player-name {
+  .showcase-host:not(.host-presentation-mode) .showcase-player-strip.player-strip[data-player-count] .showcase-player-card .player-name {
     font-size: .7rem !important;
     line-height: 1.05;
   }
 
-  .showcase-host .showcase-player-strip.player-strip[data-player-count] .showcase-player-card .score {
+  .showcase-host:not(.host-presentation-mode) .showcase-player-strip.player-strip[data-player-count] .showcase-player-card .score {
     margin-top: 1px !important;
     font-size: 1.22rem !important;
     line-height: 1 !important;
   }
 
-  .showcase-host .showcase-player-strip.player-strip[data-player-count] .streak.neutral {
+  .showcase-host:not(.host-presentation-mode) .showcase-player-strip.player-strip[data-player-count] .streak.neutral {
     height: auto !important;
     font-size: .48rem !important;
     line-height: 1;
   }
 
   /* Streak status stays inside the card instead of reserving a tall row above it. */
-  .showcase-host .showcase-player-strip.player-strip[data-player-count] .streak-ribbon {
+  .showcase-host:not(.host-presentation-mode) .showcase-player-strip.player-strip[data-player-count] .streak-ribbon {
     top: 3px !important;
     left: auto !important;
     right: 6px !important;
@@ -80,8 +80,8 @@
     box-shadow: 0 2px 7px rgba(0,0,0,.28) !important;
   }
 
-  .showcase-host .showcase-player-card.player-card.is-fire::after,
-  .showcase-host .showcase-player-card.player-card.is-cold::after {
+  .showcase-host:not(.host-presentation-mode) .showcase-player-card.player-card.is-fire::after,
+  .showcase-host:not(.host-presentation-mode) .showcase-player-card.player-card.is-cold::after {
     display: none !important;
   }
 
@@ -135,14 +135,14 @@
 }
 
 @media (max-height: 720px) and (min-width: 760px) {
-  .showcase-host .showcase-player-strip.player-strip[data-player-count] {
+  .showcase-host:not(.host-presentation-mode) .showcase-player-strip.player-strip[data-player-count] {
     padding-block: 4px !important;
   }
-  .showcase-host .showcase-player-strip.player-strip[data-player-count] .showcase-player-card.player-card {
+  .showcase-host:not(.host-presentation-mode) .showcase-player-strip.player-strip[data-player-count] .showcase-player-card.player-card {
     min-height: 46px !important;
     height: 46px !important;
   }
-  .showcase-host .showcase-player-strip.player-strip[data-player-count] .player-avatar-large {
+  .showcase-host:not(.host-presentation-mode) .showcase-player-strip.player-strip[data-player-count] .player-avatar-large {
     width: 30px !important;
     height: 30px !important;
     font-size: 1rem !important;
