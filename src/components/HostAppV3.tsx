@@ -460,7 +460,9 @@ export function HostAppV3() {
   const dailyDoubleMax = selectedPackQuestionCount ?? Math.max(0, settings.dailyDoubleCount);
   const updateGameLength = (gameLength: GameSettings['gameLength']) => {
     const next = settingsForGameLength(gameLength);
-    const dailyDoubleCount = clampDailyDoubleCount(next.dailyDoubleCount, dailyDoubleMax);
+    const dailyDoubleCount = selectedPackQuestionCount === undefined
+      ? next.dailyDoubleCount
+      : clampDailyDoubleCount(next.dailyDoubleCount, selectedPackQuestionCount);
     return updateSettings({ ...next, dailyDoubleCount, dailyDoublesEnabled: dailyDoubleCount > 0 });
   };
   const textResponses = current?.textResponses ?? {};
