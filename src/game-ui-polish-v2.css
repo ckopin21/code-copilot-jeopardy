@@ -224,20 +224,21 @@ body:has(.audio-drawer) .comeback-host { visibility: hidden; }
 }
 
 
-/* In presentation mode, streak and turn badges share one right-side lane without colliding. */
+/* In presentation mode, streak and turn badges occupy separate zones so their borders/glow cannot collide. */
 .presentation-shell .showcase-player-card.is-turn:is(.is-fire,.is-cold) {
   padding-right: 92px !important;
 }
 .presentation-shell .showcase-player-card.is-turn:is(.is-fire,.is-cold) .streak-ribbon {
-  left: auto !important;
-  right: 8px !important;
-  top: -12px !important;
+  left: 56px !important;
+  right: auto !important;
+  top: -14px !important;
+  transform: none !important;
   animation-name: presentationStreakRibbonPulse !important;
 }
 .presentation-shell .showcase-player-card.is-turn:is(.is-fire,.is-cold) .turn-beacon {
-  top: 20px !important;
+  top: auto !important;
   right: 8px !important;
-  bottom: auto !important;
+  bottom: 6px !important;
 }
 @keyframes presentationStreakRibbonPulse {
   from { transform: scale(1); filter: brightness(1); }
