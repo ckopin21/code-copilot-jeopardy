@@ -23,6 +23,16 @@
   line-height: 1;
 }
 
+/* Normal host scoreboard: keep only the top-center turn star and keep it inside the card. */
+.showcase-host .showcase-player-card.is-turn .turn-beacon.star-only {
+  display: none !important;
+}
+
+.showcase-host .showcase-player-card.is-turn::after {
+  top: 4px !important;
+  translate: -50% 0 !important;
+}
+
 /* ScoreFlight applies these to the score node as a secondary impact cue. */
 .score.score-impact-pulse-correct,
 .score.score-impact-pulse-wrong {
