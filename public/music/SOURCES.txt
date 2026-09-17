@@ -1,0 +1,8 @@
+Background music sources
+
+These tracks are synced at build/dev time from Pixabay and used under the Pixabay Content License.
+
+- kulakovka-upbeat-music-281095.mp3: https://pixabay.com/music/funk-upbeat-music-281095/
+- tatamusic-upbeat-upbeat-music-377668.mp3: https://pixabay.com/music/upbeat-upbeat-upbeat-music-377668/
+- the_mountain-upbeat-upbeat-music-567445.mp3: https://pixabay.com/music/old-school-hip-hop-upbeat-upbeat-music-567445/
+- sonican-tech-quiz-news-loop-274362.mp3: https://pixabay.com/music/electronic-tech-quiz-news-loop-274362/
