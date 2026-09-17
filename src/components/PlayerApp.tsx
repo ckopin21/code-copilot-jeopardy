@@ -259,7 +259,7 @@ export function PlayerApp() {
     setBuzzMessage('');
     try {
       await audio.unlock();
-      const result = await emitAck<{ accepted: boolean; reason?: string }>('player:buzz', credentials);
+      const result = await emitAck<{ accepted: boolean; reason?: string }>('player:buzz', { ...credentials, questionId: room.currentQuestion?.questionId, gameStartedAt: room.gameStartedAt });
       if (result.accepted) { audio.cue('buzz'); setBuzzMessage('BUZZ REGISTERED'); }
       else { audio.cue('locked'); setBuzzMessage(result.reason ?? 'LOCKED OUT'); }
     } catch (err) {
@@ -271,7 +271,7 @@ export function PlayerApp() {
     if (!credentials || !textAnswer.trim()) return;
     setError('');
     try {
-      await emitAck('player:text-response', { ...credentials, answer: textAnswer.trim() });
+      await emitAck('player:text-response', { ...credentials, answer: textAnswer.trim(), questionId: room.currentQuestion?.questionId, gameStartedAt: room.gameStartedAt });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not lock response');
     }
@@ -280,14 +280,14 @@ export function PlayerApp() {
   const submitDailyDoubleWager = async (wager: number) => {
     if (!credentials) return;
     setError('');
-    try { await emitAck('player:daily-double-wager', { ...credentials, wager }); }
+    try { await emitAck('player:daily-double-wager', { ...credentials, wager, questionId: room.currentQuestion?.questionId, gameStartedAt: room.gameStartedAt }); }
     catch (err) { setError(err instanceof Error ? err.message : 'Could not lock wager'); }
   };
 
   const submitFinalWager = async () => {
     if (!credentials || selectedFinalWager === null) return;
     setError('');
-    try { await emitAck('player:final-wager', { ...credentials, wager: selectedFinalWager }); }
+    try { await emitAck('player:final-wager', { ...credentials, wager: selectedFinalWager, gameStartedAt: room.gameStartedAt }); }
     catch (err) { setError(err instanceof Error ? err.message : 'Could not lock wager'); }
   };
 
@@ -372,7 +372,7 @@ export function PlayerApp() {
 
     {room.phase === 'final-category' && (isFinalParticipant ? <section className="phone-state-v2"><div className="section-kicker gold">FINAL ROUND</div><h1>{room.finalRound?.category}</h1><p>Get ready to wager.</p></section> : <section className="phone-state-v2"><div className="section-kicker gold">FINAL ROUND</div><h1>Watching this Final</h1><p>You joined after the Final roster was locked. Your seat is ready for the next game.</p></section>)}
     {room.phase === 'final-wager' && (isFinalParticipant ? <section className="phone-state-v2 final-phone-v2"><div className="section-kicker gold">FINAL WAGER</div><h1>{room.finalRound?.category}</h1>{me.finalWagerSubmitted ? <div className="response-locked"><div className="lock-icon">✓</div><h3>Wager locked</h3><strong className="locked-wager-number">{(me.finalWager ?? 0).toLocaleString()}</strong></div> : <><p>Choose one wager.</p>{finalWagerRule?.protectedLoss && <div className="final-wager-rule comeback"><strong>COMEBACK PROTECTION</strong><span>Up to {finalWagerRule.maxWager.toLocaleString()}. A miss will not lower your score.</span></div>}{finalWagerRule?.runawayLeaderCap && <div className="final-wager-rule leader"><strong>LEADER CAP</strong><span>Your lead is at least 2× the next score, so Final is capped at {finalWagerRule.maxWager.toLocaleString()}.</span></div>}<div className="wager-grid phone fixed-wagers">{FINAL_WAGER_PRESETS.map((value)=><button className={selectedFinalWager===value?'selected':''} disabled={Boolean(finalWagerRule && value > finalWagerRule.maxWager)} key={value} onClick={()=>setSelectedFinalWager(value)}>{value.toLocaleString()}</button>)}{showAllIn && <button className={`all-in-wager ${selectedFinalWager===me.score?'selected':''}`} onClick={()=>setSelectedFinalWager(me.score)}>ALL IN · {me.score.toLocaleString()}</button>}</div><button className="primary-button giant" disabled={selectedFinalWager===null || Boolean(finalWagerRule && selectedFinalWager > finalWagerRule.maxWager)} onClick={()=>void submitFinalWager()}>Lock {selectedFinalWager === null ? 'Wager' : selectedFinalWager.toLocaleString()}</button></>}{error && <p className="form-error">{error}</p>}</section> : <section className="phone-state-v2"><div className="section-kicker gold">FINAL WAGER</div><h1>Watching this Final</h1><p>The Final roster was already locked when you joined.</p></section>)}
-    {room.phase === 'final-question' && (isFinalParticipant ? <section className="phone-state-v2 final-phone-v2"><div className="section-kicker gold">FINAL QUESTION</div>{me.finalWagerSubmitted && <div className="locked-wager-inline">WAGER {me.finalWager?.toLocaleString()}</div>}<h1>{room.finalRound?.question}</h1><Timer timer={room.timer} serverNow={room.serverNow}/>{me.finalAnswerSubmitted ? <div className="response-locked"><div className="lock-icon">✓</div><h3>Answer locked</h3><p>{me.finalAnswer}</p></div> : <><textarea value={finalAnswer} maxLength={200} onChange={(event)=>setFinalAnswer(event.target.value)} placeholder="Type your answer"/><button className="primary-button giant" disabled={!finalAnswer.trim()} onClick={async()=>{try{await emitAck('player:final-answer',{...credentials,answer:finalAnswer})}catch(err){setError(err instanceof Error?err.message:'Failed')}}}>Lock Answer</button></>}</section> : <section className="phone-state-v2"><div className="section-kicker gold">FINAL QUESTION</div><h1>Watch the main screen</h1><p>You are spectating this Final and will play in the next game.</p></section>)}
+    {room.phase === 'final-question' && (isFinalParticipant ? <section className="phone-state-v2 final-phone-v2"><div className="section-kicker gold">FINAL QUESTION</div>{me.finalWagerSubmitted && <div className="locked-wager-inline">WAGER {me.finalWager?.toLocaleString()}</div>}<h1>{room.finalRound?.question}</h1><Timer timer={room.timer} serverNow={room.serverNow}/>{me.finalAnswerSubmitted ? <div className="response-locked"><div className="lock-icon">✓</div><h3>Answer locked</h3><p>{me.finalAnswer}</p></div> : <><textarea value={finalAnswer} maxLength={200} onChange={(event)=>setFinalAnswer(event.target.value)} placeholder="Type your answer"/><button className="primary-button giant" disabled={!finalAnswer.trim()} onClick={async()=>{try{await emitAck('player:final-answer',{...credentials,answer:finalAnswer,gameStartedAt:room.gameStartedAt})}catch(err){setError(err instanceof Error?err.message:'Failed')}}}>Lock Answer</button></>}</section> : <section className="phone-state-v2"><div className="section-kicker gold">FINAL QUESTION</div><h1>Watch the main screen</h1><p>You are spectating this Final and will play in the next game.</p></section>)}
     {room.phase === 'final-review' && (isFinalParticipant ? <section className="phone-state-v2"><div className="section-kicker gold">ANSWER REVEAL</div><div className="locked-wager-inline">WAGER {(me.finalWager ?? 0).toLocaleString()}</div><h1>{room.finalRound?.acceptedAnswers?.[0]}</h1><p>Watch the main screen for scoring.</p></section> : <section className="phone-state-v2"><div className="section-kicker gold">ANSWER REVEAL</div><h1>Watching the results</h1><p>Your seat is reserved for the next game.</p></section>)}
     {room.phase === 'recap' && (isResultPlayer ? <section className="phone-state-v2 phone-recap-v2"><div className="section-kicker gold">YOUR FINAL STATS</div><div className="phone-recap-hero"><span>{me.avatar}</span><h1>{me.score.toLocaleString()}</h1><strong>{me.name}</strong></div><dl className="phone-stats-grid"><dt>Correct</dt><dd>{me.stats.correct}</dd><dt>Incorrect</dt><dd>{me.stats.incorrect}</dd><dt>Accuracy</dt><dd>{accuracy}%</dd><dt>Longest streak</dt><dd>{me.stats.longestStreak}</dd><dt>Fastest buzz</dt><dd>{me.stats.fastestBuzzMs == null ? '—' : `${me.stats.fastestBuzzMs}ms`}</dd><dt>Points gained</dt><dd>{me.stats.pointsGained.toLocaleString()}</dd><dt>Points lost</dt><dd>{me.stats.pointsLost.toLocaleString()}</dd><dt>Biggest wager</dt><dd>{me.stats.biggestWager.toLocaleString()}</dd></dl><button className="secondary-button" onClick={leaveToMenu}>Back to menu</button></section> : <section className="phone-state-v2"><div className="section-kicker gold">GAME COMPLETE</div><h1>Ready for the next game</h1><p>You joined after this game’s results were locked, so you are not included in this scoreboard.</p><button className="secondary-button" onClick={leaveToMenu}>Back to menu</button></section>)}
   </main>;
