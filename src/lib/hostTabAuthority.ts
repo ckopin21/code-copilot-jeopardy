@@ -2,7 +2,8 @@ const HOST_AUTHORITY_KEY = 'blue-stage-host-owner';
 
 const fallbackOwners = new Map<string, string>();
 
-export function hostAuthorityKey(_roomCode?: string): string {
+export function hostAuthorityKey(roomCode?: string): string {
+  void roomCode;
   return HOST_AUTHORITY_KEY;
 }
 
