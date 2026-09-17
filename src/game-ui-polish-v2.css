@@ -230,14 +230,15 @@ body:has(.audio-drawer) .comeback-host { visibility: hidden; }
 }
 .showcase-player-card .player-status-stack {
   position: absolute;
-  top: -12px;
+  top: 50%;
   right: 8px;
   z-index: 10;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 6px;
+  gap: 4px;
   max-width: calc(100% - 64px);
+  transform: translateY(-50%);
   pointer-events: none;
 }
 .showcase-player-card .player-status-stack .streak-ribbon,
@@ -249,10 +250,16 @@ body:has(.audio-drawer) .comeback-host { visibility: hidden; }
 }
 .showcase-player-card .player-status-stack .streak-ribbon {
   max-width: 100%;
+  padding: 3px 7px;
+  border-width: 2px;
+  font-size: .5rem;
   animation-name: stackedStreakRibbonPulse !important;
 }
 .showcase-player-card .player-status-stack .turn-beacon {
   max-width: 100%;
+  padding: 3px 6px;
+  border-width: 2px;
+  font-size: .46rem;
 }
 @keyframes stackedStreakRibbonPulse {
   from { transform: scale(1); filter: brightness(1); }
@@ -264,9 +271,9 @@ body:has(.audio-drawer) .comeback-host { visibility: hidden; }
     padding-right: 96px !important;
   }
   .showcase-player-card .player-status-stack {
-    top: -9px;
+    top: 50%;
     right: 6px;
-    gap: 4px;
+    gap: 3px;
     max-width: calc(100% - 54px);
   }
 }
