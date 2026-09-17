@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { BrowserGameEngine, type RandomSource } from '../src/lib/browserGameEngine';
+import '../src/lib/turnHistoryPolicy';
 import { calculateComebackAward, comebackBoostsUnlocked } from '../src/lib/comebackScoring';
 import type { RoomSnapshot } from '../src/shared/types';
 
@@ -56,12 +57,16 @@ function unlockComebacks(engine: BrowserGameEngine, roomCode: string, hostToken:
 }
 
 function unlockStateComebacks(state: RoomSnapshot) {
-  const needed = state.players.length * 2;
-  const tiles = state.board!.questions.filter((tile) => !tile.used).slice(0, needed);
-  for (const tile of tiles) {
-    tile.used = true;
-    tile.playedValue = tile.value;
-    tile.results = [];
+  const tiles = state.board!.questions.filter((tile) => !tile.used).slice(0, state.players.length * 2);
+  let index = 0;
+  for (const player of state.players) {
+    for (let turn = 0; turn < 2; turn += 1) {
+      const tile = tiles[index++];
+      tile.used = true;
+      tile.turnPlayerId = player.id;
+      tile.playedValue = tile.value;
+      tile.results = [];
+    }
   }
 }
 
@@ -70,7 +75,7 @@ beforeEach(() => {
 });
 
 describe('limited comeback scoring', () => {
-  it('stays disabled until two full rounds have been completed', () => {
+  it('stays disabled until every active player has individually completed two turns', () => {
     const { engine, host, leader, chaser } = setup();
     engine.adjustScore(host.roomCode, host.hostToken, leader.playerId, 1000);
     const state = selectValue(engine, host.roomCode, host.hostToken, chaser.playerId, 100);
@@ -78,6 +83,21 @@ describe('limited comeback scoring', () => {
 
     expect(comebackBoostsUnlocked(state)).toBe(false);
     expect(calculateComebackAward(state, chaserState, 100).multiplier).toBe(1);
+  });
+
+  it('does not unlock from total question count if one player has not had two turns', () => {
+    const { engine, host, leader, chaser } = setup();
+    const state = engine.snapshot(host.roomCode);
+    const tiles = state.board!.questions.slice(0, 4);
+    const ownership = [leader.playerId, leader.playerId, leader.playerId, chaser.playerId];
+    tiles.forEach((tile, index) => {
+      tile.used = true;
+      tile.turnPlayerId = ownership[index];
+      tile.playedValue = tile.value;
+      tile.results = [];
+    });
+
+    expect(comebackBoostsUnlocked(state)).toBe(false);
   });
 
   it('gives the sole last-place turn owner 3x when trailing by at least 4x the clue value', () => {
