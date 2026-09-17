@@ -7,6 +7,11 @@ export const DAILY_DOUBLE_COUNT_BY_LENGTH: Record<GameSettings['gameLength'], nu
   marathon: 6
 };
 
+export function settingsForGameLength(gameLength: GameSettings['gameLength']): Pick<GameSettings, 'gameLength' | 'dailyDoubleCount' | 'dailyDoublesEnabled'> {
+  const dailyDoubleCount = DAILY_DOUBLE_COUNT_BY_LENGTH[gameLength];
+  return { gameLength, dailyDoubleCount, dailyDoublesEnabled: dailyDoubleCount > 0 };
+}
+
 export const DEFAULT_SETTINGS: GameSettings = {
   gameLength: 'standard',
   selectedPackIds: ['disney'],
