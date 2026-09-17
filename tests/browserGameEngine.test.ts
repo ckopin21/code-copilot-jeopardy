@@ -680,4 +680,95 @@ describe('BrowserGameEngine production state', () => {
     expect(() => engine.submitFinalWager(host.roomCode, leader.playerId, leader.reconnectToken, 1000)).not.toThrow();
   });
 
+
+  it('rejects a delayed player action from an older question', () => {
+    const { engine, host } = setup({ dailyDoublesEnabled: false, finalRoundEnabled: false, timerSeconds: null });
+    const player = addPlayer(engine, host.roomCode, 'Delayed');
+    engine.startGame(host.roomCode, host.hostToken);
+
+    const first = firstUnused(engine, host.roomCode);
+    engine.selectQuestion(host.roomCode, host.hostToken, first.questionId);
+    const firstState = engine.snapshot(host.roomCode);
+    const gameStartedAt = firstState.gameStartedAt!;
+    const firstQuestionId = firstState.currentQuestion!.questionId;
+    engine.revealAnswer(host.roomCode, host.hostToken);
+    engine.advanceToBoard(host.roomCode, host.hostToken);
+
+    const second = firstUnused(engine, host.roomCode);
+    engine.selectQuestion(host.roomCode, host.hostToken, second.questionId);
+    engine.openBuzzers(host.roomCode, host.hostToken);
+    const secondState = engine.snapshot(host.roomCode);
+
+    expect(() => engine.buzz(host.roomCode, player.playerId, player.reconnectToken, firstQuestionId, gameStartedAt)).toThrow(/older question/i);
+    expect(engine.buzz(host.roomCode, player.playerId, player.reconnectToken, secondState.currentQuestion!.questionId, gameStartedAt).accepted).toBe(true);
+  });
+
+  it('rejects a buzz that arrives after the authoritative timer deadline', () => {
+    const { engine, host } = setup({
+      dailyDoublesEnabled: false,
+      finalRoundEnabled: false,
+      timerSeconds: 5,
+      autoCloseBuzzersAtZero: true
+    });
+    const player = addPlayer(engine, host.roomCode, 'Late Buzz');
+    engine.startGame(host.roomCode, host.hostToken);
+    const tile = firstUnused(engine, host.roomCode);
+    engine.selectQuestion(host.roomCode, host.hostToken, tile.questionId);
+    engine.openBuzzers(host.roomCode, host.hostToken);
+    const before = engine.snapshot(host.roomCode);
+
+    const rooms = (engine as unknown as { rooms: Map<string, { state: { timer: { endsAt: number | null } } }> }).rooms;
+    rooms.get(host.roomCode)!.state.timer.endsAt = Date.now() - 1;
+
+    const result = engine.buzz(
+      host.roomCode,
+      player.playerId,
+      player.reconnectToken,
+      before.currentQuestion!.questionId,
+      before.gameStartedAt!
+    );
+    expect(result.accepted).toBe(false);
+    const after = engine.snapshot(host.roomCode);
+    expect(after.currentQuestion?.timedOut).toBe(true);
+    expect(after.timer.running).toBe(false);
+  });
+
+  it('closes Final before accepting an answer that arrives after the timer deadline', () => {
+    const { engine, host } = setup({
+      gameLength: 'quick',
+      dailyDoublesEnabled: false,
+      finalRoundEnabled: true,
+      timerSeconds: 5
+    });
+    const player = addPlayer(engine, host.roomCode, 'Late Final');
+    engine.startGame(host.roomCode, host.hostToken);
+    finishBoardWithoutScoring(engine, host.roomCode, host.hostToken);
+    engine.beginFinalWagers(host.roomCode, host.hostToken);
+    engine.submitFinalWager(host.roomCode, player.playerId, player.reconnectToken, 0);
+    engine.openFinalQuestion(host.roomCode, host.hostToken);
+    const before = engine.snapshot(host.roomCode);
+
+    const rooms = (engine as unknown as { rooms: Map<string, { state: { timer: { endsAt: number | null } } }> }).rooms;
+    rooms.get(host.roomCode)!.state.timer.endsAt = Date.now() - 1;
+
+    expect(() => engine.submitFinalAnswer(
+      host.roomCode,
+      player.playerId,
+      player.reconnectToken,
+      'too late',
+      before.gameStartedAt!
+    )).toThrow(/closed/i);
+    expect(engine.snapshot(host.roomCode).finalRound?.responsesClosed).toBe(true);
+  });
+
+  it('keeps the persisted revision monotonic across score undo', () => {
+    const { engine, host } = setup({ allowNegativeScores: true });
+    const player = addPlayer(engine, host.roomCode, 'Revision');
+    engine.adjustScore(host.roomCode, host.hostToken, player.playerId, 100);
+    const afterScore = engine.snapshot(host.roomCode).revision ?? 0;
+    engine.undoLastScoreAction(host.roomCode, host.hostToken);
+    const afterUndo = engine.snapshot(host.roomCode).revision ?? 0;
+    expect(afterUndo).toBeGreaterThan(afterScore);
+  });
+
 });
