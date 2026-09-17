@@ -1,0 +1,285 @@
+/* Lobby setup fixes: compact pack families, automatic rules, custom rotation, and viewport-safe controls. */
+
+.showcase-host .enhanced-lobby-setup > .pack-grid-v2 {
+  display: none !important;
+}
+
+.showcase-host .lobby-pack-enhancement-mount {
+  width: 100%;
+}
+
+.showcase-host .enhanced-pack-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(138px, 1fr));
+  gap: clamp(5px, .6vw, 8px);
+}
+
+.showcase-host .enhanced-pack-card {
+  min-width: 0;
+  display: grid;
+  grid-template-rows: 1fr auto;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,.13);
+  border-radius: 12px;
+  background: rgba(2,24,40,.52);
+  transition: transform .14s ease, filter .14s ease, border-color .14s ease;
+}
+
+.showcase-host .enhanced-pack-card:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.06);
+}
+
+.showcase-host .enhanced-pack-card.selected {
+  border-color: var(--gold);
+  background: #244e5f;
+  box-shadow: 0 0 0 1px rgba(255,209,102,.25), 0 0 18px rgba(255,209,102,.1);
+}
+
+.showcase-host .enhanced-pack-main {
+  min-width: 0;
+  min-height: clamp(56px, 7.6vh, 78px);
+  display: grid;
+  align-content: start;
+  gap: 2px;
+  padding: clamp(7px, .9vh, 10px);
+  border: 0;
+  background: transparent;
+  color: #edf8ff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.showcase-host .enhanced-pack-main strong,
+.showcase-host .enhanced-pack-main span,
+.showcase-host .enhanced-pack-main small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.showcase-host .enhanced-pack-main strong {
+  font-size: clamp(.75rem, 1.35vh, .9rem);
+  line-height: 1.08;
+  white-space: nowrap;
+}
+
+.showcase-host .enhanced-pack-main span {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  color: #c7deeb;
+  font-size: clamp(.56rem, 1.05vh, .66rem);
+  line-height: 1.18;
+}
+
+.showcase-host .enhanced-pack-main small {
+  margin-top: 2px;
+  color: #8fb0c2;
+  font-size: clamp(.52rem, .95vh, .62rem);
+  white-space: nowrap;
+}
+
+.showcase-host .pack-version-select {
+  width: calc(100% - 10px);
+  min-width: 0;
+  min-height: 24px;
+  margin: 0 5px 5px;
+  padding: 3px 22px 3px 6px;
+  border: 1px solid rgba(255,255,255,.16);
+  border-radius: 7px;
+  background: #071d2b;
+  color: #eaf8ff;
+  font-size: .58rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.showcase-host .cold-streak-hidden-control {
+  display: none !important;
+}
+
+.showcase-host .automatic-daily-double-control input {
+  cursor: default;
+  color: #ffd166 !important;
+  font-weight: 900;
+  opacity: .9;
+}
+
+.showcase-host .lobby-turn-order-mount[hidden] {
+  display: none !important;
+}
+
+.showcase-host .manual-turn-order-v2 {
+  display: grid;
+  gap: 5px;
+  margin-top: clamp(6px, 1vh, 10px);
+  padding: 7px 8px;
+  border: 1px solid rgba(255,209,102,.22);
+  border-radius: 10px;
+  background: rgba(1,20,33,.34);
+}
+
+.showcase-host .manual-turn-order-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.showcase-host .manual-turn-order-head strong {
+  color: #f3fbff;
+  font-size: .67rem;
+}
+
+.showcase-host .manual-turn-order-head small {
+  color: #9cb4c4;
+  font-size: .56rem;
+}
+
+.showcase-host .manual-turn-order-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  min-height: 28px;
+}
+
+.showcase-host .turn-order-chip {
+  display: inline-grid;
+  grid-template-columns: 18px 13px auto minmax(0, auto);
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  min-height: 28px;
+  padding: 3px 7px 3px 4px;
+  border: 1px solid rgba(255,255,255,.17);
+  border-radius: 8px;
+  background: #08283d;
+  color: #edf8ff;
+  cursor: grab;
+  user-select: none;
+}
+
+.showcase-host .turn-order-chip:active {
+  cursor: grabbing;
+}
+
+.showcase-host .turn-order-chip.dragging {
+  opacity: .4;
+  transform: scale(.97);
+}
+
+.showcase-host .turn-order-chip.disconnected {
+  opacity: .55;
+  border-style: dashed;
+}
+
+.showcase-host .turn-order-chip > b {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(255,209,102,.16);
+  color: #ffd166;
+  font-size: .54rem;
+}
+
+.showcase-host .drag-grip {
+  color: #83aabd;
+  font-size: .62rem;
+  letter-spacing: -3px;
+}
+
+.showcase-host .turn-order-avatar {
+  font-size: .9rem;
+}
+
+.showcase-host .turn-order-chip > strong {
+  max-width: 90px;
+  overflow: hidden;
+  color: #f3fbff;
+  font-size: .6rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.showcase-host .manual-turn-order-empty {
+  align-self: center;
+  color: #8faaba;
+  font-size: .58rem;
+}
+
+/* The QR caption is part of the trigger's layout rather than hanging below a fixed-height box. */
+.showcase-host .showcase-lobby .join-card-v2 .qr-expand-trigger {
+  width: clamp(68px, 9vh, 118px) !important;
+  height: auto !important;
+  min-height: 0 !important;
+  align-self: center;
+  grid-template-rows: auto auto;
+  gap: 2px !important;
+}
+
+.showcase-host .showcase-lobby .join-card-v2 .qr-expand-trigger img {
+  width: 100% !important;
+  height: auto !important;
+  aspect-ratio: 1 / 1;
+}
+
+.showcase-host .showcase-lobby .join-card-v2 .qr-expand-trigger span {
+  width: 100%;
+  color: #bdd8e7;
+  font-size: clamp(.48rem, .85vh, .58rem);
+  line-height: 1.05;
+  text-align: center;
+}
+
+@media (min-width: 760px) {
+  /* Four compact toggle columns reduce the setup card from three rows to two. */
+  .showcase-host .toggle-grid-v2 {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+
+  .showcase-host .toggle-v2 {
+    min-width: 0;
+  }
+
+  .showcase-host .toggle-v2 span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Keep one-screen layout when possible, but allow a safe scroll fallback on short windows. */
+  .showcase-host > .showcase-lobby.lobby-layout {
+    overflow-y: auto !important;
+    align-items: start !important;
+    scrollbar-width: thin;
+  }
+
+  .showcase-host .showcase-lobby .panel-v2 {
+    height: auto !important;
+    min-height: 100% !important;
+  }
+}
+
+@media (max-width: 980px) and (min-width: 760px) {
+  .showcase-host .enhanced-pack-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .showcase-host .toggle-grid-v2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 759px) {
+  .showcase-host .enhanced-pack-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .showcase-host .manual-turn-order-head {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 2px;
+  }
+}
