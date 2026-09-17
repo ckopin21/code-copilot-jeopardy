@@ -124,6 +124,22 @@
 }
 .question-tile.used.has-result .used-result-chip.wrong em { color: #ff9f9b; }
 
+/* Preserve the bigger look for the common 1-2 result case, but compact gracefully if several players attempted one clue. */
+.question-tile.used.has-result .used-result-list:has(.used-result-chip:nth-child(3)) {
+  gap: 3px;
+}
+.question-tile.used.has-result .used-result-list:has(.used-result-chip:nth-child(3)) .used-result-chip {
+  min-height: 22px;
+  padding: 3px 7px;
+  border-radius: 7px;
+}
+.question-tile.used.has-result .used-result-list:has(.used-result-chip:nth-child(3)) .used-result-chip b {
+  font-size: clamp(.58rem, .72vw, .76rem) !important;
+}
+.question-tile.used.has-result .used-result-list:has(.used-result-chip:nth-child(3)) .used-result-chip em {
+  font-size: clamp(.49rem, .6vw, .64rem) !important;
+}
+
 /* Presentation mode can afford slightly larger result typography. */
 .presentation-board-fill .question-tile.used.has-result .used-tile-value {
   font-size: clamp(.78rem, 1.35vh, 1rem) !important;
@@ -133,6 +149,12 @@
 }
 .presentation-board-fill .question-tile.used.has-result .used-result-chip em {
   font-size: clamp(.62rem, 1.15vh, .82rem) !important;
+}
+.presentation-board-fill .question-tile.used.has-result .used-result-list:has(.used-result-chip:nth-child(3)) .used-result-chip b {
+  font-size: clamp(.62rem, 1.1vh, .8rem) !important;
+}
+.presentation-board-fill .question-tile.used.has-result .used-result-list:has(.used-result-chip:nth-child(3)) .used-result-chip em {
+  font-size: clamp(.52rem, .9vh, .68rem) !important;
 }
 
 @media (max-width: 760px) {
