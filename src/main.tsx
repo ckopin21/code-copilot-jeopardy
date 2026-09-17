@@ -12,4 +12,4 @@ import './gameplay-regression-fixes.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(<React.StrictMode><App/></React.StrictMode>);
 
-// Source touch intentionally triggers validated Pages deployment after gameplay fixes.
+// Late-loaded regression styles intentionally win cascade conflicts in game overlays.
