@@ -1,13 +1,19 @@
 export { QUESTION_VALUES } from './types';
 import type { GameSettings } from './types';
 
+export const DAILY_DOUBLE_COUNT_BY_LENGTH: Record<GameSettings['gameLength'], number> = {
+  quick: 2,
+  standard: 4,
+  marathon: 6
+};
+
 export const DEFAULT_SETTINGS: GameSettings = {
   gameLength: 'standard',
   selectedPackIds: ['disney'],
   mixedPacks: false,
   randomizeCategories: true,
   dailyDoublesEnabled: true,
-  dailyDoubleCount: 3,
+  dailyDoubleCount: DAILY_DOUBLE_COUNT_BY_LENGTH.standard,
   stealsEnabled: false,
   allowNegativeScores: true,
   timerSeconds: 15,
@@ -40,7 +46,7 @@ export const GAME_PRESETS: GamePreset[] = [
     name: 'Casual',
     description: 'Relaxed timing, standard board, streaks and Final enabled.',
     settings: {
-      gameLength: 'standard', timerSeconds: 30, dailyDoublesEnabled: true, dailyDoubleCount: 2,
+      gameLength: 'standard', timerSeconds: 30, dailyDoublesEnabled: true, dailyDoubleCount: DAILY_DOUBLE_COUNT_BY_LENGTH.standard,
       lateGameModifiers: true, streaksEnabled: true, finalRoundEnabled: true, allowNegativeScores: false,
       dailyDoubleStacksWithMultiplier: false
     }
@@ -48,9 +54,9 @@ export const GAME_PRESETS: GamePreset[] = [
   {
     id: 'fast',
     name: 'Fast',
-    description: 'Short board, tight timer, one Daily Double, quick finish.',
+    description: 'Short board, tight timer, two Daily Doubles, quick finish.',
     settings: {
-      gameLength: 'quick', timerSeconds: 10, dailyDoublesEnabled: true, dailyDoubleCount: 1,
+      gameLength: 'quick', timerSeconds: 10, dailyDoublesEnabled: true, dailyDoubleCount: DAILY_DOUBLE_COUNT_BY_LENGTH.quick,
       lateGameModifiers: true, streaksEnabled: true, finalRoundEnabled: true, allowNegativeScores: true,
       dailyDoubleStacksWithMultiplier: true
     }
@@ -60,7 +66,7 @@ export const GAME_PRESETS: GamePreset[] = [
     name: 'Competitive',
     description: 'Standard board, strict timing, negative scores and full modifiers.',
     settings: {
-      gameLength: 'standard', timerSeconds: 15, dailyDoublesEnabled: true, dailyDoubleCount: 3,
+      gameLength: 'standard', timerSeconds: 15, dailyDoublesEnabled: true, dailyDoubleCount: DAILY_DOUBLE_COUNT_BY_LENGTH.standard,
       lateGameModifiers: true, streaksEnabled: true, finalRoundEnabled: true, allowNegativeScores: true,
       dailyDoubleStacksWithMultiplier: true
     }
@@ -70,7 +76,7 @@ export const GAME_PRESETS: GamePreset[] = [
     name: 'Party',
     description: 'Long game with more specials, streak drama and forgiving scoring.',
     settings: {
-      gameLength: 'marathon', timerSeconds: 20, dailyDoublesEnabled: true, dailyDoubleCount: 4,
+      gameLength: 'marathon', timerSeconds: 20, dailyDoublesEnabled: true, dailyDoubleCount: DAILY_DOUBLE_COUNT_BY_LENGTH.marathon,
       lateGameModifiers: true, streaksEnabled: true, finalRoundEnabled: true, allowNegativeScores: false,
       dailyDoubleStacksWithMultiplier: true
     }
