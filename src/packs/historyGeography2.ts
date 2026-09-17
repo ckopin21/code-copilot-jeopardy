@@ -28,7 +28,7 @@ const categories = [
   category('Capitals & Cities II', {
     100: question('What is the capital of Spain?', 'Madrid'),
     200: question('What is the capital of South Korea?', 'Seoul'),
-    300: question('What is the capital of New Zealand?', 'Wellington'),
+    300: question('What is the capital of Chile?', 'Santiago'),
     400: question('What is the capital of Turkey?', 'Ankara'),
     500: question('What is the capital of Kazakhstan?', 'Astana'),
     1000: question('What is the legislative capital of Sri Lanka?', ['Sri Jayawardenepura Kotte', 'Sri Jayewardenepura Kotte', 'Kotte'])
