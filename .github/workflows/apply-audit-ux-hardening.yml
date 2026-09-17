@@ -35,10 +35,7 @@ jobs:
       - name: Commit validated fixes
         shell: bash
         run: |
-          rm .github/workflows/apply-audit-ux-hardening.yml
-          rm scripts/apply-audit-ux-hardening.py
-          rm scripts/repair-audit-ux-script.py
-          rm scripts/fix-audit-ux-output.py
+          git checkout HEAD -- .github/workflows scripts
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
