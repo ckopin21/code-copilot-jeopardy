@@ -18,7 +18,7 @@ export function BoardPresentation({ room, onBack, onSelect, onReview, results = 
                 : 'READY';
           return <div className={`presentation-name-card ${room.turnPlayerId === player.id ? 'is-turn' : ''} ${player.onFire ? 'is-fire' : ''} ${player.isCold ? 'is-cold' : ''}`} key={player.id} style={{ '--accent': player.accent } as React.CSSProperties}>
             <span className="presentation-player-avatar">{player.avatar}</span>
-            <div className="presentation-player-main"><strong>{player.name}</strong>{room.turnPlayerId === player.id ? <span className="presentation-turn-beacon">★ SELECTS NEXT</span> : <small>{status}</small>}</div>
+            <div className="presentation-player-main"><strong>{player.name}</strong>{room.turnPlayerId === player.id ? <span className="presentation-turn-beacon star-only">★</span> : <small>{status}</small>}</div>
             <b>{player.score.toLocaleString()}</b>
           </div>;
         }) : <div className="presentation-name-card practice"><strong>PRACTICE MODE</strong></div>}
