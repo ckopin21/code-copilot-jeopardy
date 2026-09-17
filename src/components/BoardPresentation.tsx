@@ -1,7 +1,7 @@
 import type { RoomSnapshot } from '../shared/types';
 import { Board, type BoardResultMap } from './Board';
 
-export function BoardPresentation({ room, onBack, onSelect, onReview, results = {} }: { room: RoomSnapshot; onBack: () => void; onSelect: (id: string) => void; onReview?: (id: string) => void; results?: BoardResultMap }) {
+export function BoardPresentation({ room, onBack, onSelect, onReview, results = {}, scoreOverrides = {} }: { room: RoomSnapshot; onBack: () => void; onSelect: (id: string) => void; onReview?: (id: string) => void; results?: BoardResultMap; scoreOverrides?: Record<string, number> }) {
   if (!room.board) return null;
   const players = room.players.filter((player) => player.connected);
   return <section className="board-presentation-mode" role="dialog" aria-modal="true" aria-label="Board presentation">
@@ -16,10 +16,11 @@ export function BoardPresentation({ room, onBack, onSelect, onReview, results = 
               : player.positiveStreak > 0
                 ? `STREAK ${player.positiveStreak}`
                 : 'READY';
-          return <div className={`presentation-name-card ${room.turnPlayerId === player.id ? 'is-turn' : ''} ${player.onFire ? 'is-fire' : ''} ${player.isCold ? 'is-cold' : ''}`} key={player.id} style={{ '--accent': player.accent } as React.CSSProperties}>
+          const displayedScore = scoreOverrides[player.id] ?? player.score;
+          return <div data-player-id={player.id} className={`presentation-name-card ${room.turnPlayerId === player.id ? 'is-turn' : ''} ${player.onFire ? 'is-fire' : ''} ${player.isCold ? 'is-cold' : ''}`} key={player.id} style={{ '--accent': player.accent } as React.CSSProperties}>
             <span className="presentation-player-avatar">{player.avatar}</span>
             <div className="presentation-player-main"><strong>{player.name}</strong>{room.turnPlayerId === player.id ? <span className="presentation-turn-beacon star-only">★</span> : <small>{status}</small>}</div>
-            <b>{player.score.toLocaleString()}</b>
+            <b data-player-score={player.id}>{displayedScore.toLocaleString()}</b>
           </div>;
         }) : <div className="presentation-name-card practice"><strong>PRACTICE MODE</strong></div>}
       </div>
