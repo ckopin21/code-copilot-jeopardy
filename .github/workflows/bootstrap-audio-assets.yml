@@ -23,21 +23,51 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p public/audio
+          USER_AGENT='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/18.6 Safari/605.1.15'
+
           fetch_track() {
             local page="$1"
-            local download="$2"
+            local id="$2"
             local output="$3"
-            curl -L --fail --retry 3 --retry-delay 2 \
-              -A 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/18.6 Safari/605.1.15' \
-              -H 'Accept: audio/mpeg,audio/*;q=0.9,*/*;q=0.8' \
-              -H "Referer: $page" \
-              "$download" -o "$output"
-            test "$(wc -c < "$output")" -gt 1000000
+            local expected_size="$4"
+            local html="/tmp/pixabay-${id}.html"
+
+            curl -L --fail --retry 3 --retry-delay 2 -A "$USER_AGENT" \
+              -H 'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' \
+              "$page" -o "$html"
+
+            local media_url
+            media_url="$(python3 - "$html" "$id" <<'PY'
+          import html as html_module
+          import re
+          import sys
+          from pathlib import Path
+
+          path, track_id = sys.argv[1], sys.argv[2]
+          text = Path(path).read_text(errors='ignore')
+          text = html_module.unescape(text).replace('\\u002F', '/').replace('\\/', '/')
+          urls = re.findall(r'https://cdn\.pixabay\.com/download/audio/[^"\'<>\s]+', text)
+          urls = list(dict.fromkeys(urls))
+          matching = [url for url in urls if track_id in url]
+          if not matching:
+              raise SystemExit(f'No CDN MP3 URL containing track id {track_id}; found {len(urls)} audio URL(s)')
+          print(matching[0])
+          PY
+            )"
+
+            echo "Resolved $id to ${media_url%%\?*}"
+            curl -L --fail --retry 3 --retry-delay 2 -A "$USER_AGENT" "$media_url" -o "$output"
+            actual_size="$(wc -c < "$output" | tr -d ' ')"
+            test "$actual_size" -eq "$expected_size" || {
+              echo "Unexpected size for $id: got $actual_size, expected $expected_size"
+              exit 1
+            }
           }
-          fetch_track 'https://pixabay.com/music/upbeat-upbeat-music-281095/' 'https://pixabay.com/music/download/id-281095.mp3' 'public/audio/kulakovka-upbeat-music-281095.mp3'
-          fetch_track 'https://pixabay.com/music/upbeat-upbeat-upbeat-music-377668/' 'https://pixabay.com/music/download/id-377668.mp3' 'public/audio/tatamusic-upbeat-upbeat-music-377668.mp3'
-          fetch_track 'https://pixabay.com/music/upbeat-upbeat-upbeat-music-567445/' 'https://pixabay.com/music/download/id-567445.mp3' 'public/audio/the_mountain-upbeat-upbeat-music-567445.mp3'
-          fetch_track 'https://pixabay.com/music/electronic-tech-quiz-news-loop-274362/' 'https://pixabay.com/music/download/id-274362.mp3' 'public/audio/sonican-tech-quiz-news-loop-274362.mp3'
+
+          fetch_track 'https://pixabay.com/music/funk-upbeat-music-281095/' '281095' 'public/audio/kulakovka-upbeat-music-281095.mp3' '3872809'
+          fetch_track 'https://pixabay.com/music/upbeat-upbeat-upbeat-music-377668/' '377668' 'public/audio/tatamusic-upbeat-upbeat-music-377668.mp3' '3857763'
+          fetch_track 'https://pixabay.com/music/funk-upbeat-upbeat-music-567445/' '567445' 'public/audio/the_mountain-upbeat-upbeat-music-567445.mp3' '4979565'
+          fetch_track 'https://pixabay.com/music/electronic-tech-quiz-news-loop-274362/' '274362' 'public/audio/sonican-tech-quiz-news-loop-274362.mp3' '4033306'
       - name: Commit bundled tracks
         shell: bash
         run: |
