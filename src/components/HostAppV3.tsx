@@ -698,7 +698,7 @@ export function HostAppV3() {
         return <><div className="section-kicker">{entry.category} · {entry.value} POINTS</div><h2>{entry.text}</h2><div className="review-answer-v2"><small>ANSWER</small><strong>{entry.answer || 'Not revealed'}</strong></div><div className="attempt-list">{entry.attempts.length ? entry.attempts.map((attempt) => <div className={`attempt-row ${attempt.correct ? 'correct' : 'wrong'}`} key={attempt.playerId}><span>{attempt.playerAvatar}</span><strong>{attempt.playerName}</strong><b>{attempt.correct ? 'CORRECT' : 'INCORRECT'}</b></div>) : <p className="muted">No player response recorded.</p>}</div></>;
       })()}</section></div>}
 
-      {presentationMode && room.phase === 'board' && <BoardPresentation room={room} onBack={() => setPresentationMode(false)} onSelect={selectBoardQuestion} onReview={(questionId) => setReviewId(questionId)} results={boardResults} />}
+      {presentationMode && room.phase === 'board' && <BoardPresentation room={room} onBack={() => setPresentationMode(false)} onSelect={selectBoardQuestion} onReview={(questionId) => setReviewId(questionId)} results={boardResults} scoreOverrides={scoreOverrides} />}
       {scoreFlights[0] && <ScoreFlight flight={scoreFlights[0]} onImpact={handleScoreImpact} onComplete={handleScoreComplete} />}
     </main>
   );
