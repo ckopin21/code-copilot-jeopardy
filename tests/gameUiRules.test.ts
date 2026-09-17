@@ -14,8 +14,8 @@ describe('shared game UI rules', () => {
     expect(turnIndicatorVisible('recap')).toBe(false);
   });
 
-  it('uses a truthful turn label for board versus active clue states', () => {
-    expect(turnIndicatorLabel('board')).toBe('SELECTS NEXT');
+  it('uses a star-only board marker and a truthful active-clue label', () => {
+    expect(turnIndicatorLabel('board')).toBe('');
     expect(turnIndicatorLabel('question')).toBe('ON TURN');
     expect(turnIndicatorLabel('daily-double-question')).toBe('ON TURN');
   });
