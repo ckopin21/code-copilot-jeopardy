@@ -1,0 +1,43 @@
+name: Bootstrap audio assets
+
+on:
+  push:
+    branches:
+      - feat/safe-background-music
+    paths:
+      - .github/workflows/bootstrap-audio-assets.yml
+
+permissions:
+  contents: write
+
+jobs:
+  bundle-audio:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/safe-background-music
+          fetch-depth: 0
+      - name: Download background tracks
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p public/audio
+          curl -L --fail --retry 3 --retry-delay 2 'https://pixabay.com/music/download/id-281095.mp3' -o public/audio/kulakovka-upbeat-music-281095.mp3
+          curl -L --fail --retry 3 --retry-delay 2 'https://pixabay.com/music/download/id-377668.mp3' -o public/audio/tatamusic-upbeat-upbeat-music-377668.mp3
+          curl -L --fail --retry 3 --retry-delay 2 'https://pixabay.com/music/download/id-567445.mp3' -o public/audio/the_mountain-upbeat-upbeat-music-567445.mp3
+          curl -L --fail --retry 3 --retry-delay 2 'https://pixabay.com/music/download/id-274362.mp3' -o public/audio/sonican-tech-quiz-news-loop-274362.mp3
+          test "$(wc -c < public/audio/kulakovka-upbeat-music-281095.mp3)" -gt 1000000
+          test "$(wc -c < public/audio/tatamusic-upbeat-upbeat-music-377668.mp3)" -gt 1000000
+          test "$(wc -c < public/audio/the_mountain-upbeat-upbeat-music-567445.mp3)" -gt 1000000
+          test "$(wc -c < public/audio/sonican-tech-quiz-news-loop-274362.mp3)" -gt 1000000
+      - name: Commit bundled tracks
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add public/audio
+          git diff --cached --quiet && exit 0
+          git commit -m 'chore: bundle background music assets'
+          git push origin HEAD:feat/safe-background-music
