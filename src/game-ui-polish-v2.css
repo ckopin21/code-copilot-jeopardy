@@ -277,3 +277,71 @@ body:has(.audio-drawer) .comeback-host { visibility: hidden; }
     max-width: calc(100% - 54px);
   }
 }
+
+
+/* Presentation scoreboard is meant to be read across a room, not at host-control density. */
+.presentation-shell > .showcase-player-strip.player-strip {
+  padding: 18px 24px 16px !important;
+  gap: 14px !important;
+}
+.presentation-shell .showcase-player-card.player-card {
+  min-height: 116px !important;
+  grid-template-columns: 64px minmax(0,1fr) auto !important;
+  gap: 14px !important;
+  padding: 14px 18px !important;
+}
+.presentation-shell .showcase-player-card.player-card.is-active,
+.presentation-shell .showcase-player-card.player-card.is-turn {
+  transform: none !important;
+}
+.presentation-shell .showcase-player-card .player-avatar-large {
+  width: 62px !important;
+  height: 62px !important;
+  font-size: 2rem !important;
+}
+.presentation-shell .showcase-player-card .player-card-main {
+  min-height: 74px;
+  display: grid;
+  align-content: center;
+  gap: 2px;
+}
+.presentation-shell .showcase-player-card .player-name {
+  font-size: 1.7rem !important;
+  line-height: 1 !important;
+  letter-spacing: .01em;
+}
+.presentation-shell .showcase-player-card .score {
+  margin-top: 2px !important;
+  font-size: 3.25rem !important;
+  line-height: .95 !important;
+}
+.presentation-shell .showcase-player-card.is-turn:is(.is-fire,.is-cold) {
+  padding-right: 132px !important;
+}
+
+@media (max-width: 900px) {
+  .presentation-shell > .showcase-player-strip.player-strip {
+    padding: 14px 12px 12px !important;
+    gap: 10px !important;
+  }
+  .presentation-shell .showcase-player-card.player-card {
+    min-height: 96px !important;
+    grid-template-columns: 52px minmax(0,1fr) auto !important;
+    gap: 10px !important;
+    padding: 11px 13px !important;
+  }
+  .presentation-shell .showcase-player-card .player-avatar-large {
+    width: 50px !important;
+    height: 50px !important;
+    font-size: 1.65rem !important;
+  }
+  .presentation-shell .showcase-player-card .player-card-main {
+    min-height: 62px;
+  }
+  .presentation-shell .showcase-player-card .player-name {
+    font-size: 1.35rem !important;
+  }
+  .presentation-shell .showcase-player-card .score {
+    font-size: 2.6rem !important;
+  }
+}
