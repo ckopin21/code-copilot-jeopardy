@@ -14,6 +14,7 @@ import './gameplay-regression-fixes.css';
 import './lobby-setup-fixes.css';
 import './round-start-result-fixes.css';
 import './background-music.css';
+import './comeback-boosts.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(<React.StrictMode><App/></React.StrictMode>);
 
