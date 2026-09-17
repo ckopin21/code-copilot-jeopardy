@@ -255,7 +255,7 @@ export function PlayerApp() {
   }, []);
 
   const buzz = async () => {
-    if (!credentials || !me?.buzzEligible) return;
+    if (!credentials || !room || !me?.buzzEligible) return;
     setBuzzMessage('');
     try {
       await audio.unlock();
@@ -268,7 +268,7 @@ export function PlayerApp() {
   };
 
   const submitText = async () => {
-    if (!credentials || !textAnswer.trim()) return;
+    if (!credentials || !room || !textAnswer.trim()) return;
     setError('');
     try {
       await emitAck('player:text-response', { ...credentials, answer: textAnswer.trim(), questionId: room.currentQuestion?.questionId, gameStartedAt: room.gameStartedAt });
@@ -278,14 +278,14 @@ export function PlayerApp() {
   };
 
   const submitDailyDoubleWager = async (wager: number) => {
-    if (!credentials) return;
+    if (!credentials || !room) return;
     setError('');
     try { await emitAck('player:daily-double-wager', { ...credentials, wager, questionId: room.currentQuestion?.questionId, gameStartedAt: room.gameStartedAt }); }
     catch (err) { setError(err instanceof Error ? err.message : 'Could not lock wager'); }
   };
 
   const submitFinalWager = async () => {
-    if (!credentials || selectedFinalWager === null) return;
+    if (!credentials || !room || selectedFinalWager === null) return;
     setError('');
     try { await emitAck('player:final-wager', { ...credentials, wager: selectedFinalWager, gameStartedAt: room.gameStartedAt }); }
     catch (err) { setError(err instanceof Error ? err.message : 'Could not lock wager'); }
