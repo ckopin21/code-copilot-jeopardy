@@ -93,4 +93,24 @@ describe('room storage recovery', () => {
     expect(merged.find((item) => item.state?.code === 'TIE11')?.marker).toBe('newer-backup');
   });
 
+
+  it('does not throw when browser storage access is blocked', () => {
+    const blocked = {
+      get length() { throw new Error('blocked'); },
+      clear() { throw new Error('blocked'); },
+      getItem() { throw new Error('blocked'); },
+      key() { throw new Error('blocked'); },
+      removeItem() { throw new Error('blocked'); },
+      setItem() { throw new Error('blocked'); }
+    } as Storage;
+
+    expect(recoverRoomStorage(blocked)).toEqual([]);
+  });
+
+  it('skips a structurally corrupt room record instead of crashing engine startup', () => {
+    localStorage.setItem(PRIMARY_KEY, JSON.stringify([{ broken: true }]));
+    expect(() => new BrowserGameEngine(new FixedRandom(), 60_000)).not.toThrow();
+    expect(JSON.parse(localStorage.getItem(PRIMARY_KEY) ?? '[]')).toEqual([]);
+  });
+
 });

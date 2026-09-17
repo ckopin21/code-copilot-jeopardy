@@ -9,6 +9,7 @@ import { sanitizeRoomSnapshot } from './snapshotSecurity';
 import { authorizeRemoteEvent, type RemoteIdentity } from './remoteAuthorization';
 import { randomId } from './ids';
 import { finalWagerRules } from './finalWagerRules';
+import { claimHostAuthority, hasHostAuthority, hostAuthorityKey, releaseHostAuthority } from './hostTabAuthority';
 
 type Listener = (data: any) => void;
 type Identity = RemoteIdentity;
@@ -34,6 +35,7 @@ const connections = new Set<DataConnection>();
 const pending = new Map<string, PendingRequest>();
 let hostPeer: Peer | null = null;
 let hostRoomCode = '';
+let hostAuthorityId = '';
 let clientPeer: Peer | null = null;
 let clientConnection: DataConnection | null = null;
 let clientRoomCode = '';
@@ -65,6 +67,23 @@ function roomRecord(roomCode: string): RoomRecord | undefined {
 function presetWager(wager: number, includeZero = false): boolean {
   return (includeZero && wager === 0) || QUESTION_VALUES.includes(wager as (typeof QUESTION_VALUES)[number]);
 }
+function requiredGameStartedAt(payload: Record<string, unknown>): number {
+  const value = Number(payload.gameStartedAt);
+  if (!Number.isFinite(value) || value <= 0) throw new Error('Missing or stale game context');
+  return value;
+}
+function requiredQuestionId(payload: Record<string, unknown>): string {
+  const value = String(payload.questionId ?? '');
+  if (!value) throw new Error('Missing or stale question context');
+  return value;
+}
+function ownsHostAuthority(roomCode = hostRoomCode): boolean {
+  const normalized = roomCode.toUpperCase();
+  return Boolean(normalized && hostPeer && hostRoomCode === normalized && !hostPeer.destroyed && hostAuthorityId && hasHostAuthority(normalized, hostAuthorityId));
+}
+function requireHostAuthority(roomCode: string): void {
+  if (!ownsHostAuthority(roomCode)) throw new Error('This tab is no longer the active host for this room');
+}
 
 function sendEvent(connection: DataConnection, event: string, data: unknown): void {
   if (connection.open) connection.send({ kind: 'event', event, data } satisfies EventMessage);
@@ -95,6 +114,7 @@ function handleConnectionClosed(connection: DataConnection): void {
   if (playerConnections.get(identity.playerId) !== connection) return;
   playerConnections.delete(identity.playerId);
   playerLastSeen.delete(identity.playerId);
+  if (!ownsHostAuthority(identity.roomCode)) return;
   try { engine.setPlayerConnected(identity.roomCode, identity.playerId, false); emitRoom(identity.roomCode); } catch { /* stale room */ }
 }
 function closePlayerConnection(playerId: string, event?: 'player:suspended' | 'player:removed'): void {
@@ -212,26 +232,42 @@ async function dispatchHost(event: string, payload: Record<string, unknown>, con
     case 'host:resolve-final': return engine.resolveFinalAnswer(roomCode, hostToken, String(payload.playerId ?? ''), typeof payload.correct === 'boolean' ? payload.correct : undefined);
     case 'host:end-game': return engine.endGame(roomCode, hostToken);
     case 'player:buzz': {
-      const result = engine.buzz(roomCode, String(payload.playerId ?? ''), String(payload.reconnectToken ?? ''));
+      const result = engine.buzz(
+        roomCode,
+        String(payload.playerId ?? ''),
+        String(payload.reconnectToken ?? ''),
+        requiredQuestionId(payload),
+        requiredGameStartedAt(payload)
+      );
       return { accepted: result.accepted, reason: result.reason };
     }
-    case 'player:text-response': return engine.submitTextResponse(roomCode, String(payload.playerId ?? ''), String(payload.reconnectToken ?? ''), String(payload.answer ?? ''));
+    case 'player:text-response': return engine.submitTextResponse(
+      roomCode,
+      String(payload.playerId ?? ''),
+      String(payload.reconnectToken ?? ''),
+      String(payload.answer ?? ''),
+      requiredQuestionId(payload),
+      requiredGameStartedAt(payload)
+    );
     case 'player:daily-double-wager': {
       const playerId = String(payload.playerId ?? '');
       const reconnectToken = String(payload.reconnectToken ?? '');
       const wager = Number(payload.wager);
+      const questionId = requiredQuestionId(payload);
+      const gameStartedAt = requiredGameStartedAt(payload);
       if (!presetWager(wager)) throw new Error('Choose one of the preset Daily Double wagers');
       engine.reconnectPlayer(roomCode, playerId, reconnectToken);
       const snapshot = engine.snapshot(roomCode);
       if (snapshot.phase !== 'daily-double-wager' || snapshot.currentQuestion?.dailyDoublePlayerId !== playerId) throw new Error('This Daily Double belongs to another player');
       const record = roomRecord(roomCode);
       if (!record) throw new Error('Room not found');
-      return engine.setDailyDoubleWager(roomCode, record.hostToken, wager);
+      return engine.setDailyDoubleWager(roomCode, record.hostToken, wager, questionId, gameStartedAt);
     }
     case 'player:final-wager': {
       const playerId = String(payload.playerId ?? '');
       const reconnectToken = String(payload.reconnectToken ?? '');
       const wager = Number(payload.wager);
+      const gameStartedAt = requiredGameStartedAt(payload);
       engine.reconnectPlayer(roomCode, playerId, reconnectToken);
       const snapshot = engine.snapshot(roomCode);
       const player = snapshot.players.find((candidate) => candidate.id === playerId);
@@ -240,11 +276,17 @@ async function dispatchHost(event: string, payload: Record<string, unknown>, con
       const allIn = rules.allInAllowed && wager === player.score;
       if (!presetWager(wager, true) && !allIn) throw new Error('Choose an available preset or All In');
       if (wager > rules.maxWager) throw new Error(`Final wager is capped at ${rules.maxWager.toLocaleString()}`);
-      engine.submitFinalWager(roomCode, playerId, reconnectToken, wager);
+      engine.submitFinalWager(roomCode, playerId, reconnectToken, wager, gameStartedAt);
       return null;
     }
     case 'player:final-answer': {
-      engine.submitFinalAnswer(roomCode, String(payload.playerId ?? ''), String(payload.reconnectToken ?? ''), String(payload.answer ?? ''));
+      engine.submitFinalAnswer(
+        roomCode,
+        String(payload.playerId ?? ''),
+        String(payload.reconnectToken ?? ''),
+        String(payload.answer ?? ''),
+        requiredGameStartedAt(payload)
+      );
       return null;
     }
     default: throw new Error(`Unsupported game event: ${event}`);
@@ -252,6 +294,12 @@ async function dispatchHost(event: string, payload: Record<string, unknown>, con
 }
 
 async function handleHostRequest(connection: DataConnection, message: RequestMessage): Promise<void> {
+  const requestRoomCode = String(message.payload.roomCode ?? '').toUpperCase();
+  if (!ownsHostAuthority(requestRoomCode)) {
+    if (connection.open) connection.send({ kind: 'response', requestId: message.requestId, ok: false, error: 'Host authority moved to another tab' } satisfies ResponseMessage);
+    window.setTimeout(() => { try { connection.close(); } catch { /* stale connection */ } }, 0);
+    return;
+  }
   const identity = identities.get(connection);
   if (identity?.role === 'player' && identity.playerId) playerLastSeen.set(identity.playerId, Date.now());
   try {
@@ -288,9 +336,13 @@ function createHostPeerOnce(roomCode: string): Promise<void> {
         return;
       }
       settled = true;
-      if (hostPeer && hostPeer !== peer) { try { hostPeer.destroy(); } catch { /* ignore */ } }
+      const previousPeer = hostPeer;
+      const authorityId = randomId('host-authority');
+      claimHostAuthority(roomCode, authorityId);
       hostPeer = peer;
       hostRoomCode = roomCode;
+      hostAuthorityId = authorityId;
+      if (previousPeer && previousPeer !== peer) { try { previousPeer.destroy(); } catch { /* ignore */ } }
       peer.on('connection', attachHostConnection);
       peer.on('disconnected', () => {
         socket.connected = false;
@@ -301,7 +353,14 @@ function createHostPeerOnce(roomCode: string): Promise<void> {
         };
         window.setTimeout(reconnect, 500);
       });
-      peer.on('close', () => { socket.connected = false; emitLocal('disconnect'); });
+      peer.on('close', () => {
+        releaseHostAuthority(roomCode, authorityId);
+        if (hostPeer !== peer) return;
+        hostPeer = null;
+        hostAuthorityId = '';
+        socket.connected = false;
+        emitLocal('disconnect');
+      });
       peer.on('error', () => { if (peer.disconnected && !peer.destroyed) { try { peer.reconnect(); } catch { /* next event retries */ } } });
       resolve();
     });
@@ -311,9 +370,16 @@ function createHostPeerOnce(roomCode: string): Promise<void> {
 }
 async function startHostPeer(roomCode: string, retryUnavailable: boolean): Promise<void> {
   if (hostPeer && hostRoomCode === roomCode && !hostPeer.destroyed) {
-    if (hostPeer.disconnected) { try { hostPeer.reconnect(); } catch { /* keep existing connections */ } }
-    socket.connected = !hostPeer.disconnected;
-    return;
+    if (ownsHostAuthority(roomCode)) {
+      if (hostPeer.disconnected) { try { hostPeer.reconnect(); } catch { /* keep existing connections */ } }
+      socket.connected = !hostPeer.disconnected;
+      return;
+    }
+    const stalePeer = hostPeer;
+    hostPeer = null;
+    hostAuthorityId = '';
+    socket.connected = false;
+    try { stalePeer.destroy(); } catch { /* stale peer */ }
   }
   let lastError: Error | null = null;
   const attempts = retryUnavailable ? 12 : 1;
@@ -541,7 +607,12 @@ async function createHostRoom(payload: Record<string, unknown>): Promise<unknown
 async function hostRequest(event: string, payload: Record<string, unknown>): Promise<unknown> {
   if (event === 'room:create') return createHostRoom(payload);
   const roomCode = String(payload.roomCode ?? '').toUpperCase();
-  if (event === 'host:reconnect') await startHostPeer(roomCode, true);
+  if (event === 'host:reconnect') {
+    await startHostPeer(roomCode, true);
+    requireHostAuthority(roomCode);
+  } else if (event.startsWith('host:')) {
+    requireHostAuthority(roomCode);
+  }
   const result = await dispatchHost(event, payload);
   if (roomCode) emitRoom(roomCode);
   return result;
@@ -586,14 +657,26 @@ function installVirtualApi(): void {
 installHistoryBaseGuard();
 installVirtualApi();
 window.addEventListener('online', () => { if (currentMode() !== 'host' && clientRoomCode) scheduleClientReconnect(); });
+window.addEventListener('storage', (event) => {
+  if (!hostRoomCode || !hostAuthorityId || event.key !== hostAuthorityKey(hostRoomCode) || ownsHostAuthority(hostRoomCode)) return;
+  const stalePeer = hostPeer;
+  hostPeer = null;
+  hostAuthorityId = '';
+  socket.connected = false;
+  emitLocal('disconnect');
+  for (const connection of connections) {
+    try { connection.close(); } catch { /* stale connection */ }
+  }
+  try { stalePeer?.destroy(); } catch { /* stale peer */ }
+});
 window.setInterval(() => {
-  if (currentMode() !== 'host' || !hostRoomCode) return;
+  if (currentMode() !== 'host' || !hostRoomCode || !ownsHostAuthority(hostRoomCode)) return;
   for (const changedRoom of engine.tick()) {
     if (changedRoom === hostRoomCode) emitRoom(changedRoom);
   }
 }, 250);
 window.setInterval(() => {
-  if (currentMode() !== 'host' || !hostRoomCode) return;
+  if (currentMode() !== 'host' || !hostRoomCode || !ownsHostAuthority(hostRoomCode)) return;
   const now = Date.now();
   for (const [playerId, connection] of playerConnections) {
     const identity = identities.get(connection);
@@ -608,5 +691,5 @@ window.setInterval(() => {
   emitRoom(hostRoomCode);
 }, 2000);
 window.setInterval(() => {
-  if (currentMode() === 'host' && hostRoomCode) emitRoom(hostRoomCode);
+  if (currentMode() === 'host' && hostRoomCode && ownsHostAuthority(hostRoomCode)) emitRoom(hostRoomCode);
 }, 1500);

@@ -42,7 +42,7 @@ function secureEqual(a: string, b: string): boolean {
 function defaultStats() {
   return { correct: 0, incorrect: 0, longestStreak: 0, longestColdStreak: 0, dailyDoublesFound: 0, biggestWager: 0, fastestBuzzMs: null, pointsGained: 0, pointsLost: 0 };
 }
-function loadRooms(): RoomRecord[] {
+function loadRooms(): { rooms: RoomRecord[]; readable: boolean } {
   const parse = (raw: string | null): RoomRecord[] | null => {
     if (!raw) return null;
     try {
@@ -52,7 +52,14 @@ function loadRooms(): RoomRecord[] {
       return null;
     }
   };
-  return parse(localStorage.getItem(STORAGE_KEY)) ?? parse(localStorage.getItem(STORAGE_BACKUP_KEY)) ?? [];
+  try {
+    return {
+      rooms: parse(localStorage.getItem(STORAGE_KEY)) ?? parse(localStorage.getItem(STORAGE_BACKUP_KEY)) ?? [],
+      readable: true
+    };
+  } catch {
+    return { rooms: [], readable: false };
+  }
 }
 function validStoredRooms(raw: string | null): boolean {
   if (!raw) return false;
@@ -72,7 +79,9 @@ export class BrowserGameEngine {
 
   constructor(private readonly random: RandomSource = new MathRandomSource(), private readonly roomTtlMs = ROOM_TTL_MS) {
     const now = Date.now();
-    for (const record of loadRooms()) {
+    const loaded = loadRooms();
+    for (const record of loaded.rooms) {
+      try {
       if (record.state.expiresAt <= now) continue;
       // Session locking was removed from the product. Normalize older persisted rooms so they remain joinable.
       record.state.locked = false;
@@ -131,9 +140,14 @@ export class BrowserGameEngine {
       }
       this.rooms.set(record.state.code, record);
       for (const questionId of Object.keys(record.questions)) this.seenQuestionIds.add(questionId);
+      } catch {
+        // Skip a malformed room record instead of crashing the entire game on startup.
+        continue;
+      }
     }
-    this.tick(now);
-    this.persist();
+    const changed = this.tick(now);
+    if (loaded.readable && !changed.length) this.persist();
+    else if (!loaded.readable) this.reportPersistence(false);
   }
 
   private reportPersistence(ok: boolean): void {
@@ -186,6 +200,17 @@ export class BrowserGameEngine {
     if (!player) throw new Error('Player not found');
     this.touch(room);
     return [room, player];
+  }
+  private assertGameContext(room: RoomRecord, expectedGameStartedAt?: number): void {
+    if (expectedGameStartedAt !== undefined && room.state.gameStartedAt !== expectedGameStartedAt) {
+      throw new Error('This action belongs to an older game');
+    }
+  }
+  private assertQuestionContext(room: RoomRecord, expectedQuestionId?: string, expectedGameStartedAt?: number): void {
+    this.assertGameContext(room, expectedGameStartedAt);
+    if (expectedQuestionId !== undefined && room.state.currentQuestion?.questionId !== expectedQuestionId) {
+      throw new Error('This action belongs to an older question');
+    }
   }
   private connectedPlayers(room: RoomRecord): Player[] { return room.state.players.filter((player) => player.connected).sort((a, b) => a.seat - b.seat); }
   private nextConnectedAfterSeat(room: RoomRecord, seat: number): Player | null {
@@ -439,6 +464,7 @@ export class BrowserGameEngine {
     restored.players.forEach((player) => { player.connected = connectionState.get(player.id) ?? false; });
     restored.hostConnected = hostConnected;
     restored.expiresAt = expiresAt;
+    restored.revision = Math.max(restored.revision ?? 0, room.state.revision ?? 0);
     room.state = restored;
     this.clearUndo(room);
     this.touch(room);
@@ -663,8 +689,9 @@ export class BrowserGameEngine {
     return this.snapshot(roomCode);
   }
 
-  setDailyDoubleWager(roomCode: string, hostToken: string, wager: number): RoomSnapshot {
+  setDailyDoubleWager(roomCode: string, hostToken: string, wager: number, expectedQuestionId?: string, expectedGameStartedAt?: number): RoomSnapshot {
     const room = this.hostRoom(roomCode, hostToken);
+    this.assertQuestionContext(room, expectedQuestionId, expectedGameStartedAt);
     const current = room.state.currentQuestion;
     if (room.state.phase !== 'daily-double-wager' || !current?.dailyDoublePlayerId) throw new Error('No Daily Double wager is pending');
     const player = room.state.players.find((item) => item.id === current.dailyDoublePlayerId)!;
@@ -711,11 +738,19 @@ export class BrowserGameEngine {
     return this.snapshot(roomCode);
   }
 
-  buzz(roomCode: string, playerId: string, reconnectToken: string): { accepted: boolean; reason?: string; snapshot: RoomSnapshot } {
+  buzz(roomCode: string, playerId: string, reconnectToken: string, expectedQuestionId?: string, expectedGameStartedAt?: number): { accepted: boolean; reason?: string; snapshot: RoomSnapshot } {
     const [room, player] = this.playerRoom(roomCode, playerId, reconnectToken);
+    this.assertQuestionContext(room, expectedQuestionId, expectedGameStartedAt);
+    const timerExpired = this.expireTimerIfNeeded(room);
     const current = room.state.currentQuestion;
-    if (room.state.phase !== 'question' || !current?.buzzOpen || current.buzzWinnerId) return { accepted: false, reason: 'Buzzers are locked', snapshot: this.snapshot(roomCode) };
-    if (!player.connected || !player.buzzEligible || (!room.state.settings.allowRepeatBuzzAfterMiss && current.attemptedPlayerIds.includes(player.id))) return { accepted: false, reason: 'You are not eligible to buzz', snapshot: this.snapshot(roomCode) };
+    if (room.state.phase !== 'question' || !current?.buzzOpen || current.buzzWinnerId) {
+      if (timerExpired) this.persist();
+      return { accepted: false, reason: 'Buzzers are locked', snapshot: this.snapshot(roomCode) };
+    }
+    if (!player.connected || !player.buzzEligible || (!room.state.settings.allowRepeatBuzzAfterMiss && current.attemptedPlayerIds.includes(player.id))) {
+      if (timerExpired) this.persist();
+      return { accepted: false, reason: 'You are not eligible to buzz', snapshot: this.snapshot(roomCode) };
+    }
     current.buzzWinnerId = player.id;
     current.resolvedPlayerId = null;
     current.buzzOpen = false;
@@ -820,10 +855,15 @@ export class BrowserGameEngine {
     return this.snapshot(roomCode);
   }
 
-  submitTextResponse(roomCode: string, playerId: string, reconnectToken: string, answer: string): RoomSnapshot {
+  submitTextResponse(roomCode: string, playerId: string, reconnectToken: string, answer: string, expectedQuestionId?: string, expectedGameStartedAt?: number): RoomSnapshot {
     const [room, player] = this.playerRoom(roomCode, playerId, reconnectToken);
+    this.assertQuestionContext(room, expectedQuestionId, expectedGameStartedAt);
+    const timerExpired = this.expireTimerIfNeeded(room);
     const current = room.state.currentQuestion;
-    if (room.state.phase !== 'question' || !current || current.responseMode !== 'text' || current.answerRevealed || current.responsesClosed) throw new Error('Responses are closed');
+    if (room.state.phase !== 'question' || !current || current.responseMode !== 'text' || current.answerRevealed || current.responsesClosed) {
+      if (timerExpired) this.persist();
+      throw new Error('Responses are closed');
+    }
     if (current.participantIds && !current.participantIds.includes(player.id)) throw new Error('You joined after this question started. Wait for the next question.');
     const trimmed = answer.trim().slice(0, 200);
     if (!trimmed) throw new Error('Enter an answer first');
@@ -952,6 +992,21 @@ export class BrowserGameEngine {
     const durationMs = seconds * 1000;
     room.state.timer = { running: true, durationMs, endsAt: Date.now() + durationMs, remainingMs: durationMs };
   }
+  private expireTimerIfNeeded(room: RoomRecord, now = Date.now()): boolean {
+    if (!room.state.timer.running || !room.state.timer.endsAt || room.state.timer.endsAt > now) return false;
+    room.state.timer = emptyTimer();
+    if (room.state.phase === 'final-question') {
+      this.closeFinalResponsesInternal(room);
+    } else if (room.state.currentQuestion?.responseMode === 'text' && !room.state.currentQuestion.answerRevealed) {
+      this.penalizeUnansweredTurn(room);
+      this.closeTextResponsesInternal(room);
+    } else if (room.state.phase === 'daily-double-question' && room.state.currentQuestion && !room.state.currentQuestion.answerRevealed) {
+      // Daily Double expiry only stops the clock; the host still judges the response.
+    } else if (room.state.settings.autoCloseBuzzersAtZero && room.state.currentQuestion?.buzzOpen) {
+      this.penalizeUnansweredTurn(room);
+    }
+    return true;
+  }
   startTimer(roomCode: string, hostToken: string): RoomSnapshot { const room = this.hostRoom(roomCode, hostToken); this.startTimerInternal(room); this.persist(); return this.snapshot(roomCode); }
   stopTimer(roomCode: string, hostToken: string): RoomSnapshot { const room = this.hostRoom(roomCode, hostToken); this.stopTimerInternal(room); this.persist(); return this.snapshot(roomCode); }
   private stopTimerInternal(room: RoomRecord): void { room.state.timer = emptyTimer(); }
@@ -984,19 +1039,7 @@ export class BrowserGameEngine {
     const changed: string[] = [];
     for (const [code, room] of this.rooms) {
       if (room.state.expiresAt <= now) { this.rooms.delete(code); changed.push(code); continue; }
-      if (!room.state.timer.running || !room.state.timer.endsAt || room.state.timer.endsAt > now) continue;
-      room.state.timer = emptyTimer();
-      if (room.state.phase === 'final-question') {
-        this.closeFinalResponsesInternal(room);
-      } else if (room.state.currentQuestion?.responseMode === 'text' && !room.state.currentQuestion.answerRevealed) {
-        this.penalizeUnansweredTurn(room);
-        this.closeTextResponsesInternal(room);
-      } else if (room.state.phase === 'daily-double-question' && room.state.currentQuestion && !room.state.currentQuestion.answerRevealed) {
-        // Daily Double timer expiry ends the clock only. The host still reveals
-        // the answer and judges Correct/Incorrect so timeout never auto-scores a loss.
-      } else if (room.state.settings.autoCloseBuzzersAtZero && room.state.currentQuestion?.buzzOpen) {
-        this.penalizeUnansweredTurn(room);
-      }
+      if (!this.expireTimerIfNeeded(room, now)) continue;
       changed.push(code);
     }
     if (changed.length) this.persist();
@@ -1054,8 +1097,9 @@ export class BrowserGameEngine {
     return this.snapshot(roomCode);
   }
 
-  submitFinalWager(roomCode: string, playerId: string, reconnectToken: string, wager: number): RoomSnapshot {
+  submitFinalWager(roomCode: string, playerId: string, reconnectToken: string, wager: number, expectedGameStartedAt?: number): RoomSnapshot {
     const [room, player] = this.playerRoom(roomCode, playerId, reconnectToken);
+    this.assertGameContext(room, expectedGameStartedAt);
     if (room.state.phase !== 'final-wager' || !room.state.finalRound) throw new Error('Final wagers are closed');
     if (!room.state.finalRound.participantIds.includes(player.id)) throw new Error('This seat is not participating in Final Round');
     if (player.finalWagerSubmitted) throw new Error('Your Final wager is already locked');
@@ -1084,9 +1128,14 @@ export class BrowserGameEngine {
     return this.snapshot(roomCode);
   }
 
-  submitFinalAnswer(roomCode: string, playerId: string, reconnectToken: string, answer: string): RoomSnapshot {
+  submitFinalAnswer(roomCode: string, playerId: string, reconnectToken: string, answer: string, expectedGameStartedAt?: number): RoomSnapshot {
     const [room, player] = this.playerRoom(roomCode, playerId, reconnectToken);
-    if (room.state.phase !== 'final-question' || !room.state.finalRound || room.state.finalRound.responsesClosed) throw new Error('Final answers are closed');
+    this.assertGameContext(room, expectedGameStartedAt);
+    const timerExpired = this.expireTimerIfNeeded(room);
+    if (room.state.phase !== 'final-question' || !room.state.finalRound || room.state.finalRound.responsesClosed) {
+      if (timerExpired) this.persist();
+      throw new Error('Final answers are closed');
+    }
     if (!room.state.finalRound.participantIds.includes(player.id)) throw new Error('This seat is not participating in Final Round');
     if (player.finalAnswerSubmitted) throw new Error('Your Final answer is already locked');
     const trimmed = answer.trim().slice(0, 200);
