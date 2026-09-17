@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GAME_LENGTH_CONFIG } from '../src/shared/config';
+import { DAILY_DOUBLE_COUNT_BY_LENGTH, GAME_LENGTH_CONFIG } from '../src/shared/config';
 import { QUESTION_VALUES } from '../src/shared/types';
 
 describe('game length configuration', () => {
@@ -13,5 +13,9 @@ describe('game length configuration', () => {
     expect(QUESTION_VALUES.slice(0, GAME_LENGTH_CONFIG.quick.rows)).toEqual([100, 200, 300, 400]);
     expect(QUESTION_VALUES.slice(0, GAME_LENGTH_CONFIG.standard.rows)).toEqual([100, 200, 300, 400, 500]);
     expect(QUESTION_VALUES.slice(0, GAME_LENGTH_CONFIG.marathon.rows)).toEqual([100, 200, 300, 400, 500, 1000]);
+  });
+
+  it('scales Daily Doubles with game length', () => {
+    expect(DAILY_DOUBLE_COUNT_BY_LENGTH).toEqual({ quick: 2, standard: 4, marathon: 6 });
   });
 });
