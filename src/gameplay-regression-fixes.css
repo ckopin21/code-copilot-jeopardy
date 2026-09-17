@@ -1,0 +1,31 @@
+/* Regression fixes kept last in the cascade. */
+
+/* Review modals must sit above local Presentation mode (z-index 900). */
+.modal-backdrop {
+  z-index: 1200 !important;
+}
+
+/* Board turn ownership is communicated by the star itself; no redundant label. */
+.turn-beacon.star-only,
+.presentation-turn-beacon.star-only {
+  width: 28px !important;
+  height: 28px !important;
+  min-width: 28px !important;
+  padding: 0 !important;
+  display: grid !important;
+  place-items: center !important;
+  border-radius: 50% !important;
+  letter-spacing: 0 !important;
+}
+
+.turn-beacon.star-only i {
+  font-size: .8rem;
+  line-height: 1;
+}
+
+/* ScoreFlight applies these to the score node as a secondary impact cue. */
+.score.score-impact-pulse-correct,
+.score.score-impact-pulse-wrong {
+  transform-origin: center;
+  animation: scoreNumberHeartbeat .62s cubic-bezier(.2,.82,.22,1) both !important;
+}
