@@ -1,4 +1,5 @@
 import { Buffer } from 'node:buffer';
+import { execFileSync } from 'node:child_process';
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -58,19 +59,50 @@ function findAudioUrl(html, contentId) {
   return mp3s.find((url) => url.includes(contentId)) ?? mp3s[0] ?? null;
 }
 
+function loadWithHeadlessChrome(url) {
+  for (const executable of ['google-chrome', 'chromium', 'chromium-browser']) {
+    try {
+      return execFileSync(executable, [
+        '--headless=new',
+        '--no-sandbox',
+        '--disable-gpu',
+        '--disable-dev-shm-usage',
+        '--virtual-time-budget=5000',
+        '--dump-dom',
+        url
+      ], { encoding: 'utf8', maxBuffer: 25 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] });
+    } catch { /* try the next browser executable */ }
+  }
+  return '';
+}
+
 async function loadTrackPage(track) {
   const direct = await globalThis.fetch(track.page, { headers, redirect: 'follow' }).catch(() => null);
-  if (direct?.ok) return direct.text();
+  if (direct?.ok) {
+    const html = await direct.text();
+    if (findAudioUrl(html, track.contentId)) return html;
+  }
 
-  // Pixabay can reject datacenter IPs. Jina Reader renders the public page and returns the
-  // page HTML, including the JSON-LD AudioObject contentUrl, without requiring credentials.
   const proxyUrl = `https://r.jina.ai/${track.page}`;
   const proxied = await globalThis.fetch(proxyUrl, {
-    headers: { 'x-respond-with': 'html', 'x-timeout': '45' },
+    headers: {
+      'x-respond-with': 'html',
+      'x-wait-for-selector': 'script[type="application/ld+json"]',
+      'x-timeout': '45'
+    },
     redirect: 'follow'
-  });
-  if (!proxied.ok) throw new Error(`Could not load ${track.page}: direct ${direct?.status ?? 'network error'}, proxy ${proxied.status}`);
-  return proxied.text();
+  }).catch(() => null);
+  if (proxied?.ok) {
+    const html = await proxied.text();
+    if (findAudioUrl(html, track.contentId)) return html;
+  }
+
+  // GitHub-hosted runners include Chrome. A real browser is the final fallback when Pixabay
+  // rejects a plain datacenter request or requires the page to render before JSON-LD appears.
+  const browserHtml = loadWithHeadlessChrome(track.page);
+  if (findAudioUrl(browserHtml, track.contentId)) return browserHtml;
+
+  throw new Error(`Could not resolve the public audio URL for ${track.id}`);
 }
 
 async function validExistingFile(path) {
