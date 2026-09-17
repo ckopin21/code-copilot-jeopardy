@@ -8,6 +8,7 @@ import './menu-desktop-layout.css';
 import './space-efficiency.css';
 import './turn-rules-polish.css';
 import './pack-library.css';
+import './gameplay-regression-fixes.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(<React.StrictMode><App/></React.StrictMode>);
 
