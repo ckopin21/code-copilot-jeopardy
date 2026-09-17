@@ -622,4 +622,40 @@ describe('BrowserGameEngine production state', () => {
     expect(used.results?.[0].delta).toBeGreaterThan(0);
   });
 
+
+  it('protects a non-positive Final player from losing more points on a miss', () => {
+    const { engine, host } = setup({ gameLength: 'quick', dailyDoublesEnabled: false, finalRoundEnabled: true, allowNegativeScores: true });
+    const player = addPlayer(engine, host.roomCode, 'Comeback');
+    addPlayer(engine, host.roomCode, 'Leader');
+    engine.startGame(host.roomCode, host.hostToken);
+    finishBoardWithoutScoring(engine, host.roomCode, host.hostToken);
+    engine.adjustScore(host.roomCode, host.hostToken, player.playerId, -10000);
+    const before = engine.snapshot(host.roomCode).players.find((candidate) => candidate.id === player.playerId)!.score;
+    expect(before).toBeLessThanOrEqual(0);
+    engine.beginFinalWagers(host.roomCode, host.hostToken);
+    engine.submitFinalWager(host.roomCode, player.playerId, player.reconnectToken, 1000);
+    const leader = engine.snapshot(host.roomCode).players.find((candidate) => candidate.id !== player.playerId)!;
+    const leaderToken = (engine as unknown as { rooms: Map<string, { playerTokens: Record<string, string> }> }).rooms.get(host.roomCode)!.playerTokens[leader.id];
+    engine.submitFinalWager(host.roomCode, leader.id, leaderToken, 0);
+    engine.openFinalQuestion(host.roomCode, host.hostToken);
+    engine.submitFinalAnswer(host.roomCode, player.playerId, player.reconnectToken, 'wrong answer');
+    engine.submitFinalAnswer(host.roomCode, leader.id, leaderToken, 'answer');
+    engine.beginFinalReview(host.roomCode, host.hostToken);
+    engine.resolveFinalAnswer(host.roomCode, host.hostToken, player.playerId, false);
+    expect(engine.snapshot(host.roomCode).players.find((candidate) => candidate.id === player.playerId)!.score).toBe(before);
+  });
+
+  it('enforces the 1000 Final cap on a runaway leader', () => {
+    const { engine, host } = setup({ gameLength: 'quick', dailyDoublesEnabled: false, finalRoundEnabled: true, allowNegativeScores: true });
+    const leader = addPlayer(engine, host.roomCode, 'Leader');
+    const runner = addPlayer(engine, host.roomCode, 'Runner');
+    engine.startGame(host.roomCode, host.hostToken);
+    finishBoardWithoutScoring(engine, host.roomCode, host.hostToken);
+    engine.adjustScore(host.roomCode, host.hostToken, leader.playerId, 20000);
+    engine.adjustScore(host.roomCode, host.hostToken, runner.playerId, 1000);
+    engine.beginFinalWagers(host.roomCode, host.hostToken);
+    expect(() => engine.submitFinalWager(host.roomCode, leader.playerId, leader.reconnectToken, 1100)).toThrow(/0 and 1000/i);
+    expect(() => engine.submitFinalWager(host.roomCode, leader.playerId, leader.reconnectToken, 1000)).not.toThrow();
+  });
+
 });

@@ -8,6 +8,7 @@ import { BrowserGameEngine, type RoomRecord } from './browserGameEngine';
 import { sanitizeRoomSnapshot } from './snapshotSecurity';
 import { authorizeRemoteEvent, type RemoteIdentity } from './remoteAuthorization';
 import { randomId } from './ids';
+import { finalWagerRules } from './finalWagerRules';
 
 type Listener = (data: any) => void;
 type Identity = RemoteIdentity;
@@ -232,10 +233,13 @@ async function dispatchHost(event: string, payload: Record<string, unknown>, con
       const reconnectToken = String(payload.reconnectToken ?? '');
       const wager = Number(payload.wager);
       engine.reconnectPlayer(roomCode, playerId, reconnectToken);
-      const player = engine.snapshot(roomCode).players.find((candidate) => candidate.id === playerId);
+      const snapshot = engine.snapshot(roomCode);
+      const player = snapshot.players.find((candidate) => candidate.id === playerId);
       if (!player) throw new Error('Player not found');
-      const allIn = player.score > 0 && wager === player.score;
-      if (!presetWager(wager, true) && !allIn) throw new Error('Choose a preset wager or All In');
+      const rules = finalWagerRules(snapshot, playerId);
+      const allIn = rules.allInAllowed && wager === player.score;
+      if (!presetWager(wager, true) && !allIn) throw new Error('Choose an available preset or All In');
+      if (wager > rules.maxWager) throw new Error(`Final wager is capped at ${rules.maxWager.toLocaleString()}`);
       engine.submitFinalWager(roomCode, playerId, reconnectToken, wager);
       return null;
     }

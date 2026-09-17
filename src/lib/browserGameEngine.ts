@@ -4,6 +4,7 @@ import { QUESTION_VALUES } from '../shared/types';
 import { autoGradeAnswer } from '../shared/validation';
 import { packMap } from '../packs';
 import { calculateComebackAward } from './comebackScoring';
+import { finalWagerRules } from './finalWagerRules';
 import { randomId } from './ids';
 
 export interface RoomRecord {
@@ -1057,8 +1058,8 @@ export class BrowserGameEngine {
     if (room.state.phase !== 'final-wager' || !room.state.finalRound) throw new Error('Final wagers are closed');
     if (!room.state.finalRound.participantIds.includes(player.id)) throw new Error('This seat is not participating in Final Round');
     if (player.finalWagerSubmitted) throw new Error('Your Final wager is already locked');
-    const max = room.state.settings.allowWagerBeyondScore ? room.state.settings.maxWager : Math.min(room.state.settings.maxWager, Math.max(0, player.score));
-    if (!Number.isInteger(wager) || wager < 0 || wager > max) throw new Error(`Wager must be between 0 and ${max}`);
+    const { maxWager } = finalWagerRules(room.state, player.id);
+    if (!Number.isInteger(wager) || wager < 0 || wager > maxWager) throw new Error(`Wager must be between 0 and ${maxWager}`);
     player.finalWager = wager;
     player.finalWagerSubmitted = true;
     player.stats.biggestWager = Math.max(player.stats.biggestWager, wager);
@@ -1129,7 +1130,9 @@ export class BrowserGameEngine {
     const suggestion = autoGradeAnswer(player.finalAnswer ?? '', room.state.finalRound.acceptedAnswers);
     const isCorrect = correct ?? suggestion.correct;
     const wager = player.finalWager ?? 0;
-    this.addScore(player, isCorrect ? wager : -wager, room.state.settings);
+    const { protectedLoss } = finalWagerRules(room.state, player.id);
+    const scoreDelta = isCorrect ? wager : protectedLoss ? 0 : -wager;
+    this.addScore(player, scoreDelta, room.state.settings);
     if (isCorrect) player.stats.correct += 1; else player.stats.incorrect += 1;
     player.finalResolved = true;
     this.setNextFinalReviewPlayer(room);
