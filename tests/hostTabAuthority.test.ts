@@ -27,6 +27,17 @@ describe('host tab authority', () => {
     expect(hasHostAuthority('ABCDE', 'tab-b', storage)).toBe(true);
   });
 
+
+  it('allows only one active host tab across different rooms in the browser', () => {
+    claimHostAuthority('ROOM1', 'tab-a', storage);
+    expect(hasHostAuthority('ROOM1', 'tab-a', storage)).toBe(true);
+
+    claimHostAuthority('ROOM2', 'tab-b', storage);
+    expect(hasHostAuthority('ROOM1', 'tab-a', storage)).toBe(false);
+    expect(hasHostAuthority('ROOM2', 'tab-b', storage)).toBe(true);
+    expect(hostAuthorityKey('ROOM1')).toBe(hostAuthorityKey('ROOM2'));
+  });
+
   it('does not let an old owner release the new owner lease', () => {
     claimHostAuthority('ABCDE', 'tab-a', storage);
     claimHostAuthority('ABCDE', 'tab-b', storage);
