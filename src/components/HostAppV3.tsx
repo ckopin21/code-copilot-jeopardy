@@ -17,6 +17,7 @@ import { ScoreFlight, type ScoreFlightState } from './ScoreFlight';
 import { clearHostCredentials, readActiveHostCredentials, writeHostCredentials } from '../lib/hostCredentials';
 import { stripFreshHostFlag } from '../lib/hostSession';
 import { randomId } from '../lib/ids';
+import { readAccessibility } from '../lib/accessibility';
 type HostStored = HostRoomCredentials;
 type HistoryAttempt = { playerId: string; playerName: string; playerAvatar: string; correct: boolean };
 type QuestionHistoryEntry = {
@@ -64,9 +65,13 @@ export function HostAppV3() {
   const modifierTimerRef = useRef<number | null>(null);
   const revealRunningRef = useRef(false);
   const lastPenaltySnapshotRef = useRef<RoomSnapshot | null>(null);
+  const inFlightActionsRef = useRef(new Set<string>());
 
   const perform = useCallback(async (event: string, payload: Record<string, unknown> = {}): Promise<boolean> => {
     if (!credentials) return false;
+    const actionKey = `${event}:${JSON.stringify(payload)}`;
+    if (inFlightActionsRef.current.has(actionKey)) return false;
+    inFlightActionsRef.current.add(actionKey);
     setError('');
     setBusy(true);
     try {
@@ -77,6 +82,7 @@ export function HostAppV3() {
       setError(err instanceof Error ? err.message : 'Action failed');
       return false;
     } finally {
+      inFlightActionsRef.current.delete(actionKey);
       setBusy(false);
     }
   }, [credentials]);
@@ -165,7 +171,7 @@ export function HostAppV3() {
       updates.mixedPacks = false;
     }
     if (Object.keys(updates).length) void perform('host:update-settings', { updates });
-  }, [room?.phase, room?.settings.stealsEnabled, room?.settings.lockRoomOnStart, room?.settings.selectedPackIds, room?.settings.mixedPacks, credentials, perform]);
+  }, [room, credentials, perform]);
 
   useEffect(() => {
     if (!credentials?.roomCode) return;
@@ -241,7 +247,7 @@ export function HostAppV3() {
       };
       return [...previous.filter((entry) => entry.questionId !== question.questionId), nextEntry];
     });
-  }, [room?.currentQuestion?.answerRevealed, room?.currentQuestion?.questionId, room?.currentQuestion?.acceptedAnswers, saveHistory]);
+  }, [room?.currentQuestion, saveHistory]);
 
   useEffect(() => {
     const current = room?.currentQuestion;
@@ -272,7 +278,7 @@ export function HostAppV3() {
       window.clearInterval(interval);
       window.clearTimeout(timeout);
     };
-  }, [room?.currentQuestion?.questionId, room?.currentQuestion?.buzzOpen, room?.currentQuestion?.buzzWinnerId, room?.currentQuestion?.answerRevealed, room?.currentQuestion?.responseMode, room?.phase, perform]);
+  }, [room?.currentQuestion, room?.phase, perform]);
 
   useEffect(() => {
     if (!room) return;
@@ -293,7 +299,7 @@ export function HostAppV3() {
       }, 1900);
     }
     lastMultiplierRef.current = nextMultiplier;
-  }, [room?.multiplier, room?.phase]);
+  }, [room]);
 
   useEffect(() => () => {
     if (modifierTimerRef.current !== null) window.clearTimeout(modifierTimerRef.current);
@@ -368,6 +374,10 @@ export function HostAppV3() {
   const runRevealTension = async () => {
     if (revealRunningRef.current) return false;
     revealRunningRef.current = true;
+    if (readAccessibility().reduceMotion) {
+      setRevealBeat(4);
+      return true;
+    }
     setRevealBeat(1);
     audio.cue('phase');
     await sleep(650);
@@ -385,7 +395,7 @@ export function HostAppV3() {
     window.setTimeout(() => {
       setRevealBeat(0);
       revealRunningRef.current = false;
-    }, 1150);
+    }, readAccessibility().reduceMotion ? 0 : 1150);
   };
 
   const cancelRevealTension = () => {
@@ -448,7 +458,7 @@ export function HostAppV3() {
   const pointsAtStake = current ? current.dailyDouble
     ? (current.wager ?? 0) * (settings.dailyDoubleStacksWithMultiplier ? questionMultiplier : 1)
     : current.effectiveValue : 0;
-  const boardResults: BoardResultMap = Object.fromEntries(historyEntries.map((entry) => [entry.questionId, entry.attempts]));
+  const boardResults: BoardResultMap = Object.fromEntries(historyEntries.map((entry) => [entry.questionId, entry.attempts.map((attempt) => ({ ...attempt, delta: attempt.correct ? entry.value : -entry.value }))]));
   const showTurnIndicator = turnIndicatorVisible(room.phase);
   const turnLabel = turnIndicatorLabel(room.phase);
 
@@ -456,7 +466,8 @@ export function HostAppV3() {
     if (!current) return null;
     const player = room.players.find((item) => item.id === playerId);
     if (!player) return null;
-    const awardedPoints = correct && !current.dailyDouble ? calculateComebackAward(room, player, pointsAtStake).points : pointsAtStake;
+    const comeback = correct && !current.dailyDouble ? calculateComebackAward(room, player, pointsAtStake) : null;
+    const awardedPoints = comeback?.points ?? pointsAtStake;
     const signedDelta = correct ? awardedPoints : settings.allowNegativeScores ? -pointsAtStake : -Math.min(Math.max(0, player.score), pointsAtStake);
     setScoreOverrides((previous) => ({ ...previous, [player.id]: player.score }));
     return {
@@ -464,7 +475,8 @@ export function HostAppV3() {
       questionId: current.questionId,
       playerId: player.id,
       delta: signedDelta,
-      correct
+      correct,
+      comebackBonus: comeback?.bonus ?? 0
     };
   };
 

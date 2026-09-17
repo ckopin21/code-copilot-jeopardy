@@ -26,6 +26,11 @@ export function QrScanner({ onResult, onClose }: { onResult: (value: string) => 
     };
 
     const start = async () => {
+      if (!window.isSecureContext) {
+        setStarting(false);
+        setError('Camera scanning requires HTTPS on this browser. Enter the room code manually.');
+        return;
+      }
       const Detector = detectorConstructor();
       if (!Detector) {
         setStarting(false);

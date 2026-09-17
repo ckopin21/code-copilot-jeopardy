@@ -11,9 +11,13 @@ if errorlevel 1 (
   exit /b 1
 )
 
-echo Installing locked dependencies...
-call npm ci --no-audit --no-fund
-if errorlevel 1 goto :fail
+echo Checking dependencies...
+call npm ls --depth=0 >nul 2>nul
+if errorlevel 1 (
+  echo Installing locked dependencies...
+  call npm ci --no-audit --no-fund
+  if errorlevel 1 goto :fail
+)
 
 echo Building game...
 call npm run build

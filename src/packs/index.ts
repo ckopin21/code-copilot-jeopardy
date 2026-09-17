@@ -26,7 +26,6 @@ function answerKeys(question: Question): Set<string> {
 
 /** Conservative semantic duplicate guard for reworded clues that target the same answer and fact. */
 export function likelyRepeatedFact(left: Question, right: Question): boolean {
-  if (left.packId === right.packId) return false;
   if (left.questionType !== right.questionType && left.questionType !== 'general' && right.questionType !== 'general') return false;
 
   const leftAnswers = answerKeys(left);

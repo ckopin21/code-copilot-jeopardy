@@ -33,6 +33,7 @@ export function HostEnhancements() {
   const [transition, setTransition] = useState<TransitionCard | null>(null);
   const [accessibility, setAccessibility] = useState<AccessibilityPreferences>(() => readAccessibility());
   const [actionMessage, setActionMessage] = useState('');
+  const [persistenceOk, setPersistenceOk] = useState(() => (window as typeof window & { BLUE_STAGE_PERSISTENCE_OK?: boolean }).BLUE_STAGE_PERSISTENCE_OK !== false);
   const lastPhaseRef = useRef<RoomSnapshot['phase'] | null>(null);
   const lastGameStartedRef = useRef<number | null>(null);
   const transitionHydratedRef = useRef(false);
@@ -53,6 +54,12 @@ export function HostEnhancements() {
   }, []);
 
   useEffect(() => {
+    const onPersistence = (event: Event) => setPersistenceOk(Boolean((event as CustomEvent<{ ok: boolean }>).detail?.ok));
+    window.addEventListener('blue-stage:persistence-status', onPersistence);
+    return () => window.removeEventListener('blue-stage:persistence-status', onPersistence);
+  }, []);
+
+  useEffect(() => {
     const onState = (snapshot: RoomSnapshot) => {
       setRoom(snapshot);
       const latest = readCredentials();
@@ -68,7 +75,7 @@ export function HostEnhancements() {
     update();
     const timer = window.setInterval(update, 1000);
     return () => window.clearInterval(timer);
-  }, [room?.code, room?.players.length, credentials]);
+  }, [room, credentials]);
 
   useEffect(() => {
     if (!room) return;
@@ -110,7 +117,7 @@ export function HostEnhancements() {
       setTransition(null);
       transitionTimerRef.current = null;
     }, duration);
-  }, [room?.phase, room?.gameStartedAt, room?.gameEndedAt, room?.currentQuestion?.questionId, room?.board?.categories.join('|'), accessibility.reduceMotion]);
+  }, [room, accessibility.reduceMotion]);
 
   useEffect(() => {
     if (!accessibility.reduceMotion) return;
@@ -185,7 +192,7 @@ export function HostEnhancements() {
       <header><div><small>CONTROL PANEL</small><strong>Room {room.code}</strong></div><button onClick={() => setDrawerOpen(false)} aria-label="Close">×</button></header>
 
       <section className="host-command-section recovery-status">
-        <div><small>AUTO RECOVERY</small><strong>Saved continuously</strong></div>
+        <div><small>{persistenceOk ? 'AUTO RECOVERY' : 'RECOVERY WARNING'}</small><strong>{persistenceOk ? 'Saved continuously' : 'Storage failed · in-memory only'}</strong></div>
         <span>{phaseLabel(room)}{room.timer.running ? ' · timer active' : ''}</span>
       </section>
 

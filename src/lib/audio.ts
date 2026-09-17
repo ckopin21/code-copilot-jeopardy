@@ -67,6 +67,7 @@ class AudioEngine {
   private musicState: MusicState | null = null;
   private musicTimer: number | null = null;
   private transitionTimer: number | null = null;
+  private clickTimer: number | null = null;
   private generation = 0;
   private musicNodes = new Set<OscillatorNode>();
   settings: AudioSettings = { master: 0.78, music: 0.26, effects: 0.78, muted: false };
@@ -129,6 +130,22 @@ class AudioEngine {
   }
 
   cue(name: Cue): void {
+    if (name === 'click') {
+      if (this.clickTimer !== null) window.clearTimeout(this.clickTimer);
+      this.clickTimer = window.setTimeout(() => {
+        this.clickTimer = null;
+        this.playCue('click');
+      }, 55);
+      return;
+    }
+    if (this.clickTimer !== null) {
+      window.clearTimeout(this.clickTimer);
+      this.clickTimer = null;
+    }
+    this.playCue(name);
+  }
+
+  private playCue(name: Cue): void {
     if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('blue-stage:audio-cue', { detail: name }));
     if (!this.context || !this.effects || this.settings.muted) return;
     const patterns: Record<Cue, [number, number, number][]> = {

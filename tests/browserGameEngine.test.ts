@@ -603,4 +603,23 @@ describe('BrowserGameEngine production state', () => {
     expect(state.finalRound?.participantIds).toContain(player.playerId);
   });
 
+
+  it('stores authoritative used-tile value and scoring result for presentation/recovery', () => {
+    const { engine, host } = setup({ gameLength: 'quick', dailyDoublesEnabled: false, finalRoundEnabled: false });
+    const player = addPlayer(engine, host.roomCode, 'Result');
+    engine.startGame(host.roomCode, host.hostToken);
+    const rooms = (engine as unknown as { rooms: Map<string, { questions: Record<string, { responseMode?: 'buzz' | 'text' }> }> }).rooms;
+    const record = rooms.get(host.roomCode)!;
+    const tile = engine.snapshot(host.roomCode).board!.questions.find((candidate) => !candidate.used && (record.questions[candidate.questionId].responseMode ?? 'buzz') === 'buzz')!;
+    engine.selectQuestion(host.roomCode, host.hostToken, tile.questionId);
+    engine.openBuzzers(host.roomCode, host.hostToken);
+    engine.localBuzz(host.roomCode, host.hostToken, player.playerId);
+    engine.revealAnswer(host.roomCode, host.hostToken);
+    engine.resolveAnswer(host.roomCode, host.hostToken, player.playerId, true);
+    const used = engine.snapshot(host.roomCode).board!.questions.find((candidate) => candidate.questionId === tile.questionId)!;
+    expect(used.playedValue).toBeGreaterThan(0);
+    expect(used.results?.[0]).toMatchObject({ playerId: player.playerId, correct: true });
+    expect(used.results?.[0].delta).toBeGreaterThan(0);
+  });
+
 });

@@ -234,7 +234,7 @@ async function dispatchHost(event: string, payload: Record<string, unknown>, con
       engine.reconnectPlayer(roomCode, playerId, reconnectToken);
       const player = engine.snapshot(roomCode).players.find((candidate) => candidate.id === playerId);
       if (!player) throw new Error('Player not found');
-      const allIn = player.score >= 0 && wager === player.score;
+      const allIn = player.score > 0 && wager === player.score;
       if (!presetWager(wager, true) && !allIn) throw new Error('Choose a preset wager or All In');
       engine.submitFinalWager(roomCode, playerId, reconnectToken, wager);
       return null;

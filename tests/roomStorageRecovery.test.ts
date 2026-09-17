@@ -84,4 +84,13 @@ describe('room storage recovery', () => {
     expect(after.players[0].seat).toBe(before.players[0].seat);
     expect(after.players[0].connected).toBe(true);
   });
+
+  it('prefers the higher state revision when timestamps tie', () => {
+    const now = 1_000;
+    const primary = { state: { code: 'TIE11', createdAt: 100, expiresAt: 5_000, revision: 3 }, marker: 'stale-primary' };
+    const backup = { state: { code: 'TIE11', createdAt: 100, expiresAt: 5_000, revision: 8 }, marker: 'newer-backup' };
+    const merged = mergeStoredRooms([primary], [backup], now);
+    expect(merged.find((item) => item.state?.code === 'TIE11')?.marker).toBe('newer-backup');
+  });
+
 });

@@ -42,7 +42,10 @@ export function PresentationApp() {
           questionId: snapshot.currentQuestion?.questionId ?? previous.currentQuestion?.questionId ?? 'presentation-score-change',
           playerId: player.id,
           delta: player.score - before.score,
-          correct: player.score > before.score
+          correct: player.score > before.score,
+          comebackBonus: player.score > before.score && !snapshot.currentQuestion?.dailyDouble
+            ? Math.max(0, player.score - before.score - (snapshot.currentQuestion?.effectiveValue ?? previous.currentQuestion?.effectiveValue ?? 0))
+            : 0
         });
       }
       if (nextFlights.length) {
