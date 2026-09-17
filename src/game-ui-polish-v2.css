@@ -99,6 +99,122 @@ body:has(.audio-drawer) .comeback-host { visibility: hidden; }
   border-color: rgba(255,209,102,.34);
 }
 
+/* Full UI/UX audit: presentation surfaces must fit the viewport instead of scrolling. */
+.presentation-shell {
+  height: 100dvh;
+  min-height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.presentation-shell > .showcase-player-strip { flex: 0 0 auto; }
+.presentation-shell > .presentation-board {
+  box-sizing: border-box;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  display: grid;
+  grid-template-rows: auto minmax(0,1fr);
+  gap: clamp(5px,1vh,10px);
+  padding: clamp(8px,1.2vh,14px) clamp(10px,1.3vw,20px) clamp(8px,1.4vh,18px);
+}
+.presentation-shell > .presentation-board .presentation-round-header { margin-bottom: 0; }
+.presentation-shell > .presentation-board .board {
+  height: 100%;
+  min-height: 0;
+  grid-auto-rows: minmax(0,1fr);
+  gap: clamp(3px,.65vh,7px);
+  padding: clamp(4px,.75vh,8px);
+  overflow: hidden;
+}
+.presentation-shell > .presentation-board .category-tile,
+.presentation-shell > .presentation-board .question-tile {
+  height: auto;
+  min-height: 0;
+}
+.presentation-shell > .presentation-board .category-tile {
+  font-size: clamp(.58rem,min(1.1vw,1.6vh),1.05rem);
+}
+.presentation-shell > .presentation-board .question-tile {
+  font-size: clamp(1.15rem,min(3.2vw,4.2vh),3.2rem);
+}
+.presentation-shell > .presentation-board .question-tile.used { font-size: .85rem; }
+
+/* Long questions scale by available height so the reveal/value UI remains on-screen. */
+.presentation-shell > .presentation-question,
+.presentation-shell > .presentation-center {
+  box-sizing: border-box;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+.presentation-shell > .presentation-question { padding: clamp(12px,2.2vh,30px); }
+.presentation-shell > .presentation-question > article {
+  max-height: 100%;
+  min-height: 0;
+  gap: clamp(10px,1.8vh,22px);
+}
+.presentation-shell > .presentation-question h1 {
+  font-size: clamp(2rem,min(5.3vw,6.5vh),5.8rem);
+  line-height: 1.02;
+  text-wrap: balance;
+}
+
+/* The turn badge should not consume the name column on five-player presentation layouts. */
+.presentation-shell .showcase-player-card.is-turn .turn-beacon {
+  position: absolute !important;
+  grid-area: auto !important;
+  top: auto !important;
+  right: 8px !important;
+  bottom: 7px !important;
+  max-width: 82px;
+}
+
+/* Free-response grading remains fully reachable with five players on short displays. */
+.showcase-host .grading-grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  padding-right: 4px;
+}
+
+/* More than two player results collapse to a readable aggregate on used board tiles. */
+.used-result-summary {
+  box-sizing: border-box;
+  width: calc(100% - 8px);
+  margin-inline: auto;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: center;
+  gap: 2px 5px;
+  padding: 4px 6px;
+  border: 1px solid rgba(255,255,255,.16);
+  border-radius: 7px;
+  background: rgba(255,255,255,.055);
+  font-family: "DM Sans", sans-serif;
+}
+.used-result-summary b {
+  font-size: clamp(.56rem,.8vw,.75rem);
+  white-space: nowrap;
+}
+.used-result-summary .correct { color: #82efaa; }
+.used-result-summary .wrong { color: #ffaaa6; }
+.used-result-summary small {
+  grid-column: 1 / -1;
+  color: #9db4c4;
+  font-size: clamp(.46rem,.62vw,.58rem);
+  text-align: center;
+  white-space: nowrap;
+}
+
+@media (min-width: 760px) and (max-height: 820px) {
+  .showcase-host .grading-row { gap: 7px; padding-block: 4px; }
+  .showcase-host .grading-row p { margin-block: 0; }
+}
+
 @media (max-width: 760px) {
   .menu-music-volume { width: 100%; grid-template-columns: 56px minmax(0,1fr) 36px; }
   .menu-music-select { width: 100%; min-width: 0; }
