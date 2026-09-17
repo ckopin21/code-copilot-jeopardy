@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { audio } from '../lib/audio';
+import { readAccessibility } from '../lib/accessibility';
 
 export type ScoreFlightState = {
   id: string;
@@ -7,6 +8,7 @@ export type ScoreFlightState = {
   playerId: string;
   delta: number;
   correct: boolean;
+  comebackBonus?: number;
 };
 
 function findByData(attribute: 'questionId' | 'playerScore' | 'playerId', value: string): HTMLElement | null {
@@ -47,11 +49,13 @@ export function ScoreFlight({ flight, onImpact, onComplete }: { flight: ScoreFli
       const midY = dy * 0.42 - arc;
       const approachX = dx * 0.91;
       const approachY = dy * 0.88 - 16;
-      const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const reducedMotion = readAccessibility().reduceMotion || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
       token = document.createElement('div');
       token.className = `score-flight-token ${flight.correct ? 'correct' : 'wrong'}`;
-      token.textContent = `${flight.delta > 0 ? '+' : ''}${flight.delta.toLocaleString()}`;
+      token.textContent = flight.comebackBonus && flight.comebackBonus > 0
+        ? `+${flight.delta.toLocaleString()} · COMEBACK +${flight.comebackBonus.toLocaleString()}`
+        : `${flight.delta > 0 ? '+' : ''}${flight.delta.toLocaleString()}`;
       token.style.left = `${startX}px`;
       token.style.top = `${startY}px`;
       document.body.appendChild(token);

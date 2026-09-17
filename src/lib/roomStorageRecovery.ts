@@ -6,6 +6,7 @@ type StoredRoom = {
     code?: string;
     createdAt?: number;
     expiresAt?: number;
+    revision?: number;
   };
   [key: string]: unknown;
 };
@@ -20,10 +21,16 @@ function parseRooms(raw: string | null): StoredRoom[] {
   }
 }
 
-function roomFreshness(room: StoredRoom): number {
+function roomFreshness(room: StoredRoom): [number, number] {
+  const revision = Number(room.state?.revision ?? 0);
   const expiresAt = Number(room.state?.expiresAt ?? 0);
   const createdAt = Number(room.state?.createdAt ?? 0);
-  return Math.max(expiresAt, createdAt);
+  return [Number.isFinite(revision) ? revision : 0, Math.max(expiresAt, createdAt)];
+}
+function newerThan(candidate: StoredRoom, existing: StoredRoom): boolean {
+  const [candidateRevision, candidateTime] = roomFreshness(candidate);
+  const [existingRevision, existingTime] = roomFreshness(existing);
+  return candidateRevision !== existingRevision ? candidateRevision > existingRevision : candidateTime > existingTime;
 }
 
 /**
@@ -40,7 +47,7 @@ export function mergeStoredRooms(primary: StoredRoom[], backup: StoredRoom[], no
     const expiresAt = Number(room.state?.expiresAt ?? 0);
     if (!code || !Number.isFinite(expiresAt) || expiresAt <= now) continue;
     const existing = byCode.get(code);
-    if (!existing || roomFreshness(room) >= roomFreshness(existing)) byCode.set(code, room);
+    if (!existing || newerThan(room, existing)) byCode.set(code, room);
   }
   return [...byCode.values()].sort((a, b) => String(a.state?.code ?? '').localeCompare(String(b.state?.code ?? '')));
 }

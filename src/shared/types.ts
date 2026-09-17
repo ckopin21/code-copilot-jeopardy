@@ -119,12 +119,24 @@ export interface Player {
   stats: PlayerStats;
 }
 
+export interface BoardQuestionResult {
+  playerId: string;
+  playerName: string;
+  playerAvatar: string;
+  correct: boolean;
+  delta: number;
+}
+
 export interface BoardQuestion {
   questionId: string;
   category: string;
   value: QuestionValue;
   used: boolean;
   dailyDouble: boolean;
+  /** Actual point value when this tile was played, including late modifiers or DD wager. */
+  playedValue?: number;
+  /** Public scoring result stored with the authoritative room so presentation/recovery stay consistent. */
+  results?: BoardQuestionResult[];
 }
 
 export interface BoardState {
@@ -197,6 +209,8 @@ export interface RoomState {
   previousPhase: GamePhase | null;
   createdAt: number;
   expiresAt: number;
+  /** Monotonic authoritative-state revision used to choose the newer recovery snapshot. */
+  revision?: number;
   hostConnected: boolean;
   locked: boolean;
   players: Player[];

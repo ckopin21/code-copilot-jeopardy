@@ -7,6 +7,8 @@ import { packSummaries } from '../packs';
 import { BrowserGameEngine, type RoomRecord } from './browserGameEngine';
 import { sanitizeRoomSnapshot } from './snapshotSecurity';
 import { authorizeRemoteEvent, type RemoteIdentity } from './remoteAuthorization';
+import { randomId } from './ids';
+import { finalWagerRules } from './finalWagerRules';
 
 type Listener = (data: any) => void;
 type Identity = RemoteIdentity;
@@ -38,6 +40,7 @@ let clientRoomCode = '';
 let clientSuspended = false;
 let reconnectDelayMs = 400;
 let reconnectTimer: number | null = null;
+let clientConnectPromise: { roomCode: string; promise: Promise<DataConnection> } | null = null;
 let authReplay: { event: 'player:reconnect' | 'presentation:join'; payload: Record<string, unknown> } | null = null;
 
 const PLAYER_STALE_MS = 8000;
@@ -162,6 +165,7 @@ async function dispatchHost(event: string, payload: Record<string, unknown>, con
       emitRoom(credentials.roomCode);
       return credentials;
     }
+    case 'player:heartbeat': return null;
     case 'host:update-settings': {
       const updates = (payload.updates ?? {}) as Partial<GameSettings>;
       return engine.updateSettings(roomCode, hostToken, updates);
@@ -229,10 +233,13 @@ async function dispatchHost(event: string, payload: Record<string, unknown>, con
       const reconnectToken = String(payload.reconnectToken ?? '');
       const wager = Number(payload.wager);
       engine.reconnectPlayer(roomCode, playerId, reconnectToken);
-      const player = engine.snapshot(roomCode).players.find((candidate) => candidate.id === playerId);
+      const snapshot = engine.snapshot(roomCode);
+      const player = snapshot.players.find((candidate) => candidate.id === playerId);
       if (!player) throw new Error('Player not found');
-      const allIn = player.score >= 0 && wager === player.score;
-      if (!presetWager(wager, true) && !allIn) throw new Error('Choose a preset wager or All In');
+      const rules = finalWagerRules(snapshot, playerId);
+      const allIn = rules.allInAllowed && wager === player.score;
+      if (!presetWager(wager, true) && !allIn) throw new Error('Choose an available preset or All In');
+      if (wager > rules.maxWager) throw new Error(`Final wager is capped at ${rules.maxWager.toLocaleString()}`);
       engine.submitFinalWager(roomCode, playerId, reconnectToken, wager);
       return null;
     }
@@ -252,7 +259,7 @@ async function handleHostRequest(connection: DataConnection, message: RequestMes
     const data = await dispatchHost(message.event, message.payload, connection);
     connection.send({ kind: 'response', requestId: message.requestId, ok: true, data } satisfies ResponseMessage);
     const roomCode = String(message.payload.roomCode ?? '').toUpperCase();
-    if (roomCode) emitRoom(roomCode);
+    if (roomCode && message.event !== 'player:heartbeat') emitRoom(roomCode);
   } catch (error) {
     if (connection.open) connection.send({ kind: 'response', requestId: message.requestId, ok: false, error: failMessage(error) } satisfies ResponseMessage);
   }
@@ -396,7 +403,7 @@ function dropClientConnection(connection: DataConnection): void {
 function sendRequestOn(connection: DataConnection, event: string, payload: Record<string, unknown>, timeoutMs = 8000): Promise<unknown> {
   return new Promise((resolve, reject) => {
     if (!connection.open) { reject(new Error('Host connection is not open')); return; }
-    const requestId = crypto.randomUUID();
+    const requestId = randomId('request');
     const timeoutId = window.setTimeout(() => {
       pending.delete(requestId);
       reject(new Error('Host did not respond'));
@@ -406,9 +413,7 @@ function sendRequestOn(connection: DataConnection, event: string, payload: Recor
     connection.send({ kind: 'request', requestId, event, payload } satisfies RequestMessage);
   });
 }
-async function connectToHost(roomCode: string): Promise<DataConnection> {
-  if (clientSuspended) throw new Error('Connection is paused');
-  const targetRoom = roomCode.toUpperCase();
+async function openConnectionToHost(targetRoom: string): Promise<DataConnection> {
   if (clientConnection && !clientConnection.open) {
     const staleConnection = clientConnection;
     clientConnection = null;
@@ -423,11 +428,17 @@ async function connectToHost(roomCode: string): Promise<DataConnection> {
   clientRoomCode = targetRoom;
   const peer = await createClientPeer();
   return await new Promise<DataConnection>((resolve, reject) => {
-    const connection = peer.connect(hostPeerId(roomCode), { reliable: true, serialization: 'json' });
+    const connection = peer.connect(hostPeerId(targetRoom), { reliable: true, serialization: 'json' });
     let settled = false;
     attachClientConnection(connection);
     connection.on('open', () => {
       if (settled) return;
+      if (clientSuspended) {
+        settled = true;
+        try { connection.close(); } catch { /* ignore */ }
+        reject(new Error('Connection is paused'));
+        return;
+      }
       settled = true;
       clientConnection = connection;
       socket.connected = true;
@@ -456,6 +467,17 @@ async function connectToHost(roomCode: string): Promise<DataConnection> {
     }, 6500);
   });
 }
+async function connectToHost(roomCode: string): Promise<DataConnection> {
+  if (clientSuspended) throw new Error('Connection is paused');
+  const targetRoom = roomCode.toUpperCase();
+  if (clientConnection?.open && clientRoomCode === targetRoom) return clientConnection;
+  if (clientConnectPromise?.roomCode === targetRoom) return clientConnectPromise.promise;
+  const promise = openConnectionToHost(targetRoom).finally(() => {
+    if (clientConnectPromise?.promise === promise) clientConnectPromise = null;
+  });
+  clientConnectPromise = { roomCode: targetRoom, promise };
+  return promise;
+}
 function scheduleClientReconnect(): void {
   if (clientSuspended || !clientRoomCode || reconnectTimer !== null || clientConnection?.open) return;
   reconnectTimer = window.setTimeout(() => {
@@ -481,6 +503,7 @@ async function clientRequest(event: string, payload: Record<string, unknown>): P
 }
 export function suspendClientSession(): void {
   clientSuspended = true;
+  clientConnectPromise = null;
   if (reconnectTimer !== null) {
     window.clearTimeout(reconnectTimer);
     reconnectTimer = null;

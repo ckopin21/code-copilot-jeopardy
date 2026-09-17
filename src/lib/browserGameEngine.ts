@@ -4,6 +4,8 @@ import { QUESTION_VALUES } from '../shared/types';
 import { autoGradeAnswer } from '../shared/validation';
 import { packMap } from '../packs';
 import { calculateComebackAward } from './comebackScoring';
+import { finalWagerRules } from './finalWagerRules';
+import { randomId } from './ids';
 
 export interface RoomRecord {
   state: RoomState;
@@ -30,7 +32,7 @@ function randomToken(bytes = 24): string {
   for (const value of buffer) binary += String.fromCharCode(value);
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
 }
-function id(prefix: string): string { return `${prefix}_${crypto.randomUUID()}`; }
+function id(prefix: string): string { return randomId(prefix); }
 function secureEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
   let difference = 0;
@@ -66,6 +68,7 @@ function preferredDifficulty(value: number): Question['difficulty'] {
 export class BrowserGameEngine {
   private rooms = new Map<string, RoomRecord>();
   private seenQuestionIds = new Set<string>();
+  private persistenceHealthy = true;
 
   constructor(private readonly random: RandomSource = new MathRandomSource(), private readonly roomTtlMs = ROOM_TTL_MS) {
     const now = Date.now();
@@ -73,6 +76,7 @@ export class BrowserGameEngine {
       if (record.state.expiresAt <= now) continue;
       // Session locking was removed from the product. Normalize older persisted rooms so they remain joinable.
       record.state.locked = false;
+      record.state.revision ??= 0;
       record.state.settings.lockRoomOnStart = false;
       record.state.settings.turnOrderMode ??= 'join-order';
       // Steals are not part of the current reveal-first product flow. Keep restored legacy rooms aligned with the live UI.
@@ -132,13 +136,25 @@ export class BrowserGameEngine {
     this.persist();
   }
 
+  private reportPersistence(ok: boolean): void {
+    if (this.persistenceHealthy === ok) return;
+    this.persistenceHealthy = ok;
+    if (typeof window === 'undefined') return;
+    (window as typeof window & { BLUE_STAGE_PERSISTENCE_OK?: boolean }).BLUE_STAGE_PERSISTENCE_OK = ok;
+    window.dispatchEvent(new CustomEvent('blue-stage:persistence-status', { detail: { ok } }));
+  }
   private persist(): void {
     try {
+      for (const room of this.rooms.values()) room.state.revision = (room.state.revision ?? 0) + 1;
       const serialized = JSON.stringify([...this.rooms.values()]);
       const previous = localStorage.getItem(STORAGE_KEY);
       if (previous && previous !== serialized && validStoredRooms(previous)) localStorage.setItem(STORAGE_BACKUP_KEY, previous);
       localStorage.setItem(STORAGE_KEY, serialized);
-    } catch { /* keep the in-memory game running */ }
+      this.reportPersistence(true);
+    } catch {
+      // Keep the in-memory game running, but make recovery failure visible to the host.
+      this.reportPersistence(false);
+    }
   }
   private touch(room: RoomRecord): void { room.state.expiresAt = Date.now() + this.roomTtlMs; }
   private clearUndo(room: RoomRecord): void { room.undoState = null; }
@@ -238,6 +254,7 @@ export class BrowserGameEngine {
       previousPhase: null,
       createdAt: Date.now(),
       expiresAt: Date.now() + this.roomTtlMs,
+      revision: 0,
       hostConnected: true,
       locked: false,
       players: [],
@@ -311,16 +328,9 @@ export class BrowserGameEngine {
     if (!player) return;
     player.connected = connected;
     if (!connected) {
+      // A transient disconnect must not permanently close a typed/Final response window.
+      // Timers or the host still close those phases; reconnecting players can continue if time remains.
       player.buzzEligible = false;
-      const current = room.state.currentQuestion;
-      if (room.state.phase === 'question' && current?.responseMode === 'text' && !current.answerRevealed) {
-        const active = this.currentQuestionParticipants(room);
-        if (active.length === 0 || active.every((candidate) => Boolean(current.textResponses?.[candidate.id]))) this.closeTextResponsesInternal(room);
-      }
-      if (room.state.phase === 'final-question' && room.state.finalRound && !room.state.finalRound.responsesClosed) {
-        const active = this.activeFinalParticipants(room);
-        if (active.length === 0 || active.every((candidate) => candidate.finalAnswerSubmitted)) this.closeFinalResponsesInternal(room);
-      }
     } else {
       const current = room.state.currentQuestion;
       if (current?.buzzOpen && !current.buzzWinnerId && current.responseMode !== 'text') {
@@ -492,7 +502,7 @@ export class BrowserGameEngine {
         const selectionPool = difficultyMatchedUnseen.length ? difficultyMatchedUnseen : unseen.length ? unseen : difficultyMatched.length ? difficultyMatched : candidates;
         const chosenQuestion = this.shuffle(selectionPool)[0];
         questions[chosenQuestion.id] = chosenQuestion;
-        boardQuestions.push({ questionId: chosenQuestion.id, category: categoryName, value: chosenQuestion.value, used: false, dailyDouble: false });
+        boardQuestions.push({ questionId: chosenQuestion.id, category: categoryName, value: chosenQuestion.value, used: false, dailyDouble: false, playedValue: undefined, results: [] });
         this.seenQuestionIds.add(chosenQuestion.id);
       }
     }
@@ -589,6 +599,8 @@ export class BrowserGameEngine {
     // A typed-response clue cannot make progress with no phones. Practice mode falls back to the normal reveal flow.
     const responseMode = connected.length === 0 && configuredResponseMode === 'text' ? 'buzz' : configuredResponseMode;
     tile.used = true;
+    tile.playedValue = question.value * multiplier;
+    tile.results = [];
     room.state.remainingQuestions -= 1;
     room.state.currentQuestion = {
       questionId,
@@ -659,6 +671,13 @@ export class BrowserGameEngine {
     const maximum = room.state.settings.allowWagerBeyondScore ? room.state.settings.maxWager : Math.min(room.state.settings.maxWager, Math.max(0, player.score));
     if (!Number.isInteger(wager) || wager < 0 || wager > maximum) throw new Error(`Wager must be between 0 and ${maximum}`);
     current.wager = wager;
+    const tile = room.state.board?.questions.find((entry) => entry.questionId === current.questionId);
+    if (tile) {
+      const multiplier = room.state.settings.dailyDoubleStacksWithMultiplier
+        ? this.multiplierForRemaining(room.state.remainingQuestions + 1, room.state.settings.lateGameModifiers)
+        : 1;
+      tile.playedValue = wager * multiplier;
+    }
     player.stats.biggestWager = Math.max(player.stats.biggestWager, wager);
     room.state.phase = 'daily-double-question';
     this.startTimerInternal(room);
@@ -742,13 +761,23 @@ export class BrowserGameEngine {
       player.stats.longestColdStreak = Math.max(player.stats.longestColdStreak, player.coldStreak);
     }
   }
-  private addScore(player: Player, delta: number, settings: GameSettings): void {
+  private addScore(player: Player, delta: number, settings: GameSettings): number {
     const before = player.score;
     const after = settings.allowNegativeScores ? before + delta : Math.max(0, before + delta);
     const actualDelta = after - before;
     player.score = after;
     if (actualDelta >= 0) player.stats.pointsGained += actualDelta;
     else player.stats.pointsLost += Math.abs(actualDelta);
+    return actualDelta;
+  }
+  private recordBoardResult(room: RoomRecord, player: Player, correct: boolean, delta: number): void {
+    const current = room.state.currentQuestion;
+    if (!current || !room.state.board) return;
+    const tile = room.state.board.questions.find((entry) => entry.questionId === current.questionId);
+    if (!tile) return;
+    tile.playedValue ??= current.effectiveValue;
+    const result = { playerId: player.id, playerName: player.name, playerAvatar: player.avatar, correct, delta };
+    tile.results = [...(tile.results ?? []).filter((entry) => entry.playerId !== player.id), result];
   }
 
   resolveAnswer(roomCode: string, hostToken: string, playerId: string, correct: boolean): RoomSnapshot {
@@ -769,7 +798,8 @@ export class BrowserGameEngine {
     } else if (correct) {
       points = calculateComebackAward(room.state, player, points).points;
     }
-    this.addScore(player, correct ? points : -points, room.state.settings);
+    const scoreDelta = this.addScore(player, correct ? points : -points, room.state.settings);
+    this.recordBoardResult(room, player, correct, scoreDelta);
     if (correct) player.stats.correct += 1; else player.stats.incorrect += 1;
     this.applyStreak(player, correct, room.state.settings);
     current.resolvedPlayerId = player.id;
@@ -819,7 +849,8 @@ export class BrowserGameEngine {
     this.checkpointScore(room);
     response.resolvedCorrect = correct;
     const points = correct ? calculateComebackAward(room.state, player, current.effectiveValue).points : current.effectiveValue;
-    this.addScore(player, correct ? points : -points, room.state.settings);
+    const scoreDelta = this.addScore(player, correct ? points : -points, room.state.settings);
+    this.recordBoardResult(room, player, correct, scoreDelta);
     if (correct) player.stats.correct += 1; else player.stats.incorrect += 1;
     this.applyStreak(player, correct, room.state.settings);
     this.persist();
@@ -869,7 +900,9 @@ export class BrowserGameEngine {
     room.state.currentQuestion = null;
     this.stopTimerInternal(room);
     if (room.state.remainingQuestions === 0) {
-      if (room.state.settings.finalRoundEnabled && this.connectedPlayers(room).length > 0) this.prepareFinalRound(room);
+      const finalEligibleIds = current.participantIds ?? [];
+      const hasFinalist = this.connectedPlayers(room).length > 0 || finalEligibleIds.some((playerId) => room.state.players.some((player) => player.id === playerId));
+      if (room.state.settings.finalRoundEnabled && hasFinalist) this.prepareFinalRound(room, finalEligibleIds);
       else this.finishGame(room);
     } else {
       room.state.multiplier = this.multiplierForRemaining(room.state.remainingQuestions, room.state.settings.lateGameModifiers);
@@ -935,7 +968,8 @@ export class BrowserGameEngine {
       const multiplier = room.state.settings.dailyDoubleStacksWithMultiplier ? this.multiplierForRemaining(room.state.remainingQuestions + 1, room.state.settings.lateGameModifiers) : 1;
       points = (current.wager ?? 0) * multiplier;
     }
-    this.addScore(player, -points, room.state.settings);
+    const scoreDelta = this.addScore(player, -points, room.state.settings);
+    this.recordBoardResult(room, player, false, scoreDelta);
     player.stats.incorrect += 1;
     this.applyStreak(player, false, room.state.settings);
     current.resolvedPlayerId = player.id;
@@ -968,8 +1002,14 @@ export class BrowserGameEngine {
     return changed;
   }
 
-  private prepareFinalRound(room: RoomRecord): void {
-    const participantIds = this.connectedPlayers(room).map((player) => player.id);
+  private prepareFinalRound(room: RoomRecord, recentlyEligibleIds: string[] = []): void {
+    // Preserve normal connected-only Final eligibility, but rescue a controller that
+    // dropped during the final clue after already being part of that clue's roster.
+    const recentlyEligible = new Set(recentlyEligibleIds);
+    const participantIds = room.state.players
+      .filter((player) => player.connected || recentlyEligible.has(player.id))
+      .sort((a, b) => a.seat - b.seat)
+      .map((player) => player.id);
     if (!participantIds.length) { this.finishGame(room); return; }
     const selectedPacks = room.state.selectedPackIds.map((packId) => this.getPack(packId)).filter((pack): pack is QuestionPack => Boolean(pack));
     const selected = selectedPacks.flatMap((pack) => pack.questions);
@@ -1018,8 +1058,8 @@ export class BrowserGameEngine {
     if (room.state.phase !== 'final-wager' || !room.state.finalRound) throw new Error('Final wagers are closed');
     if (!room.state.finalRound.participantIds.includes(player.id)) throw new Error('This seat is not participating in Final Round');
     if (player.finalWagerSubmitted) throw new Error('Your Final wager is already locked');
-    const max = room.state.settings.allowWagerBeyondScore ? room.state.settings.maxWager : Math.min(room.state.settings.maxWager, Math.max(0, player.score));
-    if (!Number.isInteger(wager) || wager < 0 || wager > max) throw new Error(`Wager must be between 0 and ${max}`);
+    const { maxWager } = finalWagerRules(room.state, player.id);
+    if (!Number.isInteger(wager) || wager < 0 || wager > maxWager) throw new Error(`Wager must be between 0 and ${maxWager}`);
     player.finalWager = wager;
     player.finalWagerSubmitted = true;
     player.stats.biggestWager = Math.max(player.stats.biggestWager, wager);
@@ -1090,7 +1130,9 @@ export class BrowserGameEngine {
     const suggestion = autoGradeAnswer(player.finalAnswer ?? '', room.state.finalRound.acceptedAnswers);
     const isCorrect = correct ?? suggestion.correct;
     const wager = player.finalWager ?? 0;
-    this.addScore(player, isCorrect ? wager : -wager, room.state.settings);
+    const { protectedLoss } = finalWagerRules(room.state, player.id);
+    const scoreDelta = isCorrect ? wager : protectedLoss ? 0 : -wager;
+    this.addScore(player, scoreDelta, room.state.settings);
     if (isCorrect) player.stats.correct += 1; else player.stats.incorrect += 1;
     player.finalResolved = true;
     this.setNextFinalReviewPlayer(room);

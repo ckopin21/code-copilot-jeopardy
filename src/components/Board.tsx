@@ -1,11 +1,6 @@
-import type { BoardState } from '../shared/types';
+import type { BoardQuestionResult, BoardState } from '../shared/types';
 
-export type BoardResult = {
-  playerId: string;
-  playerName: string;
-  playerAvatar: string;
-  correct: boolean;
-};
+export type BoardResult = BoardQuestionResult;
 export type BoardResultMap = Record<string, BoardResult[]>;
 
 export function Board({ board, multiplier = 1, disabled = false, onSelect, onReview, results = {} }: { board: BoardState; multiplier?: 1 | 2 | 3; disabled?: boolean; onSelect?: (id: string) => void; onReview?: (id: string) => void; results?: BoardResultMap }) {
@@ -17,8 +12,8 @@ export function Board({ board, multiplier = 1, disabled = false, onSelect, onRev
         const question = board.questions.filter((item) => item.category === category)[row];
         if (!question) return <div className="question-tile empty" key={`${category}-${row}`} />;
         const canReview = question.used && Boolean(onReview);
-        const displayedValue = question.used ? question.value : question.value * multiplier;
-        const questionResults = results[question.questionId] ?? [];
+        const displayedValue = question.used ? question.playedValue ?? question.value : question.value * multiplier;
+        const questionResults = question.results?.length ? question.results : results[question.questionId] ?? [];
         return <button
           type="button"
           key={question.questionId}
@@ -30,8 +25,8 @@ export function Board({ board, multiplier = 1, disabled = false, onSelect, onRev
           title={canReview ? 'Review answered question' : undefined}
         >
           {question.used ? questionResults.length ? <div className="used-tile-result">
-            <small className="used-tile-value">{question.value}</small>
-            <div className="used-result-list">{questionResults.map((result) => <span className={`used-result-chip ${result.correct ? 'correct' : 'wrong'}`} key={result.playerId}><b>{result.playerAvatar} {result.playerName}</b><em>{result.correct ? 'CORRECT' : 'INCORRECT'}</em></span>)}</div>
+            <small className="used-tile-value">{question.playedValue ?? question.value}</small>
+            <div className="used-result-list">{questionResults.map((result) => <span className={`used-result-chip ${result.correct ? 'correct' : 'wrong'}`} key={result.playerId}><b>{result.playerAvatar} {result.playerName}</b><em>{result.correct ? `CORRECT · +${Math.max(0, result.delta).toLocaleString()}` : `INCORRECT · ${result.delta.toLocaleString()}`}</em></span>)}</div>
           </div> : <span className="used-check used-check-empty">X</span> : displayedValue}
         </button>;
       }))}

@@ -34,7 +34,7 @@ function captionNode(): HTMLDivElement {
     left: '50%',
     bottom: 'max(22px, env(safe-area-inset-bottom))',
     transform: 'translateX(-50%)',
-    zIndex: '2000',
+    zIndex: '20000',
     maxWidth: 'min(560px, calc(100vw - 28px))',
     padding: '9px 14px',
     border: '2px solid rgba(255,255,255,.82)',

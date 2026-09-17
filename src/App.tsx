@@ -7,7 +7,7 @@ import { PresentationApp } from './components/PresentationApp';
 import { audio } from './lib/audio';
 import { applySavedAccessibility } from './lib/accessibility';
 import { hostPhaseLabel, readHostPreview } from './lib/hostPreview';
-import { menuUrl, resetInstance } from './lib/resetInstance';
+import { resetInstance } from './lib/resetInstance';
 import './lib/clientLifecycle';
 import './styles.css';
 import './showcase.css';
@@ -260,5 +260,3 @@ function Menu({ onNavigate }: { onNavigate: (mode: AppMode, fresh?: boolean) => 
     </div>}
   </main>;
 }
-
-export { menuUrl };

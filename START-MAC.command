@@ -8,8 +8,11 @@ if ! command -v node >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "Installing locked dependencies..."
-npm ci --no-audit --no-fund || exit 1
+echo "Checking dependencies..."
+if ! npm ls --depth=0 >/dev/null 2>&1; then
+  echo "Installing locked dependencies..."
+  npm ci --no-audit --no-fund || exit 1
+fi
 
 echo "Building game..."
 npm run build || exit 1

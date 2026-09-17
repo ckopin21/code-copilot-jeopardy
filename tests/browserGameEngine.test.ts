@@ -551,4 +551,111 @@ describe('BrowserGameEngine production state', () => {
     expect(engine.multiplierForRemaining(3)).toBe(3);
     expect(engine.multiplierForRemaining(1)).toBe(3);
   });
+
+  it('keeps typed and Final response windows open through a transient disconnect', () => {
+    const { engine, host } = setup({ gameLength: 'quick', dailyDoublesEnabled: false, finalRoundEnabled: true, timerSeconds: 15 });
+    const player = addPlayer(engine, host.roomCode, 'Reconnect Me');
+    engine.startGame(host.roomCode, host.hostToken);
+
+    const rooms = (engine as unknown as { rooms: Map<string, { questions: Record<string, { responseMode?: 'buzz' | 'text' }> }> }).rooms;
+    const record = rooms.get(host.roomCode)!;
+    const typed = engine.snapshot(host.roomCode).board!.questions.find((candidate) => !candidate.used && (record.questions[candidate.questionId].responseMode ?? 'buzz') === 'text');
+    if (typed) {
+      engine.selectQuestion(host.roomCode, host.hostToken, typed.questionId);
+      engine.setPlayerConnected(host.roomCode, player.playerId, false);
+      expect(engine.snapshot(host.roomCode).currentQuestion?.responsesClosed).toBe(false);
+      engine.reconnectPlayer(host.roomCode, player.playerId, player.reconnectToken);
+      engine.submitTextResponse(host.roomCode, player.playerId, player.reconnectToken, 'answer');
+      expect(engine.snapshot(host.roomCode).currentQuestion?.textResponses?.[player.playerId]).toBeTruthy();
+      engine.revealAnswer(host.roomCode, host.hostToken);
+      engine.resolveTextResponse(host.roomCode, host.hostToken, player.playerId, false);
+      engine.advanceToBoard(host.roomCode, host.hostToken);
+    }
+
+    finishBoardWithoutScoring(engine, host.roomCode, host.hostToken);
+    const finalState = engine.snapshot(host.roomCode);
+    expect(finalState.phase).toBe('final-category');
+    expect(finalState.finalRound?.participantIds).toContain(player.playerId);
+    engine.beginFinalWagers(host.roomCode, host.hostToken);
+    engine.submitFinalWager(host.roomCode, player.playerId, player.reconnectToken, 0);
+    engine.openFinalQuestion(host.roomCode, host.hostToken);
+    engine.setPlayerConnected(host.roomCode, player.playerId, false);
+    expect(engine.snapshot(host.roomCode).finalRound?.responsesClosed).toBe(false);
+  });
+
+  it('still starts Final when the reserved player is disconnected at the last board clue', () => {
+    const { engine, host } = setup({ gameLength: 'quick', dailyDoublesEnabled: false, finalRoundEnabled: true });
+    const player = addPlayer(engine, host.roomCode, 'Reserved');
+    engine.startGame(host.roomCode, host.hostToken);
+    while (engine.snapshot(host.roomCode).remainingQuestions > 1) {
+      const tile = firstUnused(engine, host.roomCode);
+      engine.selectQuestion(host.roomCode, host.hostToken, tile.questionId);
+      engine.revealAnswer(host.roomCode, host.hostToken);
+      engine.advanceToBoard(host.roomCode, host.hostToken);
+    }
+    const last = firstUnused(engine, host.roomCode);
+    engine.selectQuestion(host.roomCode, host.hostToken, last.questionId);
+    engine.setPlayerConnected(host.roomCode, player.playerId, false);
+    engine.revealAnswer(host.roomCode, host.hostToken);
+    engine.advanceToBoard(host.roomCode, host.hostToken);
+    const state = engine.snapshot(host.roomCode);
+    expect(state.phase).toBe('final-category');
+    expect(state.finalRound?.participantIds).toContain(player.playerId);
+  });
+
+
+  it('stores authoritative used-tile value and scoring result for presentation/recovery', () => {
+    const { engine, host } = setup({ gameLength: 'quick', dailyDoublesEnabled: false, finalRoundEnabled: false });
+    const player = addPlayer(engine, host.roomCode, 'Result');
+    engine.startGame(host.roomCode, host.hostToken);
+    const rooms = (engine as unknown as { rooms: Map<string, { questions: Record<string, { responseMode?: 'buzz' | 'text' }> }> }).rooms;
+    const record = rooms.get(host.roomCode)!;
+    const tile = engine.snapshot(host.roomCode).board!.questions.find((candidate) => !candidate.used && (record.questions[candidate.questionId].responseMode ?? 'buzz') === 'buzz')!;
+    engine.selectQuestion(host.roomCode, host.hostToken, tile.questionId);
+    engine.openBuzzers(host.roomCode, host.hostToken);
+    engine.localBuzz(host.roomCode, host.hostToken, player.playerId);
+    engine.revealAnswer(host.roomCode, host.hostToken);
+    engine.resolveAnswer(host.roomCode, host.hostToken, player.playerId, true);
+    const used = engine.snapshot(host.roomCode).board!.questions.find((candidate) => candidate.questionId === tile.questionId)!;
+    expect(used.playedValue).toBeGreaterThan(0);
+    expect(used.results?.[0]).toMatchObject({ playerId: player.playerId, correct: true });
+    expect(used.results?.[0].delta).toBeGreaterThan(0);
+  });
+
+
+  it('protects a non-positive Final player from losing more points on a miss', () => {
+    const { engine, host } = setup({ gameLength: 'quick', dailyDoublesEnabled: false, finalRoundEnabled: true, allowNegativeScores: true });
+    const player = addPlayer(engine, host.roomCode, 'Comeback');
+    addPlayer(engine, host.roomCode, 'Leader');
+    engine.startGame(host.roomCode, host.hostToken);
+    finishBoardWithoutScoring(engine, host.roomCode, host.hostToken);
+    engine.adjustScore(host.roomCode, host.hostToken, player.playerId, -10000);
+    const before = engine.snapshot(host.roomCode).players.find((candidate) => candidate.id === player.playerId)!.score;
+    expect(before).toBeLessThanOrEqual(0);
+    engine.beginFinalWagers(host.roomCode, host.hostToken);
+    engine.submitFinalWager(host.roomCode, player.playerId, player.reconnectToken, 1000);
+    const leader = engine.snapshot(host.roomCode).players.find((candidate) => candidate.id !== player.playerId)!;
+    const leaderToken = (engine as unknown as { rooms: Map<string, { playerTokens: Record<string, string> }> }).rooms.get(host.roomCode)!.playerTokens[leader.id];
+    engine.submitFinalWager(host.roomCode, leader.id, leaderToken, 0);
+    engine.openFinalQuestion(host.roomCode, host.hostToken);
+    engine.submitFinalAnswer(host.roomCode, player.playerId, player.reconnectToken, 'wrong answer');
+    engine.submitFinalAnswer(host.roomCode, leader.id, leaderToken, 'answer');
+    engine.beginFinalReview(host.roomCode, host.hostToken);
+    engine.resolveFinalAnswer(host.roomCode, host.hostToken, player.playerId, false);
+    expect(engine.snapshot(host.roomCode).players.find((candidate) => candidate.id === player.playerId)!.score).toBe(before);
+  });
+
+  it('enforces the 1000 Final cap on a runaway leader', () => {
+    const { engine, host } = setup({ gameLength: 'quick', dailyDoublesEnabled: false, finalRoundEnabled: true, allowNegativeScores: true });
+    const leader = addPlayer(engine, host.roomCode, 'Leader');
+    const runner = addPlayer(engine, host.roomCode, 'Runner');
+    engine.startGame(host.roomCode, host.hostToken);
+    finishBoardWithoutScoring(engine, host.roomCode, host.hostToken);
+    engine.adjustScore(host.roomCode, host.hostToken, leader.playerId, 20000);
+    engine.adjustScore(host.roomCode, host.hostToken, runner.playerId, 1000);
+    engine.beginFinalWagers(host.roomCode, host.hostToken);
+    expect(() => engine.submitFinalWager(host.roomCode, leader.playerId, leader.reconnectToken, 1100)).toThrow(/0 and 1000/i);
+    expect(() => engine.submitFinalWager(host.roomCode, leader.playerId, leader.reconnectToken, 1000)).not.toThrow();
+  });
+
 });
