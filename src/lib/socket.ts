@@ -114,6 +114,7 @@ function handleConnectionClosed(connection: DataConnection): void {
   if (playerConnections.get(identity.playerId) !== connection) return;
   playerConnections.delete(identity.playerId);
   playerLastSeen.delete(identity.playerId);
+  if (!ownsHostAuthority(identity.roomCode)) return;
   try { engine.setPlayerConnected(identity.roomCode, identity.playerId, false); emitRoom(identity.roomCode); } catch { /* stale room */ }
 }
 function closePlayerConnection(playerId: string, event?: 'player:suspended' | 'player:removed'): void {
