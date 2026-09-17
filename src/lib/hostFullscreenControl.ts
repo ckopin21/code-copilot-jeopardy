@@ -36,9 +36,13 @@ async function toggleFullscreen(): Promise<void> {
 
 function syncButton(button: HTMLButtonElement): void {
   const active = fullscreenActive();
-  button.disabled = !fullscreenSupported();
-  button.textContent = active ? '⛶ Exit Fullscreen' : '⛶ Fullscreen';
-  button.setAttribute('aria-label', active ? 'Exit fullscreen' : 'Enter fullscreen');
+  const disabled = !fullscreenSupported();
+  const text = active ? '⛶ Exit Fullscreen' : '⛶ Fullscreen';
+  const ariaLabel = active ? 'Exit fullscreen' : 'Enter fullscreen';
+
+  if (button.disabled !== disabled) button.disabled = disabled;
+  if (button.textContent !== text) button.textContent = text;
+  if (button.getAttribute('aria-label') !== ariaLabel) button.setAttribute('aria-label', ariaLabel);
 }
 
 function ensureHostFullscreenButton(): void {
@@ -66,7 +70,10 @@ function syncFullscreenUi(): void {
 }
 
 if (typeof document !== 'undefined') {
-  const observer = new MutationObserver(() => ensureHostFullscreenButton());
+  const observer = new MutationObserver(() => {
+    const topbar = document.querySelector<HTMLElement>('.showcase-host .showcase-topbar');
+    if (topbar && !topbar.querySelector('.host-fullscreen-button')) ensureHostFullscreenButton();
+  });
   const start = () => {
     ensureHostFullscreenButton();
     observer.observe(document.body, { childList: true, subtree: true });
