@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { GameSettings, HostRoomCredentials, PackSummary, RoomSnapshot } from '../shared/types';
-import { DEFAULT_SETTINGS, QUESTION_VALUES, settingsForGameLength } from '../shared/config';
+import { clampDailyDoubleCount, DEFAULT_SETTINGS, QUESTION_VALUES, settingsForGameLength } from '../shared/config';
 import { autoGradeAnswer } from '../shared/validation';
 import { emitAck, socket } from '../lib/socket';
 import { audio } from '../lib/audio';
@@ -456,6 +456,15 @@ export function HostAppV3() {
   const reviewPlayer = reviewPlayerId ? room.players.find((player) => player.id === reviewPlayerId) ?? null : null;
   const settings = room.settings;
   const updateSettings = (updates: Partial<GameSettings>) => perform('host:update-settings', { updates });
+  const selectedPackQuestionCount = packs.find((pack) => pack.id === settings.selectedPackIds[0])?.questionCount;
+  const dailyDoubleMax = selectedPackQuestionCount ?? Math.max(0, settings.dailyDoubleCount);
+  const updateGameLength = (gameLength: GameSettings['gameLength']) => {
+    const next = settingsForGameLength(gameLength);
+    const dailyDoubleCount = selectedPackQuestionCount === undefined
+      ? next.dailyDoubleCount
+      : clampDailyDoubleCount(next.dailyDoubleCount, selectedPackQuestionCount);
+    return updateSettings({ ...next, dailyDoubleCount, dailyDoublesEnabled: dailyDoubleCount > 0 });
+  };
   const textResponses = current?.textResponses ?? {};
   const textResponseCount = activeQuestionPlayers.filter((player) => Boolean(textResponses[player.id])).length;
   const unresolvedTextCount = Object.values(textResponses).filter((response) => response.resolvedCorrect === null).length;
@@ -600,14 +609,20 @@ export function HostAppV3() {
           <p className="settings-helper">Choose one pack for this game.</p>
           <div className="pack-grid-v2">{packs.map((pack) => {
             const selected = settings.selectedPackIds[0] === pack.id;
-            return <button key={pack.id} aria-pressed={selected} className={`pack-card-v2 ${selected ? 'selected' : ''}`} onClick={() => void updateSettings({ selectedPackIds: [pack.id], mixedPacks: false })}><strong>{pack.title}</strong><span>{pack.theme}</span><small>{pack.questionCount} questions</small></button>;
+            return <button key={pack.id} aria-pressed={selected} className={`pack-card-v2 ${selected ? 'selected' : ''}`} onClick={() => {
+              const dailyDoubleCount = clampDailyDoubleCount(settings.dailyDoubleCount, pack.questionCount);
+              void updateSettings({ selectedPackIds: [pack.id], mixedPacks: false, dailyDoubleCount, dailyDoublesEnabled: dailyDoubleCount > 0 });
+            }}><strong>{pack.title}</strong><span>{pack.theme}</span><small>{pack.questionCount} questions</small></button>;
           })}</div>
           <h2>Rules</h2>
           <div className="settings-grid-v2">
-            <label data-tooltip="Quick uses 16 questions, Standard 25, and Marathon 36 including the $1000 row. Changing length resets Daily Doubles to 2, 4, or 6; you can still adjust that count manually afterward.">Game length<select value={settings.gameLength} onChange={(event) => void updateSettings(settingsForGameLength(event.target.value as GameSettings['gameLength']))}><option value="quick">Quick · 16 questions</option><option value="standard">Standard · 25 questions</option><option value="marathon">Marathon · 36 questions</option></select></label>
+            <label data-tooltip="Quick uses 16 questions, Standard 25, and Marathon 36 including the $1000 row. Changing length resets Daily Doubles to 2, 4, or 6; you can still adjust that count manually afterward.">Game length<select value={settings.gameLength} onChange={(event) => void updateGameLength(event.target.value as GameSettings['gameLength'])}><option value="quick">Quick · 16 questions</option><option value="standard">Standard · 25 questions</option><option value="marathon">Marathon · 36 questions</option></select></label>
             <label data-tooltip="How long players have once answering or buzzing is active. Unlimited disables the countdown.">Answer timer<select value={settings.timerSeconds ?? 'none'} onChange={(event) => void updateSettings({ timerSeconds: event.target.value === 'none' ? null : Number(event.target.value) as GameSettings['timerSeconds'] })}>{[5,10,15,20,30].map((seconds)=><option key={seconds} value={seconds}>{seconds}s</option>)}<option value="none">Unlimited</option></select></label>
             <label data-tooltip="By default, question selection rotates through players in join order. Manual keeps the selected picker until you change it.">Turn rotation<select value={settings.turnOrderMode} onChange={(event) => void updateSettings({ turnOrderMode: event.target.value as GameSettings['turnOrderMode'] })}><option value="join-order">Join order · rotate</option><option value="manual">Manual · host selects</option></select></label>
-            <label data-tooltip="How many hidden Daily Doubles are placed on the board.">Daily Doubles<input type="number" min="0" max="6" value={settings.dailyDoubleCount} onChange={(event) => void updateSettings({ dailyDoubleCount: Number(event.target.value), dailyDoublesEnabled: Number(event.target.value) > 0 })} /></label>
+            <label data-tooltip={`How many hidden Daily Doubles are placed on the board. Maximum for this pack: ${dailyDoubleMax}.`}>Daily Doubles<input type="number" min="0" max={dailyDoubleMax} step="1" value={settings.dailyDoubleCount} onChange={(event) => void updateSettings({ dailyDoubleCount: Number(event.target.value), dailyDoublesEnabled: Number(event.target.value) > 0 })} onBlur={(event) => {
+              const dailyDoubleCount = clampDailyDoubleCount(Number(event.currentTarget.value), dailyDoubleMax);
+              if (dailyDoubleCount !== settings.dailyDoubleCount) void updateSettings({ dailyDoubleCount, dailyDoublesEnabled: dailyDoubleCount > 0 });
+            }} /></label>
             <label data-tooltip="Misses in a row before the Cold Streak effect appears.">Cold streak<input type="number" min="2" max="8" value={settings.coldStreakThreshold} onChange={(event) => void updateSettings({ coldStreakThreshold: Number(event.target.value) })} /></label>
           </div>
           <div className="toggle-grid-v2">
