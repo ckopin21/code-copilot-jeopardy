@@ -17,7 +17,7 @@ export function ComebackBoostNotice({ room, playerId, surface }: { room: RoomSna
     if (!activeValues.length) return null;
 
     const sample = activeValues[0].award;
-    return <aside className="comeback-boost-notice comeback-board" role="status" aria-live="polite">
+    return <aside className={`comeback-boost-notice comeback-${surface} comeback-board`} role="status" aria-live="polite">
       <div className="comeback-boost-title"><span>COMEBACK BOOSTS ACTIVE</span><strong>{surface === 'host' ? boostedPlayer.name.toUpperCase() : 'YOUR TURN'}</strong></div>
       <div className="comeback-boost-values comeback-value-list">{activeValues.map(({ normalValue, award }) => <span key={normalValue}><small>{normalValue.toLocaleString()}</small><b>→</b><strong>{award.points.toLocaleString()} ({award.multiplier}×)</strong></span>)}</div>
       <div className="comeback-boost-note">Only a correct answer by {surface === 'host' ? boostedPlayer.name : 'you'} spends a use. A miss, no answer, or another player buzzing leaves the boost unused.</div>
