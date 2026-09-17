@@ -1,0 +1,178 @@
+/* Late-loaded visual corrections for round intro, turn ownership, and used board results. */
+
+/* Five-category intros use a centered 3-over-2 composition. */
+.game-transition-overlay.category-transition .category-intro-grid:has(> span:nth-child(5):last-child) {
+  grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+}
+.game-transition-overlay.category-transition .category-intro-grid:has(> span:nth-child(5):last-child) > span {
+  grid-column: span 2;
+}
+.game-transition-overlay.category-transition .category-intro-grid:has(> span:nth-child(5):last-child) > span:nth-child(4) {
+  grid-column: 2 / span 2;
+}
+.game-transition-overlay.category-transition .category-intro-grid:has(> span:nth-child(5):last-child) > span:nth-child(5) {
+  grid-column: 4 / span 2;
+}
+
+/* Give the large title more breathing room above the category boxes. */
+.game-transition-overlay.category-transition .category-intro-grid {
+  margin-top: clamp(16px, 2.6vh, 30px) !important;
+}
+
+/* Turn ownership occupies the card's third column instead of floating over the score. */
+.showcase-player-card.is-turn .turn-beacon {
+  position: static !important;
+  inset: auto !important;
+  grid-column: 3;
+  grid-row: 1;
+  align-self: center;
+  justify-self: end;
+  margin: 0 !important;
+  max-width: 92px;
+  min-width: 0;
+  padding: 4px 7px;
+  box-sizing: border-box;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.showcase-player-card.is-turn .turn-beacon b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.showcase-player-card.is-turn .player-card-main {
+  min-width: 0;
+}
+.showcase-player-card.is-turn .score {
+  position: relative;
+  z-index: 2;
+}
+
+/* Used clues should read like compact result cards, not tiny debug text. */
+.question-tile.used.has-result {
+  padding: clamp(7px, 1vh, 11px) !important;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(77, 173, 221, .08), transparent 58%),
+    linear-gradient(180deg, #0b2b40, #071c2b) !important;
+  border-color: rgba(143, 205, 235, .18) !important;
+  color: #eefaff;
+  text-shadow: none !important;
+}
+.question-tile.used.has-result .used-tile-result {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  align-items: center;
+  gap: clamp(6px, .9vh, 10px);
+}
+.question-tile.used.has-result .used-tile-value {
+  justify-self: center;
+  color: #b9d6e7;
+  font-family: 'Oswald', sans-serif;
+  font-size: clamp(.72rem, 1.05vw, .95rem) !important;
+  font-weight: 900;
+  letter-spacing: .05em;
+  line-height: 1;
+}
+.question-tile.used.has-result .used-result-list {
+  width: 100%;
+  display: grid;
+  align-content: center;
+  gap: clamp(5px, .7vh, 8px);
+}
+.question-tile.used.has-result .used-result-chip {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: clamp(30px, 4.2vh, 40px);
+  padding: clamp(6px, .9vh, 9px) clamp(8px, .8vw, 12px);
+  border-width: 1px;
+  border-radius: 9px;
+  background: rgba(255,255,255,.045);
+}
+.question-tile.used.has-result .used-result-chip b {
+  min-width: 0;
+  overflow: hidden;
+  color: #f4fbff;
+  font-size: clamp(.68rem, .9vw, .92rem) !important;
+  font-weight: 1000;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.question-tile.used.has-result .used-result-chip em {
+  font-size: clamp(.58rem, .72vw, .76rem) !important;
+  font-style: normal;
+  font-weight: 1000;
+  line-height: 1.1;
+  letter-spacing: .035em;
+  white-space: nowrap;
+}
+.question-tile.used.has-result .used-result-chip.correct {
+  border-color: rgba(52,208,111,.62);
+  background: linear-gradient(90deg, rgba(52,208,111,.11), rgba(255,255,255,.035));
+  box-shadow: inset 4px 0 0 #34d06f;
+}
+.question-tile.used.has-result .used-result-chip.correct em { color: #72ef9e; }
+.question-tile.used.has-result .used-result-chip.wrong {
+  border-color: rgba(240,82,82,.62);
+  background: linear-gradient(90deg, rgba(240,82,82,.11), rgba(255,255,255,.035));
+  box-shadow: inset 4px 0 0 #f05252;
+}
+.question-tile.used.has-result .used-result-chip.wrong em { color: #ff9f9b; }
+
+/* Preserve the bigger look for the common 1-2 result case, but compact gracefully if several players attempted one clue. */
+.question-tile.used.has-result .used-result-list:has(.used-result-chip:nth-child(3)) {
+  gap: 3px;
+}
+.question-tile.used.has-result .used-result-list:has(.used-result-chip:nth-child(3)) .used-result-chip {
+  min-height: 22px;
+  padding: 3px 7px;
+  border-radius: 7px;
+}
+.question-tile.used.has-result .used-result-list:has(.used-result-chip:nth-child(3)) .used-result-chip b {
+  font-size: clamp(.58rem, .72vw, .76rem) !important;
+}
+.question-tile.used.has-result .used-result-list:has(.used-result-chip:nth-child(3)) .used-result-chip em {
+  font-size: clamp(.49rem, .6vw, .64rem) !important;
+}
+
+/* Presentation mode can afford slightly larger result typography. */
+.presentation-board-fill .question-tile.used.has-result .used-tile-value {
+  font-size: clamp(.78rem, 1.35vh, 1rem) !important;
+}
+.presentation-board-fill .question-tile.used.has-result .used-result-chip b {
+  font-size: clamp(.72rem, 1.45vh, 1rem) !important;
+}
+.presentation-board-fill .question-tile.used.has-result .used-result-chip em {
+  font-size: clamp(.62rem, 1.15vh, .82rem) !important;
+}
+.presentation-board-fill .question-tile.used.has-result .used-result-list:has(.used-result-chip:nth-child(3)) .used-result-chip b {
+  font-size: clamp(.62rem, 1.1vh, .8rem) !important;
+}
+.presentation-board-fill .question-tile.used.has-result .used-result-list:has(.used-result-chip:nth-child(3)) .used-result-chip em {
+  font-size: clamp(.52rem, .9vh, .68rem) !important;
+}
+
+@media (max-width: 760px) {
+  .game-transition-overlay.category-transition .category-intro-grid:has(> span:nth-child(5):last-child) {
+    grid-template-columns: repeat(2, minmax(0,1fr)) !important;
+  }
+  .game-transition-overlay.category-transition .category-intro-grid:has(> span:nth-child(5):last-child) > span,
+  .game-transition-overlay.category-transition .category-intro-grid:has(> span:nth-child(5):last-child) > span:nth-child(4),
+  .game-transition-overlay.category-transition .category-intro-grid:has(> span:nth-child(5):last-child) > span:nth-child(5) {
+    grid-column: auto;
+  }
+  .game-transition-overlay.category-transition .category-intro-grid:has(> span:nth-child(5):last-child) > span:nth-child(5) {
+    grid-column: 1 / -1;
+    width: calc(50% - 5px);
+    justify-self: center;
+  }
+  .showcase-player-card.is-turn .turn-beacon {
+    max-width: 76px;
+    padding: 3px 5px;
+  }
+}
