@@ -249,19 +249,30 @@ export function HostAppV3() {
     });
   }, [room?.currentQuestion, saveHistory]);
 
+  const autoBuzzQuestion = room?.currentQuestion;
+  const autoBuzzQuestionId = autoBuzzQuestion?.questionId ?? '';
+  const autoBuzzEligible = Boolean(
+    autoBuzzQuestionId &&
+    room?.phase === 'question' &&
+    !autoBuzzQuestion?.dailyDouble &&
+    autoBuzzQuestion?.responseMode !== 'text' &&
+    !autoBuzzQuestion?.answerRevealed &&
+    !autoBuzzQuestion?.buzzOpen &&
+    !autoBuzzQuestion?.buzzWinnerId
+  );
+
   useEffect(() => {
-    const current = room?.currentQuestion;
-    if (!current) {
+    if (!autoBuzzQuestionId) {
       autoBuzzQuestionRef.current = '';
       setBuzzerCountdown(null);
       return;
     }
-    if (room?.phase !== 'question' || current.dailyDouble || current.responseMode === 'text' || current.answerRevealed || current.buzzOpen || current.buzzWinnerId) {
+    if (!autoBuzzEligible) {
       setBuzzerCountdown(null);
       return;
     }
-    if (autoBuzzQuestionRef.current === current.questionId) return;
-    autoBuzzQuestionRef.current = current.questionId;
+    if (autoBuzzQuestionRef.current === autoBuzzQuestionId) return;
+    autoBuzzQuestionRef.current = autoBuzzQuestionId;
     let remaining = 10;
     setBuzzerCountdown(remaining);
     const interval = window.setInterval(() => {
@@ -278,7 +289,7 @@ export function HostAppV3() {
       window.clearInterval(interval);
       window.clearTimeout(timeout);
     };
-  }, [room?.currentQuestion, room?.phase, perform]);
+  }, [autoBuzzEligible, autoBuzzQuestionId, perform]);
 
   useEffect(() => {
     if (!room) return;
