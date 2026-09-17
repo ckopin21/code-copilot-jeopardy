@@ -80,6 +80,7 @@ function spentBoostQuestion(player: Player, index: number, multiplier: 2 | 3): B
     value: 100,
     used: true,
     dailyDouble: false,
+    turnPlayerId: player.id,
     playedValue: normalValue,
     results: [{
       playerId: player.id,
@@ -91,16 +92,17 @@ function spentBoostQuestion(player: Player, index: number, multiplier: 2 | 3): B
   };
 }
 
-function warmupQuestions(count: number): BoardQuestion[] {
-  return Array.from({ length: count * 2 }, (_, index) => ({
-    questionId: `dev-warmup-${index}`,
+function warmupQuestions(players: Player[]): BoardQuestion[] {
+  return players.flatMap((player) => [0, 1].map((turn) => ({
+    questionId: `dev-warmup-${player.seat}-${turn}`,
     category: 'DEV WARMUP',
-    value: 100,
+    value: 100 as const,
     used: true,
     dailyDouble: false,
+    turnPlayerId: player.id,
     playedValue: 100,
     results: []
-  }));
+  })));
 }
 
 export function buildDevScenario(input: DevScenarioInput): RoomSnapshot {
@@ -109,7 +111,7 @@ export function buildDevScenario(input: DevScenarioInput): RoomSnapshot {
   const selectedSeat = Math.min(count, Math.max(1, input.selectedSeat));
   const selected = players[selectedSeat - 1];
   const normalValue = input.clueValue * input.lateMultiplier;
-  const history: BoardQuestion[] = warmupQuestions(count);
+  const history: BoardQuestion[] = warmupQuestions(players);
 
   for (let index = 0; index < input.doubleBoostsSpent; index += 1) history.push(spentBoostQuestion(selected, index, 2));
   for (let index = 0; index < input.tripleBoostsSpent; index += 1) history.push(spentBoostQuestion(selected, index, 3));
@@ -120,6 +122,7 @@ export function buildDevScenario(input: DevScenarioInput): RoomSnapshot {
     value: input.clueValue,
     used: true,
     dailyDouble: false,
+    turnPlayerId: selected.id,
     playedValue: normalValue,
     results: []
   });

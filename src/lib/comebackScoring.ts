@@ -38,25 +38,36 @@ function spentComebackBoosts(state: RoomState, playerId: string): { doubles: num
   return { doubles, triples };
 }
 
-function activePlayerCount(state: RoomState): number {
+function activePlayers(state: RoomState): Player[] {
   const participantIds = state.currentQuestion?.participantIds;
-  if (participantIds?.length) return participantIds.length;
-  const connected = state.players.filter((player) => player.connected).length;
-  return connected || state.players.length;
+  if (participantIds?.length) {
+    const ids = new Set(participantIds);
+    return state.players.filter((player) => ids.has(player.id));
+  }
+  const connected = state.players.filter((player) => player.connected);
+  return connected.length ? connected : state.players;
 }
 
 /**
- * Comeback help starts only after two complete rounds of turns have finished.
- * With the normal rotating turn order, this means every active player has completed
- * at least two turns before anyone can receive a boost. The currently open clue is
- * excluded so the final player's second turn cannot unlock a boost mid-question.
+ * Comeback help starts only after every active player has individually completed
+ * at least two turns. Turn ownership is stored on each played board tile. The
+ * currently open clue is excluded, so a player's second turn must be fully
+ * completed before it can help unlock the system.
  */
 export function comebackBoostsUnlocked(state: RoomState): boolean {
-  const players = activePlayerCount(state);
-  if (players < 2) return false;
+  const players = activePlayers(state);
+  if (players.length < 2) return false;
+
+  const activeIds = new Set(players.map((player) => player.id));
+  const completedTurns = new Map(players.map((player) => [player.id, 0]));
   const activeQuestionId = state.currentQuestion?.questionId;
-  const completedQuestions = (state.board?.questions ?? []).filter((tile) => tile.used && tile.questionId !== activeQuestionId).length;
-  return completedQuestions >= players * MIN_COMPLETED_TURNS_PER_PLAYER;
+
+  for (const tile of state.board?.questions ?? []) {
+    if (!tile.used || tile.questionId === activeQuestionId || !tile.turnPlayerId || !activeIds.has(tile.turnPlayerId)) continue;
+    completedTurns.set(tile.turnPlayerId, (completedTurns.get(tile.turnPlayerId) ?? 0) + 1);
+  }
+
+  return players.every((player) => (completedTurns.get(player.id) ?? 0) >= MIN_COMPLETED_TURNS_PER_PLAYER);
 }
 
 function inactiveAward(basePoints: number, doubleUsesRemaining: number, tripleUsesRemaining: number): ComebackAward {
@@ -76,8 +87,8 @@ function inactiveAward(basePoints: number, doubleUsesRemaining: number, tripleUs
 /**
  * Limited comeback boosts for the player whose turn selected the clue.
  *
- * - Boosts stay disabled until two complete rounds of turns have finished.
- * - Exactly one player must be alone in last place; a tie for last gets no boost.
+ * - Boosts stay disabled until every active player has completed two turns.
+ * - Exactly one active player must be alone in last place; a tie for last gets no boost.
  * - Trailing the leader by at least 2x the normal clue value unlocks a 2x award.
  * - Trailing by at least 4x unlocks a 3x award while that one-time boost remains.
  * - Each player may successfully use two 2x boosts and one 3x boost per game.
@@ -94,20 +105,21 @@ export function calculateComebackAward(state: RoomState, player: Player, basePoi
   const spent = spentComebackBoosts(state, player.id);
   const doubleUsesRemaining = Math.max(0, MAX_DOUBLE_BOOSTS - spent.doubles);
   const tripleUsesRemaining = Math.max(0, MAX_TRIPLE_BOOSTS - spent.triples);
+  const eligiblePlayers = activePlayers(state);
 
-  if (!Number.isFinite(basePoints) || basePoints <= 0 || state.players.length < 2 || !comebackBoostsUnlocked(state)) {
+  if (!Number.isFinite(basePoints) || basePoints <= 0 || eligiblePlayers.length < 2 || !comebackBoostsUnlocked(state)) {
     return inactiveAward(basePoints, doubleUsesRemaining, tripleUsesRemaining);
   }
 
   const activeTurnPlayerId = state.currentQuestion?.turnPlayerId ?? (state.phase === 'board' ? state.turnPlayerId : null);
-  if (activeTurnPlayerId !== player.id || state.currentQuestion?.dailyDouble) {
+  if (activeTurnPlayerId !== player.id || state.currentQuestion?.dailyDouble || !eligiblePlayers.some((candidate) => candidate.id === player.id)) {
     return inactiveAward(basePoints, doubleUsesRemaining, tripleUsesRemaining);
   }
 
-  const scores = state.players.map((candidate) => candidate.score);
+  const scores = eligiblePlayers.map((candidate) => candidate.score);
   const leaderScore = Math.max(...scores);
   const lastPlaceScore = Math.min(...scores);
-  const lastPlacePlayers = state.players.filter((candidate) => candidate.score === lastPlaceScore);
+  const lastPlacePlayers = eligiblePlayers.filter((candidate) => candidate.score === lastPlaceScore);
   const deficit = leaderScore - player.score;
   if (deficit <= 0 || lastPlacePlayers.length !== 1 || lastPlacePlayers[0].id !== player.id) {
     return inactiveAward(basePoints, doubleUsesRemaining, tripleUsesRemaining);
