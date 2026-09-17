@@ -49,10 +49,28 @@ function decodeHtmlUrls(html) {
 
 function findAudioUrl(html, contentId) {
   const normalized = decodeHtmlUrls(html);
+  const contentUrl = normalized.match(/"contentUrl"\s*:\s*"([^"]+\.mp3[^"]*)"/i)?.[1];
+  if (contentUrl) return contentUrl.replaceAll('\\u002F', '/').replaceAll('\\/', '/');
+
   const matches = [...normalized.matchAll(/https:\/\/cdn\.pixabay\.com\/(?:download\/)?audio\/[^\s"'<>]+/g)]
     .map((match) => match[0].replace(/[),;]+$/, ''));
   const mp3s = matches.filter((url) => /\.mp3(?:\?|$)/i.test(url));
   return mp3s.find((url) => url.includes(contentId)) ?? mp3s[0] ?? null;
+}
+
+async function loadTrackPage(track) {
+  const direct = await globalThis.fetch(track.page, { headers, redirect: 'follow' }).catch(() => null);
+  if (direct?.ok) return direct.text();
+
+  // Pixabay can reject datacenter IPs. Jina Reader renders the public page and returns the
+  // page HTML, including the JSON-LD AudioObject contentUrl, without requiring credentials.
+  const proxyUrl = `https://r.jina.ai/${track.page}`;
+  const proxied = await globalThis.fetch(proxyUrl, {
+    headers: { 'x-respond-with': 'html', 'x-timeout': '45' },
+    redirect: 'follow'
+  });
+  if (!proxied.ok) throw new Error(`Could not load ${track.page}: direct ${direct?.status ?? 'network error'}, proxy ${proxied.status}`);
+  return proxied.text();
 }
 
 async function validExistingFile(path) {
@@ -70,9 +88,7 @@ async function syncTrack(track) {
     return;
   }
 
-  const pageResponse = await globalThis.fetch(track.page, { headers, redirect: 'follow' });
-  if (!pageResponse.ok) throw new Error(`Could not load ${track.page}: ${pageResponse.status}`);
-  const html = await pageResponse.text();
+  const html = await loadTrackPage(track);
   const audioUrl = findAudioUrl(html, track.contentId);
   if (!audioUrl) throw new Error(`Could not locate the MP3 URL for ${track.id}`);
 
