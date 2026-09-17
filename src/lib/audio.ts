@@ -3,10 +3,10 @@ export type Cue = 'click' | 'open' | 'buzz' | 'locked' | 'correct' | 'wrong' | '
 
 export const BACKGROUND_TRACKS = [
   { id: 'dynamic', label: 'Dynamic Game Theme', file: null },
-  { id: 'kulakovka', label: 'Upbeat Music · Kulakovka', file: 'music/kulakovka-upbeat-music-281095.mp3' },
-  { id: 'tatamusic', label: 'Upbeat Music · Tatamusic', file: 'music/tatamusic-upbeat-upbeat-music-377668.mp3' },
-  { id: 'mountain', label: 'Upbeat Music · The Mountain', file: 'music/the_mountain-upbeat-upbeat-music-567445.mp3' },
-  { id: 'sonican', label: 'Tech Quiz News Loop · Sonican', file: 'music/sonican-tech-quiz-news-loop-274362.mp3' }
+  { id: 'kulakovka', label: 'Upbeat Music · Kulakovka', file: 'https://pixabay.com/music/download/id-281095.mp3' },
+  { id: 'tatamusic', label: 'Upbeat Music · Tatamusic', file: 'https://pixabay.com/music/download/id-377668.mp3' },
+  { id: 'mountain', label: 'Upbeat Music · The Mountain', file: 'https://pixabay.com/music/download/id-567445.mp3' },
+  { id: 'sonican', label: 'Tech Quiz News Loop · Sonican', file: 'https://pixabay.com/music/download/id-274362.mp3' }
 ] as const;
 export type BackgroundTrackId = typeof BACKGROUND_TRACKS[number]['id'];
 
