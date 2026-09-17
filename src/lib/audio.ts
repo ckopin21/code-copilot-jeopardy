@@ -142,7 +142,7 @@ class AudioEngine {
     return BACKGROUND_TRACKS.find((track) => track.id === this.settings.backgroundTrack && track.file !== null) ?? null;
   }
 
-  private async startSelectedMediaTrack(): Promise<void> {
+  private startSelectedMediaTrack(): void {
     const selected = this.selectedMediaTrack();
     if (!selected || typeof document === 'undefined') return;
     if (!this.mediaTrack || this.mediaTrackId !== selected.id) {
@@ -152,9 +152,27 @@ class AudioEngine {
       media.preload = 'auto';
       this.mediaTrack = media;
       this.mediaTrackId = selected.id;
+
+      const fallBackToDynamic = () => {
+        if (this.mediaTrack !== media || this.mediaTrackId !== selected.id) return;
+        const state = this.musicState ?? 'lobby';
+        this.stopMediaTrack();
+        this.setSettings({ backgroundTrack: 'dynamic' });
+        void this.setMusic(state).catch(() => {});
+      };
+      media.addEventListener('error', fallBackToDynamic, { once: true });
+      media.addEventListener('stalled', fallBackToDynamic, { once: true });
     }
     this.applyMediaVolume();
-    try { await this.mediaTrack.play(); } catch { /* user interaction will retry playback on the next audio action */ }
+    const playResult = this.mediaTrack.play();
+    if (playResult) void playResult.catch(() => {
+      const media = this.mediaTrack;
+      if (!media) return;
+      const state = this.musicState ?? 'lobby';
+      this.stopMediaTrack();
+      this.setSettings({ backgroundTrack: 'dynamic' });
+      void this.setMusic(state).catch(() => {});
+    });
   }
 
   private stopMediaTrack(): void {
@@ -281,7 +299,7 @@ class AudioEngine {
     if (this.settings.backgroundTrack !== 'dynamic') {
       this.stopScheduledMusic();
       this.musicState = state;
-      await this.startSelectedMediaTrack();
+      this.startSelectedMediaTrack();
       return;
     }
 
