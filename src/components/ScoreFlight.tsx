@@ -13,7 +13,12 @@ export type ScoreFlightState = {
 
 function findByData(attribute: 'questionId' | 'playerScore' | 'playerId', value: string): HTMLElement | null {
   const selector = attribute === 'questionId' ? '[data-question-id]' : attribute === 'playerScore' ? '[data-player-score]' : '[data-player-id]';
-  return Array.from(document.querySelectorAll<HTMLElement>(selector)).find((element) => element.dataset[attribute] === value) ?? null;
+  const matches = Array.from(document.querySelectorAll<HTMLElement>(selector)).filter((element) => element.dataset[attribute] === value);
+  const visible = matches.filter((element) => {
+    const rect = element.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0 && getComputedStyle(element).visibility !== 'hidden';
+  });
+  return visible.at(-1) ?? matches.at(-1) ?? null;
 }
 
 export function ScoreFlight({ flight, onImpact, onComplete }: { flight: ScoreFlightState; onImpact: (flight: ScoreFlightState) => void; onComplete: (id: string) => void }) {
