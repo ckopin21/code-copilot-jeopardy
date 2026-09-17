@@ -1,0 +1,1 @@
+Background music controls are implemented by BackgroundMusicPicker.tsx and AudioMixer.tsx.
