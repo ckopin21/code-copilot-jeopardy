@@ -297,7 +297,7 @@ body:has(.audio-drawer) .comeback-host { visibility: hidden; }
 .presentation-shell .showcase-player-card .player-avatar-large {
   width: 62px !important;
   height: 62px !important;
-  font-size: 2rem !important;
+  font-size: 1.75rem !important;
 }
 .presentation-shell .showcase-player-card .player-card-main {
   min-height: 74px;
@@ -333,7 +333,7 @@ body:has(.audio-drawer) .comeback-host { visibility: hidden; }
   .presentation-shell .showcase-player-card .player-avatar-large {
     width: 50px !important;
     height: 50px !important;
-    font-size: 1.65rem !important;
+    font-size: 1.52rem !important;
   }
   .presentation-shell .showcase-player-card .player-card-main {
     min-height: 62px;
@@ -351,8 +351,8 @@ body:has(.audio-drawer) .comeback-host { visibility: hidden; }
 .showcase-host.host-presentation-mode > .showcase-player-strip.player-strip {
   width: 100% !important;
   max-width: 1800px !important;
-  min-height: 220px !important;
-  padding: 20px 28px !important;
+  min-height: 186px !important;
+  padding: 16px 28px !important;
   gap: 16px !important;
   margin-inline: auto !important;
   align-items: center !important;
@@ -374,12 +374,12 @@ body:has(.audio-drawer) .comeback-host { visibility: hidden; }
   grid-template-columns: repeat(5, minmax(210px, 320px)) !important;
 }
 .showcase-host.host-presentation-mode > .showcase-player-strip.player-strip[data-player-count] .showcase-player-card.player-card {
-  min-height: 180px !important;
-  height: 180px !important;
-  grid-template-columns: 78px minmax(0,1fr) auto !important;
+  min-height: 150px !important;
+  height: 150px !important;
+  grid-template-columns: 68px minmax(0,1fr) auto !important;
   align-items: center !important;
-  gap: 16px !important;
-  padding: 24px 22px !important;
+  gap: 14px !important;
+  padding: 18px 20px !important;
   border-width: 3px !important;
   border-radius: 18px !important;
 }
@@ -387,15 +387,22 @@ body:has(.audio-drawer) .comeback-host { visibility: hidden; }
 .showcase-host.host-presentation-mode > .showcase-player-strip .showcase-player-card.player-card.is-turn {
   transform: none !important;
 }
+
+/* Presentation status already contains the streak icon, so suppress the detached corner emoji. */
+.showcase-host.host-presentation-mode > .showcase-player-strip .showcase-player-card.player-card.is-fire::after,
+.showcase-host.host-presentation-mode > .showcase-player-strip .showcase-player-card.player-card.is-cold::after {
+  display: none !important;
+  content: none !important;
+}
 .showcase-host.host-presentation-mode > .showcase-player-strip .player-avatar-large {
-  width: 76px !important;
-  height: 76px !important;
-  font-size: 2.4rem !important;
+  width: 66px !important;
+  height: 66px !important;
+  font-size: 2.1rem !important;
   border-width: 2px !important;
   align-self: center !important;
 }
 .showcase-host.host-presentation-mode > .showcase-player-strip .player-card-main {
-  min-height: 126px !important;
+  min-height: 104px !important;
   display: grid !important;
   align-content: center !important;
   gap: 5px !important;
@@ -407,27 +414,34 @@ body:has(.audio-drawer) .comeback-host { visibility: hidden; }
 }
 .showcase-host.host-presentation-mode > .showcase-player-strip .showcase-player-card .score {
   margin-top: 3px !important;
-  font-size: 4rem !important;
+  font-size: 3.4rem !important;
   line-height: .95 !important;
 }
 .showcase-host.host-presentation-mode > .showcase-player-strip .streak.neutral {
-  font-size: .78rem !important;
+  font-size: .72rem !important;
 }
 .showcase-host.host-presentation-mode > .showcase-player-strip .player-status-stack {
-  right: 16px !important;
-  gap: 7px !important;
-  max-width: 126px !important;
+  right: 14px !important;
+  gap: 8px !important;
+  max-width: 144px !important;
 }
 .showcase-host.host-presentation-mode > .showcase-player-strip .player-status-stack .streak-ribbon {
+  padding: 7px 11px !important;
+  font-size: .68rem !important;
+}
+.showcase-host.host-presentation-mode > .showcase-player-strip .player-status-stack .streak-ribbon > span {
+  font-size: .95rem !important;
+  line-height: 1 !important;
+}
+.showcase-host.host-presentation-mode > .showcase-player-strip .player-status-stack .streak-ribbon > em {
+  font-size: .58rem !important;
+}
+.showcase-host.host-presentation-mode > .showcase-player-strip .player-status-stack .turn-beacon {
   padding: 6px 10px !important;
   font-size: .62rem !important;
 }
-.showcase-host.host-presentation-mode > .showcase-player-strip .player-status-stack .turn-beacon {
-  padding: 5px 9px !important;
-  font-size: .56rem !important;
-}
 .showcase-host.host-presentation-mode > .showcase-player-strip .showcase-player-card.is-turn:is(.is-fire,.is-cold) {
-  padding-right: 148px !important;
+  padding-right: 164px !important;
 }
 
 /* Four- and five-player layouts keep the same tall band while tightening only horizontal content. */
@@ -462,16 +476,16 @@ body:has(.audio-drawer) .comeback-host { visibility: hidden; }
 
 @media (max-width: 1100px) {
   .showcase-host.host-presentation-mode > .showcase-player-strip.player-strip {
-    min-height: 182px !important;
-    padding: 16px 14px !important;
+    min-height: 162px !important;
+    padding: 14px 12px !important;
     gap: 10px !important;
   }
   .showcase-host.host-presentation-mode > .showcase-player-strip.player-strip[data-player-count] .showcase-player-card.player-card {
-    min-height: 148px !important;
-    height: 148px !important;
+    min-height: 132px !important;
+    height: 132px !important;
     grid-template-columns: 60px minmax(0,1fr) auto !important;
     gap: 12px !important;
-    padding: 18px 16px !important;
+    padding: 15px 14px !important;
   }
   .showcase-host.host-presentation-mode > .showcase-player-strip .player-avatar-large {
     width: 58px !important;
@@ -479,33 +493,33 @@ body:has(.audio-drawer) .comeback-host { visibility: hidden; }
     font-size: 1.9rem !important;
   }
   .showcase-host.host-presentation-mode > .showcase-player-strip .player-card-main {
-    min-height: 98px !important;
+    min-height: 88px !important;
   }
   .showcase-host.host-presentation-mode > .showcase-player-strip .showcase-player-card .player-name {
-    font-size: 1.6rem !important;
+    font-size: 1.5rem !important;
   }
   .showcase-host.host-presentation-mode > .showcase-player-strip .showcase-player-card .score {
-    font-size: 3.2rem !important;
+    font-size: 2.95rem !important;
   }
 }
 
 @media (max-height: 720px) and (min-width: 1101px) {
   .showcase-host.host-presentation-mode > .showcase-player-strip.player-strip {
-    min-height: 184px !important;
-    padding-block: 16px !important;
+    min-height: 164px !important;
+    padding-block: 14px !important;
   }
   .showcase-host.host-presentation-mode > .showcase-player-strip.player-strip[data-player-count] .showcase-player-card.player-card {
-    min-height: 150px !important;
-    height: 150px !important;
-    padding-block: 18px !important;
+    min-height: 134px !important;
+    height: 134px !important;
+    padding-block: 15px !important;
   }
   .showcase-host.host-presentation-mode > .showcase-player-strip .player-card-main {
-    min-height: 102px !important;
+    min-height: 90px !important;
   }
   .showcase-host.host-presentation-mode > .showcase-player-strip .showcase-player-card .player-name {
     font-size: 1.65rem !important;
   }
   .showcase-host.host-presentation-mode > .showcase-player-strip .showcase-player-card .score {
-    font-size: 3.3rem !important;
+    font-size: 3rem !important;
   }
 }
