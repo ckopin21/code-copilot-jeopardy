@@ -14,4 +14,5 @@ old = "import { menuUrl, resetInstance } from './lib/resetInstance';"
 new = "import { resetInstance } from './lib/resetInstance';"
 if old not in text:
     raise SystemExit('App resetInstance import not found')
-app.write_text(text.replace(old, new, 1))
+text = text.replace(old, new, 1)
+app.write_text(text.rstrip() + '\n')
