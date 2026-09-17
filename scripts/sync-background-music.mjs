@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer';
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -65,17 +66,17 @@ async function validExistingFile(path) {
 async function syncTrack(track) {
   const target = join(outDir, track.file);
   if (await validExistingFile(target)) {
-    console.log(`music: ${track.id} already present`);
+    globalThis.console.log(`music: ${track.id} already present`);
     return;
   }
 
-  const pageResponse = await fetch(track.page, { headers, redirect: 'follow' });
+  const pageResponse = await globalThis.fetch(track.page, { headers, redirect: 'follow' });
   if (!pageResponse.ok) throw new Error(`Could not load ${track.page}: ${pageResponse.status}`);
   const html = await pageResponse.text();
   const audioUrl = findAudioUrl(html, track.contentId);
   if (!audioUrl) throw new Error(`Could not locate the MP3 URL for ${track.id}`);
 
-  const audioResponse = await fetch(audioUrl, {
+  const audioResponse = await globalThis.fetch(audioUrl, {
     headers: { ...headers, referer: track.page },
     redirect: 'follow'
   });
@@ -86,7 +87,7 @@ async function syncTrack(track) {
     throw new Error(`Downloaded content for ${track.id} is not a valid audio file`);
   }
   await writeFile(target, bytes);
-  console.log(`music: downloaded ${track.id} (${Math.round(bytes.length / 1024)} KiB)`);
+  globalThis.console.log(`music: downloaded ${track.id} (${Math.round(bytes.length / 1024)} KiB)`);
 }
 
 await mkdir(outDir, { recursive: true });
