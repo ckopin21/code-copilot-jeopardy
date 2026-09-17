@@ -1,9 +1,9 @@
-const PREFIX = 'blue-stage-host-owner-';
+const HOST_AUTHORITY_KEY = 'blue-stage-host-owner';
 
 const fallbackOwners = new Map<string, string>();
 
-export function hostAuthorityKey(roomCode: string): string {
-  return `${PREFIX}${roomCode.trim().toUpperCase()}`;
+export function hostAuthorityKey(_roomCode?: string): string {
+  return HOST_AUTHORITY_KEY;
 }
 
 export function claimHostAuthority(roomCode: string, ownerId: string, storage: Storage = localStorage): void {
