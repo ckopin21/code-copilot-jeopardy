@@ -53,6 +53,26 @@
 .comeback-boost-values b { color: #ffd95e; font-size: 1.1rem; }
 .comeback-boost-values strong { color: #fff0a6; text-align: right; }
 
+.comeback-value-list {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.comeback-value-list > span {
+  display: inline-grid;
+  grid-template-columns: auto 14px auto;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 7px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, .2);
+  opacity: 1;
+}
+
+.comeback-value-list small { color: rgba(255, 255, 255, .75); font-weight: 800; }
+.comeback-value-list strong { font-size: .78rem; }
+.comeback-value-list b { font-size: .85rem; text-align: center; }
+
 .comeback-boost-note {
   margin-top: 6px;
   font-size: .76rem;
@@ -84,10 +104,19 @@
     border-radius: 12px;
   }
 
-  .comeback-boost-values {
+  .comeback-boost-values:not(.comeback-value-list) {
     display: grid;
     grid-template-columns: auto 18px 1fr;
     font-size: .78rem;
+  }
+
+  .comeback-value-list {
+    display: flex;
+    gap: 5px;
+  }
+
+  .comeback-value-list > span {
+    font-size: .72rem;
   }
 
   .comeback-boost-note { font-size: .69rem; }
