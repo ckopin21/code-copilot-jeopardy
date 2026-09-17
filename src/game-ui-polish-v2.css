@@ -347,7 +347,7 @@ body:has(.audio-drawer) .comeback-host { visibility: hidden; }
 }
 
 
-/* Host presentation mode uses a genuinely tall, across-the-room scoreboard treatment. */
+/* Host presentation mode uses a clearly tall, across-the-room scoreboard treatment. */
 .showcase-host.host-presentation-mode > .showcase-player-strip.player-strip {
   width: 100% !important;
   max-width: 1800px !important;
