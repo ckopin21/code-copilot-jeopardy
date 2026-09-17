@@ -113,6 +113,28 @@ describe('BrowserGameEngine production state', () => {
     expect(after.stats.incorrect).toBe(before.stats.incorrect);
   });
 
+  it('keeps a Daily Double host-judged after its timer expires', () => {
+    const { engine, host } = setup({ gameLength: 'quick', dailyDoublesEnabled: true, dailyDoubleCount: 16, finalRoundEnabled: false, timerSeconds: 5, allowNegativeScores: true, allowWagerBeyondScore: true });
+    const player = addPlayer(engine, host.roomCode, 'Daily Timer');
+    engine.startGame(host.roomCode, host.hostToken);
+    const daily = engine.snapshot(host.roomCode).board!.questions.find((question) => question.dailyDouble)!;
+    engine.selectQuestion(host.roomCode, host.hostToken, daily.questionId, player.playerId);
+    engine.setDailyDoubleWager(host.roomCode, host.hostToken, 100);
+    const before = engine.snapshot(host.roomCode).players.find((candidate) => candidate.id === player.playerId)!.score;
+    const endsAt = engine.snapshot(host.roomCode).timer.endsAt!;
+
+    engine.tick(endsAt + 1);
+
+    const expired = engine.snapshot(host.roomCode);
+    expect(expired.currentQuestion?.timedOut).toBe(false);
+    expect(expired.currentQuestion?.answerRevealed).toBe(false);
+    expect(expired.players.find((candidate) => candidate.id === player.playerId)!.score).toBe(before);
+
+    engine.revealAnswer(host.roomCode, host.hostToken);
+    expect(() => engine.resolveAnswer(host.roomCode, host.hostToken, player.playerId, true)).not.toThrow();
+    expect(engine.snapshot(host.roomCode).players.find((candidate) => candidate.id === player.playerId)!.score).toBe(before + 100);
+  });
+
   it('reconnects a reserved seat without changing player identity or seat', () => {
     const { engine, host } = setup();
     const player = addPlayer(engine, host.roomCode);

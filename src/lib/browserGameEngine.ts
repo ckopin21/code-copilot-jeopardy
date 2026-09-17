@@ -992,7 +992,8 @@ export class BrowserGameEngine {
         this.penalizeUnansweredTurn(room);
         this.closeTextResponsesInternal(room);
       } else if (room.state.phase === 'daily-double-question' && room.state.currentQuestion && !room.state.currentQuestion.answerRevealed) {
-        this.penalizeUnansweredTurn(room);
+        // Daily Double timer expiry ends the clock only. The host still reveals
+        // the answer and judges Correct/Incorrect so timeout never auto-scores a loss.
       } else if (room.state.settings.autoCloseBuzzersAtZero && room.state.currentQuestion?.buzzOpen) {
         this.penalizeUnansweredTurn(room);
       }
