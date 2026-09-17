@@ -5,6 +5,7 @@ import { emitAck, getPlayerConnectionHealth, socket, testPlayerControllers, type
 import { audio } from '../lib/audio';
 import { readAccessibility, saveAccessibility, type AccessibilityPreferences } from '../lib/accessibility';
 import { readActiveHostCredentials } from '../lib/hostCredentials';
+import { ComebackBoostNotice } from './ComebackBoostNotice';
 type TransitionCard = { key: string; eyebrow: string; title: string; detail?: string; categories?: string[] };
 
 function readCredentials(): HostRoomCredentials | null {
@@ -184,6 +185,7 @@ export function HostEnhancements() {
   };
 
   return <>
+    <ComebackBoostNotice room={room} surface="host" />
     <button className="host-command-trigger" onClick={() => setDrawerOpen((open) => !open)} aria-expanded={drawerOpen} aria-label="Open host controls">
       <span>HOST</span><b>{connectedCount}</b>
     </button>
@@ -200,6 +202,14 @@ export function HostEnhancements() {
         <div className="drawer-section-title"><strong>Game presets</strong><small>One click, then fine-tune normally.</small></div>
         <div className="preset-grid">{GAME_PRESETS.map((preset) => <button key={preset.id} onClick={() => void hostAction('host:update-settings', { updates: preset.settings })}><strong>{preset.name}</strong><span>{preset.description}</span></button>)}</div>
       </section>}
+
+      <section className="host-command-section comeback-rules-card">
+        <div className="drawer-section-title"><strong>Comeback boosts</strong><small>Last-place help, only on that player’s turn.</small></div>
+        <p><b>2× boost:</b> trail the leader by at least 2× the normal clue value. Each player gets two successful uses per game.</p>
+        <p><b>3× boost:</b> trail by at least 4× the normal clue value. Each player gets one successful use per game.</p>
+        <p><b>A use is spent only when that player answers correctly.</b> A miss or no answer loses only the normal value. If someone else buzzes, they score normally and the boost stays available.</p>
+        <p>Daily Doubles and Final do not use comeback boosts. A boost also disappears whenever the player’s score no longer meets the trailing requirement.</p>
+      </section>
 
       <section className="host-command-section">
         <div className="drawer-section-title"><strong>Players</strong><button className="drawer-link" onClick={() => setPreflightOpen(true)}>Connection check</button></div>

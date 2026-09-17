@@ -24,7 +24,8 @@ function setup() {
     dailyDoublesEnabled: false,
     finalRoundEnabled: false,
     lateGameModifiers: false,
-    streaksEnabled: true
+    streaksEnabled: true,
+    allowNegativeScores: true
   });
   const leader = engine.joinPlayer(host.roomCode, { name: 'Leader', avatar: '⭐', accent: '#ffd166' });
   const chaser = engine.joinPlayer(host.roomCode, { name: 'Chaser', avatar: '🚀', accent: '#93c5fd' });
@@ -32,62 +33,128 @@ function setup() {
   return { engine, host, leader, chaser };
 }
 
+function selectValue(engine: BrowserGameEngine, roomCode: string, hostToken: string, playerId: string, value: number) {
+  engine.setTurnPlayer(roomCode, hostToken, playerId);
+  const tile = engine.snapshot(roomCode).board!.questions.find((question) => !question.used && question.value === value)!;
+  return engine.selectQuestion(roomCode, hostToken, tile.questionId);
+}
+
 beforeEach(() => {
   Object.defineProperty(globalThis, 'localStorage', { value: new MemoryStorage(), configurable: true });
 });
 
-describe('comeback scoring', () => {
-  it('gives a large underdog a 50% boost on an ordinary correct answer', () => {
+describe('limited comeback scoring', () => {
+  it('gives the last-place turn owner 3x when trailing by at least 4x the clue value', () => {
     const { engine, host, leader, chaser } = setup();
     engine.adjustScore(host.roomCode, host.hostToken, leader.playerId, 1000);
-
-    const tile = engine.snapshot(host.roomCode).board!.questions.find((question) => question.value === 100)!;
-    engine.selectQuestion(host.roomCode, host.hostToken, tile.questionId);
+    selectValue(engine, host.roomCode, host.hostToken, chaser.playerId, 100);
     engine.openBuzzers(host.roomCode, host.hostToken);
     engine.localBuzz(host.roomCode, host.hostToken, chaser.playerId);
     engine.revealAnswer(host.roomCode, host.hostToken);
     const resolved = engine.resolveAnswer(host.roomCode, host.hostToken, chaser.playerId, true);
 
-    expect(resolved.players.find((player) => player.id === chaser.playerId)?.score).toBe(150);
-    expect(resolved.players.find((player) => player.id === chaser.playerId)?.stats.pointsGained).toBe(150);
+    expect(resolved.players.find((player) => player.id === chaser.playerId)?.score).toBe(300);
+    expect(resolved.players.find((player) => player.id === chaser.playerId)?.stats.pointsGained).toBe(300);
   });
 
-  it('stacks earned comeback momentum with the underdog boost but caps the total bonus at 100%', () => {
+  it('gives the last-place turn owner 2x when trailing by at least 2x but less than 4x', () => {
+    const { engine, host, leader, chaser } = setup();
+    engine.adjustScore(host.roomCode, host.hostToken, leader.playerId, 300);
+    selectValue(engine, host.roomCode, host.hostToken, chaser.playerId, 100);
+    engine.openBuzzers(host.roomCode, host.hostToken);
+    engine.localBuzz(host.roomCode, host.hostToken, chaser.playerId);
+    engine.revealAnswer(host.roomCode, host.hostToken);
+    const resolved = engine.resolveAnswer(host.roomCode, host.hostToken, chaser.playerId, true);
+
+    expect(resolved.players.find((player) => player.id === chaser.playerId)?.score).toBe(200);
+  });
+
+  it('charges only the normal value when the boosted player answers incorrectly', () => {
+    const { engine, host, leader, chaser } = setup();
+    engine.adjustScore(host.roomCode, host.hostToken, leader.playerId, 1000);
+    selectValue(engine, host.roomCode, host.hostToken, chaser.playerId, 100);
+    engine.openBuzzers(host.roomCode, host.hostToken);
+    engine.localBuzz(host.roomCode, host.hostToken, chaser.playerId);
+    engine.revealAnswer(host.roomCode, host.hostToken);
+    const resolved = engine.resolveAnswer(host.roomCode, host.hostToken, chaser.playerId, false);
+
+    expect(resolved.players.find((player) => player.id === chaser.playerId)?.score).toBe(-100);
+    expect(resolved.players.find((player) => player.id === chaser.playerId)?.stats.pointsLost).toBe(100);
+  });
+
+  it('charges only the normal value when the boosted turn owner does not answer', () => {
+    const { engine, host, leader, chaser } = setup();
+    engine.adjustScore(host.roomCode, host.hostToken, leader.playerId, 1000);
+    selectValue(engine, host.roomCode, host.hostToken, chaser.playerId, 100);
+    const revealed = engine.revealAnswer(host.roomCode, host.hostToken);
+
+    expect(revealed.players.find((player) => player.id === chaser.playerId)?.score).toBe(-100);
+  });
+
+  it('awards a different player only the normal amount on the boosted player’s turn', () => {
+    const { engine, host, leader, chaser } = setup();
+    engine.adjustScore(host.roomCode, host.hostToken, leader.playerId, 1000);
+    selectValue(engine, host.roomCode, host.hostToken, chaser.playerId, 100);
+    engine.openBuzzers(host.roomCode, host.hostToken);
+    engine.localBuzz(host.roomCode, host.hostToken, leader.playerId);
+    engine.revealAnswer(host.roomCode, host.hostToken);
+    const resolved = engine.resolveAnswer(host.roomCode, host.hostToken, leader.playerId, true);
+
+    expect(resolved.players.find((player) => player.id === leader.playerId)?.score).toBe(1100);
+    expect(resolved.players.find((player) => player.id === chaser.playerId)?.score).toBe(0);
+  });
+
+  it('limits each player to two successful 2x boosts and one successful 3x boost', () => {
     const { engine, leader, chaser, host } = setup();
     const state = engine.snapshot(host.roomCode);
     const leaderState = state.players.find((player) => player.id === leader.playerId)!;
     const chaserState = state.players.find((player) => player.id === chaser.playerId)!;
     leaderState.score = 1000;
     chaserState.score = 0;
-    chaserState.positiveStreak = 2;
+    state.turnPlayerId = chaserState.id;
+    state.phase = 'board';
 
-    const award = calculateComebackAward(state, chaserState, 100);
-    expect(award.underdogRate).toBe(0.5);
-    expect(award.streakRate).toBe(0.5);
-    expect(award.bonus).toBe(100);
-    expect(award.points).toBe(200);
+    const tile100 = state.board!.questions.find((question) => question.value === 100)!;
+    const tile200 = state.board!.questions.find((question) => question.value === 200)!;
+    const tile300 = state.board!.questions.find((question) => question.value === 300)!;
+    tile100.used = true;
+    tile100.playedValue = 100;
+    tile100.results = [{ playerId: chaserState.id, playerName: chaserState.name, playerAvatar: chaserState.avatar, correct: true, delta: 300 }];
+    tile200.used = true;
+    tile200.playedValue = 200;
+    tile200.results = [{ playerId: chaserState.id, playerName: chaserState.name, playerAvatar: chaserState.avatar, correct: true, delta: 400 }];
+    tile300.used = true;
+    tile300.playedValue = 300;
+    tile300.results = [{ playerId: chaserState.id, playerName: chaserState.name, playerAvatar: chaserState.avatar, correct: true, delta: 600 }];
+
+    const afterAllThree = calculateComebackAward(state, chaserState, 100);
+    expect(afterAllThree.tripleUsesRemaining).toBe(0);
+    expect(afterAllThree.doubleUsesRemaining).toBe(0);
+    expect(afterAllThree.multiplier).toBe(1);
+    expect(afterAllThree.points).toBe(100);
   });
 
-  it('never lets bonus points be the reason a trailing player passes first place', () => {
+  it('does not let streak length add another scoring multiplier', () => {
     const { engine, leader, chaser, host } = setup();
     const state = engine.snapshot(host.roomCode);
     const leaderState = state.players.find((player) => player.id === leader.playerId)!;
     const chaserState = state.players.find((player) => player.id === chaser.playerId)!;
-    leaderState.score = 1000;
-    chaserState.score = 850;
-    chaserState.positiveStreak = 4;
+    leaderState.score = 300;
+    chaserState.score = 0;
+    chaserState.positiveStreak = 5;
+    state.turnPlayerId = chaserState.id;
+    state.phase = 'board';
 
-    const award = calculateComebackAward(state, chaserState, 200);
-    expect(award.streakRate).toBe(0.5);
-    expect(award.bonus).toBe(0);
+    const award = calculateComebackAward(state, chaserState, 100);
+    expect(award.multiplier).toBe(2);
     expect(award.points).toBe(200);
+    expect(award.streakRate).toBe(0);
   });
 
   it('undo restores the entire boosted ruling, including score, stats and streak', () => {
     const { engine, host, leader, chaser } = setup();
     engine.adjustScore(host.roomCode, host.hostToken, leader.playerId, 1000);
-    const tile = engine.snapshot(host.roomCode).board!.questions.find((question) => question.value === 100)!;
-    engine.selectQuestion(host.roomCode, host.hostToken, tile.questionId);
+    selectValue(engine, host.roomCode, host.hostToken, chaser.playerId, 100);
     engine.openBuzzers(host.roomCode, host.hostToken);
     engine.localBuzz(host.roomCode, host.hostToken, chaser.playerId);
     engine.revealAnswer(host.roomCode, host.hostToken);
@@ -101,7 +168,7 @@ describe('comeback scoring', () => {
     expect(restoredChaser.positiveStreak).toBe(0);
   });
 
-  it('does not apply comeback bonuses to Daily Double wagers', () => {
+  it('does not apply comeback boosts to Daily Double wagers', () => {
     const engine = new BrowserGameEngine(new FixedRandom(), 60_000);
     const host = engine.createRoom('https://example.test/game', {
       gameLength: 'quick', randomizeCategories: false, dailyDoublesEnabled: true, dailyDoubleCount: 16,

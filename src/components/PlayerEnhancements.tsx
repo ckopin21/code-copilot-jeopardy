@@ -3,6 +3,7 @@ import type { PlayerJoinCredentials, RoomSnapshot } from '../shared/types';
 import { emitAck, socket } from '../lib/socket';
 import { audio } from '../lib/audio';
 import { readAccessibility, saveAccessibility, type AccessibilityPreferences } from '../lib/accessibility';
+import { ComebackBoostNotice } from './ComebackBoostNotice';
 
 const PLAYER_KEY = 'blue-stage-player';
 
@@ -88,6 +89,7 @@ export function PlayerEnhancements() {
   if (!credentials && !room) return null;
 
   return <>
+    {room && me && <ComebackBoostNotice room={room} playerId={me.id} surface="player" />}
     {me && <div className="phone-seat-chip" aria-label={`Player ${me.seat}`}>P{me.seat}</div>}
     <button className="phone-accessibility-trigger" onClick={() => setAccessOpen((open) => !open)} aria-expanded={accessOpen}>Aa</button>
     {accessOpen && <section className="phone-accessibility-panel" aria-label="Accessibility settings">
