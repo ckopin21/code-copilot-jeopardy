@@ -91,13 +91,25 @@ function spentBoostQuestion(player: Player, index: number, multiplier: 2 | 3): B
   };
 }
 
+function warmupQuestions(count: number): BoardQuestion[] {
+  return Array.from({ length: count * 2 }, (_, index) => ({
+    questionId: `dev-warmup-${index}`,
+    category: 'DEV WARMUP',
+    value: 100,
+    used: true,
+    dailyDouble: false,
+    playedValue: 100,
+    results: []
+  }));
+}
+
 export function buildDevScenario(input: DevScenarioInput): RoomSnapshot {
   const count = Math.min(5, Math.max(2, input.playerCount)) as DevPlayerCount;
   const players = Array.from({ length: count }, (_, index) => playerForSeat(index + 1, Number(input.scores[index] ?? 0)));
   const selectedSeat = Math.min(count, Math.max(1, input.selectedSeat));
   const selected = players[selectedSeat - 1];
   const normalValue = input.clueValue * input.lateMultiplier;
-  const history: BoardQuestion[] = [];
+  const history: BoardQuestion[] = warmupQuestions(count);
 
   for (let index = 0; index < input.doubleBoostsSpent; index += 1) history.push(spentBoostQuestion(selected, index, 2));
   for (let index = 0; index < input.tripleBoostsSpent; index += 1) history.push(spentBoostQuestion(selected, index, 3));
@@ -168,13 +180,14 @@ export function analyzeDevScenario(input: DevScenarioInput): DevScenarioAnalysis
   const scores = room.players.map((candidate) => candidate.score);
   const leaderScore = Math.max(...scores);
   const lastPlaceScore = Math.min(...scores);
+  const lastPlacePlayers = room.players.filter((candidate) => candidate.score === lastPlaceScore);
   return {
     room,
     player,
     leaderScore,
     lastPlaceScore,
     deficit: leaderScore - player.score,
-    isLastPlace: player.score === lastPlaceScore && player.score < leaderScore,
+    isLastPlace: lastPlacePlayers.length === 1 && lastPlacePlayers[0].id === player.id && player.score < leaderScore,
     normalValue,
     correctValue: comeback.points,
     wrongValue: -normalValue,

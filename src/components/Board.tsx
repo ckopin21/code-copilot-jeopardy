@@ -1,4 +1,5 @@
 import type { BoardQuestionResult, BoardState } from '../shared/types';
+import { questionModifierLabels, resultModifierLabels } from '../lib/boardResultPresentation';
 
 export type BoardResult = BoardQuestionResult;
 export type BoardResultMap = Record<string, BoardResult[]>;
@@ -14,6 +15,7 @@ export function Board({ board, multiplier = 1, disabled = false, onSelect, onRev
         const canReview = question.used && Boolean(onReview);
         const displayedValue = question.used ? question.playedValue ?? question.value : question.value * multiplier;
         const questionResults = question.results?.length ? question.results : results[question.questionId] ?? [];
+        const questionModifiers = questionModifierLabels(question);
         return <button
           type="button"
           key={question.questionId}
@@ -25,8 +27,18 @@ export function Board({ board, multiplier = 1, disabled = false, onSelect, onRev
           title={canReview ? 'Review answered question' : undefined}
         >
           {question.used ? questionResults.length ? <div className="used-tile-result">
-            <small className="used-tile-value">{question.playedValue ?? question.value}</small>
-            <div className="used-result-list">{questionResults.map((result) => <span className={`used-result-chip ${result.correct ? 'correct' : 'wrong'}`} key={result.playerId}><b>{result.playerAvatar} {result.playerName}</b><em>{result.correct ? `CORRECT · +${Math.max(0, result.delta).toLocaleString()}` : `INCORRECT · ${result.delta.toLocaleString()}`}</em></span>)}</div>
+            <div className="used-tile-topline">
+              <small className="used-tile-value">{question.playedValue ?? question.value}</small>
+              {questionModifiers.length > 0 && <div className="used-question-modifiers">{questionModifiers.map((label) => <span key={label}>{label}</span>)}</div>}
+            </div>
+            <div className="used-result-list">{questionResults.map((result) => {
+              const modifiers = resultModifierLabels(question, result);
+              return <span className={`used-result-chip ${result.correct ? 'correct' : 'wrong'}`} key={result.playerId}>
+                <b>{result.playerAvatar} {result.playerName}</b>
+                <em>{result.correct ? `+${Math.max(0, result.delta).toLocaleString()}` : result.delta.toLocaleString()}</em>
+                {modifiers.length > 0 && <span className="used-result-modifiers">{modifiers.map((label) => <i key={label}>{label}</i>)}</span>}
+              </span>;
+            })}</div>
           </div> : <span className="used-check used-check-empty">X</span> : displayedValue}
         </button>;
       }))}

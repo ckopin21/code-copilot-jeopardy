@@ -125,6 +125,8 @@ export interface BoardQuestionResult {
   playerAvatar: string;
   correct: boolean;
   delta: number;
+  /** Optional persisted labels for scoring rules that affected this player's result. */
+  modifiers?: string[];
 }
 
 export interface BoardQuestion {
@@ -135,6 +137,8 @@ export interface BoardQuestion {
   dailyDouble: boolean;
   /** Actual point value when this tile was played, including late modifiers or DD wager. */
   playedValue?: number;
+  /** Optional persisted labels for board-wide scoring rules used on this clue. */
+  modifiers?: string[];
   /** Public scoring result stored with the authoritative room so presentation/recovery stay consistent. */
   results?: BoardQuestionResult[];
 }

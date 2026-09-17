@@ -17,6 +17,17 @@ class FixedRandom implements RandomSource {
   next(): number { this.value = (this.value * 5.91 + 0.23) % 1; return this.value; }
 }
 
+function completeCorrectTurn(engine: BrowserGameEngine, roomCode: string, hostToken: string, playerId: string) {
+  engine.setTurnPlayer(roomCode, hostToken, playerId);
+  const tile = engine.snapshot(roomCode).board!.questions.find((question) => !question.used && question.value === 100)!;
+  engine.selectQuestion(roomCode, hostToken, tile.questionId);
+  engine.openBuzzers(roomCode, hostToken);
+  engine.localBuzz(roomCode, hostToken, playerId);
+  engine.revealAnswer(roomCode, hostToken);
+  engine.resolveAnswer(roomCode, hostToken, playerId, true);
+  engine.advanceToBoard(roomCode, hostToken);
+}
+
 function setup() {
   const engine = new BrowserGameEngine(new FixedRandom(), 60_000);
   const host = engine.createRoom('https://example.test/game', {
@@ -29,9 +40,15 @@ function setup() {
   const leader = engine.joinPlayer(host.roomCode, { name: 'Leader', avatar: '⭐', accent: '#ffd166' });
   const chaser = engine.joinPlayer(host.roomCode, { name: 'Chaser', avatar: '🚀', accent: '#93c5fd' });
   engine.startGame(host.roomCode, host.hostToken);
+
+  for (let round = 0; round < 2; round += 1) {
+    completeCorrectTurn(engine, host.roomCode, host.hostToken, leader.playerId);
+    completeCorrectTurn(engine, host.roomCode, host.hostToken, chaser.playerId);
+  }
+
   engine.adjustScore(host.roomCode, host.hostToken, leader.playerId, 1000);
   engine.setTurnPlayer(host.roomCode, host.hostToken, chaser.playerId);
-  const tile = engine.snapshot(host.roomCode).board!.questions.find((question) => question.value === 100)!;
+  const tile = engine.snapshot(host.roomCode).board!.questions.find((question) => !question.used && question.value === 100)!;
   engine.selectQuestion(host.roomCode, host.hostToken, tile.questionId);
   return { engine, host, leader, chaser };
 }

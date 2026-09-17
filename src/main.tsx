@@ -22,6 +22,7 @@ import './background-music.css';
 import './comeback-boosts.css';
 import './dev-mode.css';
 import './dev-presentation-lab.css';
+import './presentation-readability.css';
 
 applyMusicVolumePolicy();
 installModeAwareAudioPolicy();
