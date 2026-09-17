@@ -52,12 +52,24 @@ export function mergeStoredRooms(primary: StoredRoom[], backup: StoredRoom[], no
   return [...byCode.values()].sort((a, b) => String(a.state?.code ?? '').localeCompare(String(b.state?.code ?? '')));
 }
 
+function safeGetItem(storage: Storage, key: string): string | null {
+  try { return storage.getItem(key); }
+  catch { return null; }
+}
+
+function safeSetItem(storage: Storage, key: string, value: string): void {
+  try { storage.setItem(key, value); }
+  catch { /* recovery must never make the app fail to start */ }
+}
+
 export function recoverRoomStorage(storage: Storage = localStorage): StoredRoom[] {
-  const primary = parseRooms(storage.getItem(PRIMARY_KEY));
-  const backup = parseRooms(storage.getItem(BACKUP_KEY));
+  const primaryRaw = safeGetItem(storage, PRIMARY_KEY);
+  const backupRaw = safeGetItem(storage, BACKUP_KEY);
+  const primary = parseRooms(primaryRaw);
+  const backup = parseRooms(backupRaw);
   const merged = mergeStoredRooms(primary, backup);
   const serialized = JSON.stringify(merged);
-  if (storage.getItem(PRIMARY_KEY) !== serialized) storage.setItem(PRIMARY_KEY, serialized);
+  if (primaryRaw !== serialized) safeSetItem(storage, PRIMARY_KEY, serialized);
   return merged;
 }
 
