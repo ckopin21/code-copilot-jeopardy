@@ -51,7 +51,7 @@ const categories = [
   }),
   category('Landmarks & Archaeology', {
     100: question('Which country gave the Statue of Liberty to the United States?', 'France'),
-    200: question('In which city is the Colosseum located?', 'Rome'),
+    200: question('In which city is the Sagrada Família located?', 'Barcelona'),
     300: question('In which country is Stonehenge located?', ['England', 'United Kingdom', 'UK']),
     400: question('Which civilization built the city of Chichén Itzá?', ['Maya', 'Mayan civilization', 'Maya civilization']),
     500: question('On which island are the famous moai statues located?', ['Easter Island', 'Rapa Nui']),
