@@ -135,6 +135,8 @@ export interface BoardQuestion {
   value: QuestionValue;
   used: boolean;
   dailyDouble: boolean;
+  /** Player whose turn selected this clue. Used for exact comeback warmup accounting. */
+  turnPlayerId?: string | null;
   /** Actual point value when this tile was played, including late modifiers or DD wager. */
   playedValue?: number;
   /** Optional persisted labels for board-wide scoring rules used on this clue. */
