@@ -47,7 +47,7 @@ function setup() {
     completeCorrectTurn(engine, host.roomCode, host.hostToken, chaser.playerId);
   }
 
-  engine.adjustScore(host.roomCode, host.hostToken, leader.playerId, 1000);
+  engine.adjustScore(host.roomCode, host.hostToken, leader.playerId, 2000);
   engine.setTurnPlayer(host.roomCode, host.hostToken, chaser.playerId);
   const tile = engine.snapshot(host.roomCode).board!.questions.find((question) => !question.used && question.value === 100)!;
   engine.selectQuestion(host.roomCode, host.hostToken, tile.questionId);
