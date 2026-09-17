@@ -68,6 +68,14 @@ The client reconnect loop:
 
 The player screen also performs a periodic identity sync while joined. Terminal errors such as expired/not-found/authorization failures stop the retry loop and allow the user to join a new seat.
 
+## Action freshness and delayed packets
+
+Gameplay requests that can become stale carry authoritative context from the latest room snapshot. Buzzes, typed responses, and Daily Double wagers include both the current question ID and the game start timestamp. Final wagers and answers include the game start timestamp.
+
+The host rejects a request whose context no longer matches the active question/game. This prevents an ordered-but-delayed packet from an earlier clue, or from a previous game in the same room, from being applied to the current state.
+
+Timer deadlines are also reconciled inside player action handling rather than only by the host's periodic timer tick. A response arriving after an authoritative deadline cannot slip through during the interval between the deadline and the next scheduled tick. If buzzer auto-close is disabled, the timer can expire without closing the buzzer window, preserving that setting's intended behavior.
+
 ## Host-controlled temporary disconnect
 
 **Pause seat** is a recoverable host action. It:
@@ -114,6 +122,8 @@ The host then explicitly transitions to `final-review`. Review tracks the active
 ## Host lifecycle and recovery
 
 The host peer attempts to reconnect to PeerJS signaling if signaling drops while the page remains open. The primary room authority still lives in the host browser. Closing the host page removes the live WebRTC endpoint until the host page is reopened and its saved room is restored.
+
+Each successfully opened host peer also claims a browser-local ownership lease for that room. Host mutations, timer ticks, stale-phone cleanup, and incoming controller requests are accepted only while that peer still owns the lease. If another tab successfully acquires the deterministic room peer ID, it replaces the lease; the older tab closes its stale controller channels and can no longer mutate authoritative state. This prevents a suspended/older host tab from waking later and writing stale gameplay over the active host.
 
 Authoritative room state is persisted after game mutations. Active timer `endsAt` values are persisted with the room. On host engine reconstruction, the timer is restored from that absolute end time and expired timers are reconciled immediately instead of restarting or disappearing silently.
 
