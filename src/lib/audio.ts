@@ -1,8 +1,17 @@
 type MusicState = 'lobby' | 'board' | 'thinking' | 'daily-double' | 'double' | 'triple' | 'final' | 'winner';
 export type Cue = 'click' | 'open' | 'buzz' | 'locked' | 'correct' | 'wrong' | 'daily-double' | 'fire' | 'cold' | 'phase' | 'reveal' | 'category' | 'round' | 'score' | 'winner' | 'diagnostic';
 
+export const BACKGROUND_TRACKS = [
+  { id: 'dynamic', label: 'Dynamic Game Theme', file: null },
+  { id: 'kulakovka', label: 'Upbeat Music · Kulakovka', file: 'music/kulakovka-upbeat-music-281095.mp3' },
+  { id: 'tatamusic', label: 'Upbeat Music · Tatamusic', file: 'music/tatamusic-upbeat-upbeat-music-377668.mp3' },
+  { id: 'mountain', label: 'Upbeat Music · The Mountain', file: 'music/the_mountain-upbeat-upbeat-music-567445.mp3' },
+  { id: 'sonican', label: 'Tech Quiz News Loop · Sonican', file: 'music/sonican-tech-quiz-news-loop-274362.mp3' }
+] as const;
+export type BackgroundTrackId = typeof BACKGROUND_TRACKS[number]['id'];
+
 const KEY = 'blue-stage-audio';
-interface AudioSettings { master: number; music: number; effects: number; muted: boolean }
+interface AudioSettings { master: number; music: number; effects: number; muted: boolean; backgroundTrack: BackgroundTrackId }
 interface ThemeNote { note: string; beats: number; rest?: boolean }
 interface MusicTheme { bpm: number; melody: ThemeNote[]; bass: string[]; wave: OscillatorType }
 
@@ -70,12 +79,15 @@ class AudioEngine {
   private clickTimer: number | null = null;
   private generation = 0;
   private musicNodes = new Set<OscillatorNode>();
-  settings: AudioSettings = { master: 0.78, music: 0.26, effects: 0.78, muted: false };
+  private mediaTrack: HTMLAudioElement | null = null;
+  private mediaTrackId: BackgroundTrackId | null = null;
+  settings: AudioSettings = { master: 0.78, music: 0.26, effects: 0.78, muted: false, backgroundTrack: 'dynamic' };
 
   constructor() {
     try {
       const saved = localStorage.getItem(KEY);
       if (saved) this.settings = { ...this.settings, ...JSON.parse(saved) };
+      if (!BACKGROUND_TRACKS.some((track) => track.id === this.settings.backgroundTrack)) this.settings.backgroundTrack = 'dynamic';
     } catch { /* optional preference storage */ }
   }
 
@@ -95,11 +107,27 @@ class AudioEngine {
 
   setSettings(next: Partial<AudioSettings>): void {
     this.settings = { ...this.settings, ...next };
-    localStorage.setItem(KEY, JSON.stringify(this.settings));
+    try { localStorage.setItem(KEY, JSON.stringify(this.settings)); } catch { /* optional preference storage */ }
     this.apply();
+    if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('blue-stage:audio-settings'));
+  }
+
+  async setBackgroundTrack(trackId: BackgroundTrackId): Promise<void> {
+    const next = BACKGROUND_TRACKS.some((track) => track.id === trackId) ? trackId : 'dynamic';
+    if (next === this.settings.backgroundTrack && (next === 'dynamic' || this.mediaTrackId === next)) return;
+    this.stopMediaTrack();
+    this.setSettings({ backgroundTrack: next });
+    await this.setMusic(this.musicState ?? 'lobby');
+  }
+
+  private applyMediaVolume(): void {
+    if (!this.mediaTrack) return;
+    const volume = this.settings.muted ? 0 : this.settings.master * this.settings.music;
+    this.mediaTrack.volume = Math.min(1, Math.max(0, volume));
   }
 
   private apply(): void {
+    this.applyMediaVolume();
     if (!this.context || !this.master || !this.music || !this.effects) return;
     const now = this.context.currentTime;
     this.master.gain.cancelScheduledValues(now);
@@ -108,6 +136,36 @@ class AudioEngine {
     this.master.gain.setTargetAtTime(this.settings.muted ? 0 : this.settings.master, now, 0.025);
     this.music.gain.setTargetAtTime(this.settings.music, now, 0.05);
     this.effects.gain.setTargetAtTime(this.settings.effects, now, 0.025);
+  }
+
+  private selectedMediaTrack() {
+    return BACKGROUND_TRACKS.find((track) => track.id === this.settings.backgroundTrack && track.file !== null) ?? null;
+  }
+
+  private async startSelectedMediaTrack(): Promise<void> {
+    const selected = this.selectedMediaTrack();
+    if (!selected || typeof document === 'undefined') return;
+    if (!this.mediaTrack || this.mediaTrackId !== selected.id) {
+      this.stopMediaTrack();
+      const media = new Audio(new URL(selected.file!, document.baseURI).href);
+      media.loop = true;
+      media.preload = 'auto';
+      this.mediaTrack = media;
+      this.mediaTrackId = selected.id;
+    }
+    this.applyMediaVolume();
+    try { await this.mediaTrack.play(); } catch { /* user interaction will retry playback on the next audio action */ }
+  }
+
+  private stopMediaTrack(): void {
+    if (this.mediaTrack) {
+      this.mediaTrack.pause();
+      this.mediaTrack.currentTime = 0;
+      this.mediaTrack.removeAttribute('src');
+      this.mediaTrack.load();
+    }
+    this.mediaTrack = null;
+    this.mediaTrackId = null;
   }
 
   private tone(frequency: number, at: number, duration: number, volume: number, type: OscillatorType, destination: AudioNode, trackMusic = false): void {
@@ -168,7 +226,6 @@ class AudioEngine {
     };
     const start = this.context.currentTime;
     for (const [frequency, offset, duration] of patterns[name]) {
-      // Source-level effect volume is intentionally boosted; the effects slider still controls the final mix independently.
       const volume = name === 'click' ? 0.12 : name === 'reveal' ? 0.28 : 0.24;
       this.tone(frequency, start + offset, duration, volume, name === 'wrong' || name === 'locked' ? 'sawtooth' : 'sine', this.effects);
     }
@@ -219,8 +276,17 @@ class AudioEngine {
   }
 
   async setMusic(state: MusicState): Promise<void> {
-    if (this.musicState === state && this.musicTimer !== null) return;
     await this.unlock();
+
+    if (this.settings.backgroundTrack !== 'dynamic') {
+      this.stopScheduledMusic();
+      this.musicState = state;
+      await this.startSelectedMediaTrack();
+      return;
+    }
+
+    if (this.musicState === state && this.musicTimer !== null) return;
+    this.stopMediaTrack();
     this.stopScheduledMusic();
     this.musicState = state;
     if (!this.context || !this.music) return;
@@ -238,6 +304,7 @@ class AudioEngine {
 
   stop(): void {
     this.musicState = null;
+    this.stopMediaTrack();
     this.stopScheduledMusic();
   }
 }
