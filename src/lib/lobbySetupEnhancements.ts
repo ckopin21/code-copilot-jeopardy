@@ -1,4 +1,5 @@
 import type { PackSummary, Player, RoomSnapshot } from '../shared/types';
+import { clampDailyDoubleCount } from '../shared/config';
 import { readActiveHostCredentials } from './hostCredentials';
 import { emitAck, socket } from './socket';
 
@@ -134,10 +135,23 @@ function syncManualTurnRotation(snapshot: RoomSnapshot, previous: RoomSnapshot |
 }
 
 function selectPack(packId: string): void {
-  void hostAction('host:update-settings', { updates: { selectedPackIds: [packId], mixedPacks: false } });
+  const pack = packs.find((candidate) => candidate.id === packId);
+  const currentDailyDoubleCount = room?.settings.dailyDoubleCount ?? 0;
+  const dailyDoubleCount = pack ? clampDailyDoubleCount(currentDailyDoubleCount, pack.questionCount) : currentDailyDoubleCount;
+  void hostAction('host:update-settings', {
+    updates: {
+      selectedPackIds: [packId],
+      mixedPacks: false,
+      dailyDoubleCount,
+      dailyDoublesEnabled: dailyDoubleCount > 0
+    }
+  });
 }
 
 function renderPackSelector(mount: HTMLElement, snapshot: RoomSnapshot): void {
+  // Replacing a focused native <select> closes its open dropdown. Room snapshots arrive
+  // frequently, so leave the pack selector DOM untouched until the user finishes interacting.
+  if (mount.querySelector('.pack-version-select:focus')) return;
   mount.replaceChildren();
   const grid = document.createElement('div');
   grid.className = 'enhanced-pack-grid';
@@ -175,6 +189,7 @@ function renderPackSelector(mount: HTMLElement, snapshot: RoomSnapshot): void {
       }
       select.value = selectedVariant?.id ?? activeVariant.id;
       select.addEventListener('change', () => selectPack(select.value));
+      select.addEventListener('blur', scheduleRender);
       card.append(select);
     }
     grid.append(card);
