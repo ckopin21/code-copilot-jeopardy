@@ -16,5 +16,6 @@ function hasSavedTrackPreference(): boolean {
 }
 
 if (!hasSavedTrackPreference()) {
-  audio.setBackgroundTrack(DEFAULT_BACKGROUND_TRACK);
+  // Persist the default selection without attempting media playback during app boot.
+  audio.setSettings({ backgroundTrack: DEFAULT_BACKGROUND_TRACK });
 }
