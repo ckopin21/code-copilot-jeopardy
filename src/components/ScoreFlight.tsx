@@ -29,6 +29,7 @@ export function ScoreFlight({ flight, onImpact, onComplete }: { flight: ScoreFli
       const source = findByData('questionId', flight.questionId)
         ?? document.querySelector<HTMLElement>('.question-stage .question-card-v2, .presentation-question > article, .presentation-shell > section, .phone-question-stage-v2');
       const scoreTarget = findByData('playerScore', flight.playerId);
+      const playerCard = findByData('playerId', flight.playerId);
       if (!source || !scoreTarget) {
         onImpact(flight);
         onComplete(flight.id);
@@ -64,12 +65,17 @@ export function ScoreFlight({ flight, onImpact, onComplete }: { flight: ScoreFli
         if (cancelled) return;
         onImpact(flight);
         audio.cue('score');
+
         scoreTarget.classList.remove('score-impact-pulse-correct', 'score-impact-pulse-wrong');
-        void scoreTarget.offsetWidth;
+        playerCard?.classList.remove('score-impact-correct', 'score-impact-wrong');
+        void (playerCard ?? scoreTarget).offsetWidth;
         scoreTarget.classList.add(flight.correct ? 'score-impact-pulse-correct' : 'score-impact-pulse-wrong');
+        playerCard?.classList.add(flight.correct ? 'score-impact-correct' : 'score-impact-wrong');
+
         impactTimer = window.setTimeout(() => {
           scoreTarget.classList.remove('score-impact-pulse-correct', 'score-impact-pulse-wrong');
-        }, 520);
+          playerCard?.classList.remove('score-impact-correct', 'score-impact-wrong');
+        }, 640);
         token?.remove();
         token = null;
         finishTimer = window.setTimeout(() => onComplete(flight.id), 240);
