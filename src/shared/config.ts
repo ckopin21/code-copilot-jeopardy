@@ -12,6 +12,12 @@ export function settingsForGameLength(gameLength: GameSettings['gameLength']): P
   return { gameLength, dailyDoubleCount, dailyDoublesEnabled: dailyDoubleCount > 0 };
 }
 
+export function clampDailyDoubleCount(value: number, packQuestionCount: number): number {
+  const max = Math.max(0, Math.trunc(packQuestionCount));
+  if (!Number.isFinite(value)) return 0;
+  return Math.min(max, Math.max(0, Math.trunc(value)));
+}
+
 export const DEFAULT_SETTINGS: GameSettings = {
   gameLength: 'standard',
   selectedPackIds: ['disney'],
