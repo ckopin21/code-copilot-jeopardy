@@ -4,6 +4,7 @@ import { HostEnhancements } from './components/HostEnhancements';
 import { PlayerApp } from './components/PlayerApp';
 import { PlayerEnhancements } from './components/PlayerEnhancements';
 import { PresentationApp } from './components/PresentationApp';
+import { MusicTrackSelect } from './components/BackgroundMusicPicker';
 import { audio } from './lib/audio';
 import { applySavedAccessibility } from './lib/accessibility';
 import { hostPhaseLabel, readHostPreview } from './lib/hostPreview';
@@ -103,17 +104,15 @@ export default function App() {
   }, []);
 
   const navigate = useCallback(async (mode: AppMode, fresh = false) => {
-    if (mode === 'host') {
-      try {
-        await audio.unlock();
-        await audio.setMusic('lobby');
-      } catch { /* the host screen can retry audio on the next interaction */ }
-    } else {
-      audio.stop();
-    }
     const url = modeUrl(mode, fresh);
     history.pushState(null, '', url);
     setRouteHref(url.href);
+
+    if (mode === 'host') {
+      void audio.unlock().then(() => audio.setMusic('lobby')).catch(() => {});
+    } else {
+      audio.stop();
+    }
   }, []);
 
   const params = useMemo(() => new URL(routeHref).searchParams, [routeHref]);
@@ -227,6 +226,7 @@ function Menu({ onNavigate }: { onNavigate: (mode: AppMode, fresh?: boolean) => 
         <button className="menu-tool-button" disabled={!fullscreenSupported} onClick={() => void toggleFullscreen()}><span aria-hidden="true">⛶</span>{fullscreen ? 'Exit Fullscreen' : 'Fullscreen'}</button>
         <button className="menu-tool-button" onClick={() => setModal('how')}><span aria-hidden="true">?</span>How to Play</button>
         <button className="menu-tool-button" onClick={() => setModal('advanced')}><span aria-hidden="true">⚙</span>Advanced</button>
+        <MusicTrackSelect className="menu-music-select" />
       </div>
     </section>
 
