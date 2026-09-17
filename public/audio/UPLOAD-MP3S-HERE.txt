@@ -1,0 +1,7 @@
+Upload the four background music MP3 files into this folder on the feat/safe-background-music branch.
+
+Expected filenames:
+- kulakovka-upbeat-music-281095.mp3
+- tatamusic-upbeat-upbeat-music-377668.mp3
+- the_mountain-upbeat-upbeat-music-567445.mp3
+- sonican-tech-quiz-news-loop-274362.mp3
