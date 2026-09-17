@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import './lib/roomStorageRecovery';
 import './lib/lobbySetupEnhancements';
 import './lib/hostFullscreenControl';
+import './lib/defaultBackgroundTrack';
 import App from './App';
 import { DevModeOverlay } from './components/DevModeOverlay';
 import { DevPresentationLab } from './components/DevPresentationLab';
