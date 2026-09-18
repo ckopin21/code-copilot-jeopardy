@@ -15,7 +15,7 @@ const categories = [
     300: question('Who was the lead singer and guitarist of Nirvana?', ['Kurt Cobain', 'Cobain']),
     400: question('Which band recorded “Hotel California”?', ['Eagles', 'The Eagles']),
     500: question('Which band recorded “Sweet Child o’ Mine”?', ["Guns N' Roses", 'Guns and Roses', 'GNR']),
-    1000: question('Which guitarist co-founded Van Halen with his brother Alex?', ['Eddie Van Halen', 'Eddie Van Halen'])
+    1000: question('Which guitarist co-founded Van Halen with his brother Alex?', ['Eddie Van Halen', 'Eddie'])
   }),
   category('Hip-Hop & R&B', {
     100: question('Which rapper recorded “Lose Yourself”?', 'Eminem'),
