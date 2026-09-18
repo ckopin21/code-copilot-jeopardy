@@ -43,7 +43,7 @@ const categories = [
   }),
   category('World Geography', {
     100: question('What is the largest country in the world by land area?', 'Russia'),
-    200: question('Which country shares the Iberian Peninsula with Spain?', 'Portugal'),
+    200: question('Lisbon is the capital of which country?', 'Portugal'),
     300: question('Mount Fuji is located in which country?', 'Japan'),
     400: question('Most of the Amazon rainforest is located in which country?', 'Brazil'),
     500: question('Which sea lies between southern Europe and northern Africa?', ['Mediterranean Sea', 'Mediterranean']),
