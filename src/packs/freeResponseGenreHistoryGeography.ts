@@ -26,7 +26,7 @@ const categories = [
     1000: question('What ancient Assyrian city on the Tigris became one of the empire’s great capitals?', ['Nineveh'])
   }),
   category('U.S. Geography', {
-    100: question('What is the largest U.S. state by area?', ['Alaska']),
+    100: question('Which U.S. state is home to the Apostle Islands in Lake Superior?', ['Wisconsin']),
     200: question('In which state are the Everglades located?', ['Florida']),
     300: question('Which U.S. city is famous for the Gateway Arch?', ['St. Louis', 'Saint Louis']),
     400: question('Which U.S. state is home to Mount Rushmore?', ['South Dakota']),
