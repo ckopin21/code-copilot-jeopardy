@@ -36,7 +36,7 @@ const categories = [
   category('U.S. Geography', {
     100: question('What is the largest U.S. state by land area?', 'Alaska'),
     200: question('Which U.S. state is nicknamed the Sunshine State?', 'Florida'),
-    300: question('The Grand Canyon is located in which state?', 'Arizona'),
+    300: question('Which U.S. state lies directly north of California on the Pacific coast?', 'Oregon'),
     400: question('The city of Seattle is located in which U.S. state?', ['Washington', 'Washington State']),
     500: question('Mount Rushmore is located in which state?', 'South Dakota'),
     1000: question('Which U.S. state borders only one other U.S. state?', 'Maine')
