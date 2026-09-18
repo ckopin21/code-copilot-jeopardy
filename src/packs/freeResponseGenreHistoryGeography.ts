@@ -7,7 +7,7 @@ const categories = [
     300: question('Which U.S. secretary of state negotiated the purchase of Alaska from Russia in 1867?', ['William H. Seward', 'William Seward', 'Seward']),
     400: question('Which 1863 battle is often described as a turning point of the American Civil War?', ['Battle of Gettysburg', 'Gettysburg']),
     500: question('In which city was the U.S. Constitution drafted in 1787?', ['Philadelphia']),
-    1000: question('Which president issued the Emancipation Proclamation?', ['Abraham Lincoln', 'Lincoln'])
+    1000: question('Which U.S. president was assassinated at the Pan-American Exposition in Buffalo in 1901?', ['William McKinley', 'McKinley'])
   }),
   category('World History', {
     100: question('Which Paris prison was stormed at the start of the French Revolution?', ['Bastille', 'The Bastille']),
