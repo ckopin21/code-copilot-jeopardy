@@ -34,9 +34,9 @@ const categories = [
     1000: question('What does the “S” stand for in the secure web protocol HTTPS?', ['Secure', 'Security'])
   }),
   category('Sports & Games', {
-    100: question('What word represents a score of zero in tennis?', ['Love']),
+    100: question('In ice hockey, what is the area called where a player serves a penalty?', ['Penalty box', 'The penalty box']),
     200: question('How many points is a successful free throw worth in basketball?', ['1', 'One', 'One point']),
-    300: question('In soccer, how many goals by one player make a hat trick?', ['3', 'Three', 'Three goals']),
+    300: question('In indoor volleyball, how many team contacts are normally allowed before the ball must cross the net?', ['3', 'Three', 'Three contacts']),
     400: question('Which chess piece is the only one that can jump over other pieces?', ['Knight', 'The knight']),
     500: question('How many balls outside the strike zone give a batter a walk in baseball?', ['4', 'Four']),
     1000: question('What is the maximum possible break in standard snooker without a foul?', ['147', 'One hundred forty-seven', 'One hundred and forty-seven'])
@@ -45,7 +45,7 @@ const categories = [
     100: question('What is a young frog called after it hatches from an egg?', ['Tadpole', 'A tadpole']),
     200: question('What type of tree produces acorns?', ['Oak', 'Oak tree', 'Oaks']),
     300: question('What is the common name for a group of crows?', ['Murder', 'A murder', 'Murder of crows']),
-    400: question('Which mammals are capable of true sustained flight?', ['Bats', 'Bat']),
+    400: question('What is the largest living species of reptile?', ['Saltwater crocodile', 'Saltwater croc']),
     500: question('Which sea animal has three hearts and blue blood?', ['Octopus', 'An octopus', 'Octopuses']),
     1000: question('What is the largest species of penguin?', ['Emperor penguin', 'Emperor'])
   }),
@@ -62,7 +62,7 @@ const categories = [
     200: question('How many suits are in a standard deck of playing cards?', ['4', 'Four']),
     300: question('What is the name of the symbol “&”?', ['Ampersand', 'An ampersand']),
     400: question('What is the traditional gift material for a 25th wedding anniversary?', ['Silver']),
-    500: question('What instrument is used to measure atmospheric pressure?', ['Barometer', 'A barometer']),
+    500: question('What instrument is used to measure wind speed?', ['Anemometer', 'An anemometer']),
     1000: question('What is the name for a word that imitates a sound, such as “buzz” or “hiss”?', ['Onomatopoeia'])
   })
 ];
