@@ -40,12 +40,20 @@ let clientPeer: Peer | null = null;
 let clientConnection: DataConnection | null = null;
 let clientRoomCode = '';
 let clientSuspended = false;
+let clientHostPaused = false;
 let reconnectDelayMs = 400;
 let reconnectTimer: number | null = null;
 let clientConnectPromise: { roomCode: string; promise: Promise<DataConnection> } | null = null;
 let authReplay: { event: 'player:reconnect' | 'presentation:join'; payload: Record<string, unknown> } | null = null;
+let hostStaleSweepBlockedUntil = 0;
+let lastHostStaleSweepAt = Date.now();
 
-const PLAYER_STALE_MS = 8000;
+const PLAYER_STALE_MS = 30000;
+const PLAYER_HEALTH_FAIR_MS = 7000;
+const PLAYER_HEALTH_STALE_MS = 15000;
+const HEARTBEAT_TIMEOUT_MS = 7000;
+const HOST_STALE_SWEEP_GRACE_MS = 10000;
+const HOST_STALE_SWEEP_STALL_MS = 6000;
 
 function currentMode(): string | null { return new URLSearchParams(location.search).get('mode'); }
 function baseUrl(): string { const url = new URL('.', location.href); url.search = ''; url.hash = ''; return url.href.replace(/\/$/, ''); }
@@ -137,7 +145,7 @@ export function getPlayerConnectionHealth(roomCode: string): PlayerConnectionHea
     const ageMs = seen == null ? null : Math.max(0, now - seen);
     const connection = playerConnections.get(player.id);
     const connected = Boolean(player.connected && connection?.open);
-    const quality: PlayerConnectionHealth['quality'] = !connected ? 'offline' : ageMs == null || ageMs > 7000 ? 'stale' : ageMs > 4000 ? 'fair' : 'good';
+    const quality: PlayerConnectionHealth['quality'] = !connected ? 'offline' : ageMs == null || ageMs > PLAYER_HEALTH_STALE_MS ? 'stale' : ageMs > PLAYER_HEALTH_FAIR_MS ? 'fair' : 'good';
     return { playerId: player.id, connected, ageMs, quality };
   });
 }
@@ -322,6 +330,16 @@ function createHostPeerOnce(roomCode: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const peer = new Peer(hostPeerId(roomCode), peerOptions());
     let settled = false;
+    let hostSignalRetryTimer: number | null = null;
+    const scheduleHostSignalReconnect = () => {
+      if (hostSignalRetryTimer !== null || peer.destroyed || hostPeer !== peer) return;
+      hostSignalRetryTimer = window.setTimeout(() => {
+        hostSignalRetryTimer = null;
+        if (peer.destroyed || hostPeer !== peer || !peer.disconnected) return;
+        try { peer.reconnect(); } catch { /* retry below */ }
+        if (peer.disconnected && !peer.destroyed) scheduleHostSignalReconnect();
+      }, 1000);
+    };
     const finishError = (error: unknown) => {
       if (settled) return;
       settled = true;
@@ -329,6 +347,11 @@ function createHostPeerOnce(roomCode: string): Promise<void> {
       reject(error instanceof Error ? error : new Error('Could not start host connection'));
     };
     peer.on('open', () => {
+      if (hostSignalRetryTimer !== null) {
+        window.clearTimeout(hostSignalRetryTimer);
+        hostSignalRetryTimer = null;
+      }
+      hostStaleSweepBlockedUntil = Date.now() + HOST_STALE_SWEEP_GRACE_MS;
       socket.connected = true;
       emitLocal('connect');
       if (settled) {
@@ -347,13 +370,13 @@ function createHostPeerOnce(roomCode: string): Promise<void> {
       peer.on('disconnected', () => {
         socket.connected = false;
         emitLocal('disconnect');
-        const reconnect = () => {
-          if (!hostPeer || hostPeer.destroyed || !hostPeer.disconnected) return;
-          try { hostPeer.reconnect(); } catch { window.setTimeout(reconnect, 1000); }
-        };
-        window.setTimeout(reconnect, 500);
+        scheduleHostSignalReconnect();
       });
       peer.on('close', () => {
+        if (hostSignalRetryTimer !== null) {
+          window.clearTimeout(hostSignalRetryTimer);
+          hostSignalRetryTimer = null;
+        }
         releaseHostAuthority(roomCode, authorityId);
         if (hostPeer !== peer) return;
         hostPeer = null;
@@ -361,7 +384,7 @@ function createHostPeerOnce(roomCode: string): Promise<void> {
         socket.connected = false;
         emitLocal('disconnect');
       });
-      peer.on('error', () => { if (peer.disconnected && !peer.destroyed) { try { peer.reconnect(); } catch { /* next event retries */ } } });
+      peer.on('error', () => { if (peer.disconnected && !peer.destroyed) scheduleHostSignalReconnect(); });
       resolve();
     });
     peer.on('error', finishError);
@@ -405,8 +428,12 @@ function attachClientConnection(connection: DataConnection): void {
       return;
     }
     if (message?.kind === 'event') {
-      if (message.event === 'player:suspended') clientSuspended = true;
+      if (message.event === 'player:suspended') {
+        clientHostPaused = true;
+        clientSuspended = true;
+      }
       if (message.event === 'player:removed') {
+        clientHostPaused = false;
         clientSuspended = true;
         authReplay = null;
       }
@@ -466,14 +493,14 @@ function dropClientConnection(connection: DataConnection): void {
   try { connection.close(); } catch { /* ignore stale close */ }
   scheduleClientReconnect();
 }
-function sendRequestOn(connection: DataConnection, event: string, payload: Record<string, unknown>, timeoutMs = 8000): Promise<unknown> {
+function sendRequestOn(connection: DataConnection, event: string, payload: Record<string, unknown>, timeoutMs = 8000, dropOnTimeout = true): Promise<unknown> {
   return new Promise((resolve, reject) => {
     if (!connection.open) { reject(new Error('Host connection is not open')); return; }
     const requestId = randomId('request');
     const timeoutId = window.setTimeout(() => {
       pending.delete(requestId);
       reject(new Error('Host did not respond'));
-      dropClientConnection(connection);
+      if (dropOnTimeout) dropClientConnection(connection);
     }, timeoutMs);
     pending.set(requestId, { resolve, reject, timeoutId });
     connection.send({ kind: 'request', requestId, event, payload } satisfies RequestMessage);
@@ -558,7 +585,13 @@ async function clientRequest(event: string, payload: Record<string, unknown>): P
   const roomCode = String(payload.roomCode ?? clientRoomCode).toUpperCase();
   if (!roomCode) throw new Error('Enter a room code');
   const connection = await connectToHost(roomCode);
-  const result = await sendRequestOn(connection, event, payload);
+  const result = await sendRequestOn(
+    connection,
+    event,
+    payload,
+    event === 'player:heartbeat' ? HEARTBEAT_TIMEOUT_MS : 8000,
+    event !== 'player:heartbeat'
+  );
   if (event === 'player:join' || event === 'player:reconnect') {
     const credentials = result as PlayerJoinCredentials;
     authReplay = { event: 'player:reconnect', payload: { roomCode: credentials.roomCode, playerId: credentials.playerId, reconnectToken: credentials.reconnectToken } };
@@ -585,9 +618,12 @@ export function suspendClientSession(): void {
   }
   try { connection?.close(); } catch { /* already closed */ }
 }
-export function resumeClientSession(): void {
+export function resumeClientSession(forceHostPause = false): void {
+  if (clientHostPaused && !forceHostPause) return;
+  if (forceHostPause) clientHostPaused = false;
   clientSuspended = false;
   reconnectDelayMs = 400;
+  if (clientRoomCode && !clientConnection?.open) scheduleClientReconnect();
 }
 async function createHostRoom(payload: Record<string, unknown>): Promise<unknown> {
   for (let attempt = 0; attempt < 5; attempt += 1) {
@@ -657,6 +693,13 @@ function installVirtualApi(): void {
 installHistoryBaseGuard();
 installVirtualApi();
 window.addEventListener('online', () => { if (currentMode() !== 'host' && clientRoomCode) scheduleClientReconnect(); });
+document.addEventListener('visibilitychange', () => {
+  if (currentMode() !== 'host') return;
+  if (document.visibilityState === 'visible') hostStaleSweepBlockedUntil = Date.now() + HOST_STALE_SWEEP_GRACE_MS;
+});
+window.addEventListener('focus', () => {
+  if (currentMode() === 'host') hostStaleSweepBlockedUntil = Date.now() + HOST_STALE_SWEEP_GRACE_MS;
+});
 window.addEventListener('storage', (event) => {
   if (!hostRoomCode || !hostAuthorityId || event.key !== hostAuthorityKey(hostRoomCode) || ownsHostAuthority(hostRoomCode)) return;
   const stalePeer = hostPeer;
@@ -678,6 +721,10 @@ window.setInterval(() => {
 window.setInterval(() => {
   if (currentMode() !== 'host' || !hostRoomCode || !ownsHostAuthority(hostRoomCode)) return;
   const now = Date.now();
+  const sweepWasDelayed = now - lastHostStaleSweepAt > HOST_STALE_SWEEP_STALL_MS;
+  lastHostStaleSweepAt = now;
+  if (sweepWasDelayed) hostStaleSweepBlockedUntil = Math.max(hostStaleSweepBlockedUntil, now + HOST_STALE_SWEEP_GRACE_MS);
+  if (document.visibilityState === 'hidden' || now < hostStaleSweepBlockedUntil) return;
   for (const [playerId, connection] of playerConnections) {
     const identity = identities.get(connection);
     if (!identity || identity.roomCode !== hostRoomCode) continue;

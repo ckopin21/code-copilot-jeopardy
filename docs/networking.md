@@ -43,7 +43,7 @@ A phone restored from the browser back/forward cache handles `pageshow` and re-e
 
 Mobile browsers do not always deliver a clean WebRTC close event when a tab is killed, backgrounded aggressively, or the browser process disappears. Therefore connection state does not rely on close events alone.
 
-While a controller is active it refreshes its authenticated player session every few seconds. The host records the last authenticated request time for each player. If a connected phone stops checking in for roughly eight seconds, the host marks that player disconnected, removes the stale live connection, and broadcasts the updated room state. The player object, score, statistics, permanent seat, and reconnect token remain reserved.
+While a controller is active it refreshes its authenticated player session every few seconds. The host records the last authenticated request time for each player. A connection is shown as degraded before it is removed, but the host now waits roughly thirty seconds before expiring an otherwise-open controller. Stale cleanup is also paused while the host tab is hidden and receives a grace period after the host resumes from a backgrounded or stalled state, preventing a brief host-side freeze from disconnecting every phone at once. The player object, score, statistics, permanent seat, and reconnect token remain reserved.
 
 This means both graceful exits and abrupt mobile-tab loss converge on the same reserved-seat state.
 
@@ -121,7 +121,7 @@ The host then explicitly transitions to `final-review`. Review tracks the active
 
 ## Host lifecycle and recovery
 
-The host peer attempts to reconnect to PeerJS signaling if signaling drops while the page remains open. The primary room authority still lives in the host browser. Closing the host page removes the live WebRTC endpoint until the host page is reopened and its saved room is restored.
+The host peer repeatedly attempts to reconnect to PeerJS signaling if signaling drops while the page remains open. Existing WebRTC channels are preserved where possible, and reconnecting phones can reclaim their reserved seats once signaling returns. The primary room authority still lives in the host browser. Closing the host page removes the live WebRTC endpoint until the host page is reopened and its saved room is restored.
 
 Each successfully opened host peer also claims a browser-wide ownership lease. Only one host tab on that browser can own authoritative persistence at a time, matching the intended one-host-device model. Host mutations, timer ticks, stale-phone cleanup, and incoming controller requests are accepted only while that peer still owns the lease. If another host tab becomes active, even for a different room, it replaces the lease; the older tab closes its stale controller channels and can no longer mutate or rewrite persisted room state. This prevents a suspended/older host tab from waking later and writing stale gameplay over the active host.
 
