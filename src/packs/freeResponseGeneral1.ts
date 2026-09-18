@@ -23,7 +23,7 @@ const categories = [
     300: question('What is the term for an extreme fear of enclosed or confined spaces?', ['Claustrophobia']),
     400: question('What do you call a sentence that uses every letter of the alphabet at least once?', ['Pangram', 'A pangram']),
     500: question('What branch of language study traces the origin and historical development of words?', ['Etymology']),
-    1000: question('What term describes a word formed from the initial letters of a phrase and pronounced as a word, such as NASA?', ['Acronym', 'An acronym'])
+    1000: question('What term describes two words that are spelled the same but have different meanings and pronunciations, such as “lead” the metal and “lead” meaning to guide?', ['Heteronym', 'A heteronym'])
   }),
   category('Tech & Inventions', {
     100: question('What does the “QR” in QR code stand for?', ['Quick Response']),
