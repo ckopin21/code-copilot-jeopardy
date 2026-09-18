@@ -31,7 +31,7 @@ const categories = [
     300: question('Which U.S. city is famous for the Gateway Arch?', ['St. Louis', 'Saint Louis']),
     400: question('Which U.S. state is home to the San Juan Islands?', ['Washington', 'Washington state']),
     500: question('What is the highest mountain peak in the United States?', ['Denali', 'Mount Denali']),
-    1000: question('Which U.S. state is the only one whose name has just one syllable?', ['Maine'])
+    1000: question('The Okefenokee Swamp lies primarily in which U.S. state?', ['Georgia'])
   }),
   category('World Geography', {
     100: question('Which country occupies most of the Scandinavian Peninsula?', ['Sweden']),
