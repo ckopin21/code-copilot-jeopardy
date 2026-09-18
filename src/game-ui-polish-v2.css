@@ -161,6 +161,27 @@ body:has(.audio-drawer) .comeback-host { visibility: hidden; }
   text-wrap: balance;
 }
 
+/* Revealed answers stay high in the host card and remain scroll-safe on short displays. */
+.showcase-host > .question-stage.answer-visible .question-card-v2 {
+  max-height: 100% !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  gap: clamp(6px,1.1vh,13px) !important;
+  padding-block: clamp(10px,1.8vh,24px) !important;
+}
+.showcase-host > .question-stage.answer-visible .question-card-v2 h1 {
+  font-size: clamp(1.35rem,min(3.4vw,4.2vh),3.4rem) !important;
+  line-height: 1.04 !important;
+}
+.showcase-host > .question-stage.answer-visible .answer-reveal-v2 {
+  flex: 0 0 auto;
+  margin-block: 2px;
+}
+.showcase-host.host-presentation-mode > .question-stage.answer-visible .question-card-v2 h1 {
+  font-size: clamp(1.3rem,min(3vw,3.8vh),3rem) !important;
+}
+
 /* The turn badge should not consume the name column on five-player presentation layouts. */
 .presentation-shell .showcase-player-card.is-turn .turn-beacon {
   position: absolute !important;
