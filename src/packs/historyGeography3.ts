@@ -12,7 +12,7 @@ const categories = [
   category('World History Basics', {
     100: question('The ancient Olympic Games began in which country?', 'Greece'),
     200: question('In what year did the Titanic sink?', '1912'),
-    300: question('Which city hosted the first modern Olympic Games in 1896?', 'Athens'),
+    300: question('In which country did the Industrial Revolution begin?', ['Great Britain', 'Britain', 'England', 'United Kingdom', 'UK']),
     400: question('The Black Death was a devastating outbreak of which disease?', ['Bubonic plague', 'Plague']),
     500: question('Which invention is Johannes Gutenberg most famous for helping spread through Europe?', ['Printing press', 'Movable-type printing press']),
     1000: question('Which European country was ruled by Louis XIV, known as the Sun King?', 'France')
