@@ -20,7 +20,7 @@ const categories = [
   category('Sci-Fi & Fantasy', {
     100: question('Which Star Wars smuggler pilots the Millennium Falcon with Chewbacca?', ['Han Solo', 'Han']),
     200: question('What is the alternate dimension called in Stranger Things?', ['Upside Down', 'The Upside Down']),
-    300: question('What is the Doctor’s time-and-space machine called in Doctor Who?', ['TARDIS', 'The TARDIS']),
+    300: question('In The X-Files, what is the first name of FBI agent Mulder?', ['Fox', 'Fox Mulder']),
     400: question('Who is the blade runner played by Harrison Ford in the original Blade Runner?', ['Rick Deckard', 'Deckard']),
     500: question('What is the name of the surviving colonial battlestar in Battlestar Galactica?', ['Galactica', 'Battlestar Galactica']),
     1000: question('What is the surname of the detective played by Thomas Jane in the early seasons of The Expanse?', ['Miller', 'Josephus Miller'])
