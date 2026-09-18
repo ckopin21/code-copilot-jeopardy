@@ -15,7 +15,7 @@ const categories = [
     300: question('Who was the lead singer and guitarist of Nirvana?', ['Kurt Cobain', 'Cobain']),
     400: question('Which band recorded “Hotel California”?', ['Eagles', 'The Eagles']),
     500: question('Which band recorded “Sweet Child o’ Mine”?', ["Guns N' Roses", 'Guns and Roses', 'GNR']),
-    1000: question('Which guitarist co-founded Van Halen with his brother Alex?', ['Eddie Van Halen', 'Eddie'])
+    1000: question('Which guitarist co-founded Van Halen with his brother Alex?', 'Eddie Van Halen')
   }),
   category('Hip-Hop & R&B', {
     100: question('Which rapper recorded “Lose Yourself”?', 'Eminem'),
@@ -50,7 +50,7 @@ const categories = [
     1000: question('Who sang “Man! I Feel Like a Woman!”?', ['Shania Twain', 'Twain'])
   }),
   category('Music in Movies', {
-    100: question('“Let It Go” is a song from which Disney movie?', 'Frozen'),
+    100: question('“Stayin’ Alive” is strongly associated with which 1977 movie?', ['Saturday Night Fever', 'Saturday Night Fever movie']),
     200: question('Who sang “My Heart Will Go On” from Titanic?', ['Celine Dion', 'Céline Dion', 'Dion']),
     300: question('Who sang the hit version of “I Will Always Love You” featured in The Bodyguard?', ['Whitney Houston', 'Houston']),
     400: question('“Shallow” appears in which 2018 movie?', ['A Star Is Born', 'Star Is Born']),
