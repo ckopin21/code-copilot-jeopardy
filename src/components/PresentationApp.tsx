@@ -8,6 +8,7 @@ import { audio } from '../lib/audio';
 import { scoreboardWagersVisible, turnIndicatorLabel, turnIndicatorVisible } from '../lib/gameUiRules';
 import { ScoreFlight, type ScoreFlightState } from './ScoreFlight';
 import { randomId } from '../lib/ids';
+import { gameModeDefinition } from '../shared/gameModes';
 
 function musicFor(room: RoomSnapshot) {
   if (room.phase.startsWith('final')) return 'final' as const;
@@ -98,6 +99,7 @@ export function PresentationApp() {
   if (!room) return <main className="presentation-shell presentation-boot"><div className="brand-mark"><span>BLUE STAGE</span><strong>TRIVIA</strong></div><p>{error || 'Connecting to game…'}</p></main>;
 
   const current = room.currentQuestion;
+  const gameMode = gameModeDefinition(room.settings.gameMode);
   const active = current?.buzzWinnerId ?? current?.dailyDoublePlayerId;
   const connectedPlayers = room.players.filter((player) => player.connected);
   const activeQuestionPlayers = current?.participantIds
@@ -122,14 +124,14 @@ export function PresentationApp() {
 
     {room.phase === 'lobby' && <section className="presentation-center"><div className="brand-mark hero-brand"><span>BLUE STAGE</span><strong>TRIVIA</strong></div><div className="presentation-room"><small>ROOM CODE</small><strong>{room.code}</strong></div><p>Players join from their phones.</p></section>}
 
-    {room.phase === 'board' && room.board && <section className="game-stage presentation-board"><div className="presentation-round-header"><span>{room.remainingQuestions} QUESTIONS LEFT</span>{room.multiplier > 1 && <strong>{room.multiplier === 2 ? 'DOUBLE POINTS' : 'TRIPLE POINTS'}</strong>}</div><Board board={room.board} multiplier={room.multiplier}/></section>}
+    {room.phase === 'board' && room.board && <section className="game-stage presentation-board"><div className="presentation-round-header"><span>{room.remainingQuestions} QUESTIONS LEFT · {gameMode.name.toUpperCase()}</span>{room.multiplier > 1 && <strong>{room.multiplier === 2 ? 'DOUBLE POINTS' : 'TRIPLE POINTS'}</strong>}</div><Board board={room.board} multiplier={room.multiplier}/></section>}
 
     {room.phase === 'paused' && <section className="presentation-center"><div className="section-kicker">PAUSED</div><h1>Game paused</h1></section>}
 
     {room.phase === 'daily-double-wager' && <section className="presentation-center daily-double-v2"><div className="section-kicker gold">DAILY DOUBLE</div><h1>{room.players.find((player) => player.id === current?.dailyDoublePlayerId)?.name}</h1><p>is choosing a wager.</p></section>}
 
     {(room.phase === 'question' || room.phase === 'daily-double-question') && current && <section className={`presentation-question ${current.dailyDouble ? 'daily-double-v2' : ''}`}><article>
-      <div className="question-meta-v2"><span>{current.category}</span><strong>{current.dailyDouble ? `${pointsAtStake.toLocaleString()} POINTS IN PLAY` : `${current.effectiveValue} POINTS`}</strong>{current.responseMode === 'text' && <em>FREE RESPONSE</em>}</div>
+      <div className="question-meta-v2"><span>{current.category}</span><strong>{current.dailyDouble ? `${pointsAtStake.toLocaleString()} POINTS IN PLAY` : `${current.effectiveValue} POINTS`}</strong>{current.responseMode === 'text' && <em>{gameMode.questionBadge}</em>}</div>
       <h1>{current.text}</h1>
       <Timer timer={room.timer} serverNow={room.serverNow}/>
       {current.responseMode === 'text' && !current.answerRevealed && <div className="presentation-response-count"><strong>{responseCount}/{activeQuestionPlayers.length}</strong><span>RESPONSES IN</span></div>}
