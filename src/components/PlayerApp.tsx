@@ -77,9 +77,17 @@ export function PlayerApp() {
 
   useEffect(() => {
     const onPageHide = () => suspendClientSession();
+    const onPageShow = () => resumeClientSession();
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') resumeClientSession();
+    };
     window.addEventListener('pagehide', onPageHide);
+    window.addEventListener('pageshow', onPageShow);
+    document.addEventListener('visibilitychange', onVisibilityChange);
     return () => {
       window.removeEventListener('pagehide', onPageHide);
+      window.removeEventListener('pageshow', onPageShow);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
       suspendClientSession();
     };
   }, []);
@@ -215,7 +223,7 @@ export function PlayerApp() {
     setError('');
     setHostSuspended(false);
     setRecovering(true);
-    resumeClientSession();
+    resumeClientSession(true);
     try {
       const result = await emitAck<PlayerJoinCredentials>('player:reconnect', credentials);
       localStorage.setItem(PLAYER_KEY, JSON.stringify(result));
