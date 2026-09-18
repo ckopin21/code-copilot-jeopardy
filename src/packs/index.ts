@@ -1,4 +1,4 @@
-import type { PackSummary, Question, QuestionPack } from '../shared/types';
+import type { GameMode, PackSummary, Question, QuestionPack } from '../shared/types';
 import { normalizeQuestionIdentity } from './buildPack';
 import { generatedBuiltInPacks } from './generatedRegistry';
 
@@ -88,8 +88,20 @@ export function validatePackCatalog(packs: QuestionPack[]): QuestionPack[] {
 export const builtInPacks: QuestionPack[] = validatePackCatalog(generatedBuiltInPacks);
 export const packMap = new Map(builtInPacks.map((pack) => [pack.id, pack]));
 
+export function supportedGameModesForPack(pack: Pick<QuestionPack, 'supportedGameModes'>): GameMode[] {
+  return pack.supportedGameModes?.length ? [...pack.supportedGameModes] : ['classic'];
+}
+
+export function packSupportsGameMode(pack: Pick<QuestionPack, 'supportedGameModes'>, gameMode: GameMode): boolean {
+  return supportedGameModesForPack(pack).includes(gameMode);
+}
+
+export function packsForGameMode(gameMode: GameMode): QuestionPack[] {
+  return builtInPacks.filter((pack) => packSupportsGameMode(pack, gameMode));
+}
+
 export function packSummaries(): PackSummary[] {
-  return builtInPacks.map(({ id, title, theme, description, questions, difficulty, approximateMinutes, accentColor, titleArt }) => ({
+  return builtInPacks.map(({ id, title, theme, description, questions, difficulty, approximateMinutes, supportedGameModes, accentColor, titleArt }) => ({
     id,
     title,
     theme,
@@ -97,6 +109,7 @@ export function packSummaries(): PackSummary[] {
     questionCount: questions.length,
     difficulty,
     approximateMinutes,
+    supportedGameModes: supportedGameModes?.length ? [...supportedGameModes] : ['classic'],
     accentColor,
     titleArt
   }));
