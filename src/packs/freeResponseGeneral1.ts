@@ -50,7 +50,7 @@ const categories = [
     1000: question('What is the largest species of penguin?', ['Emperor penguin', 'Emperor'])
   }),
   category('Numbers & Logic', {
-    100: question('How many sides does a hexagon have?', ['6', 'Six']),
+    100: question('How many degrees are in a right angle?', ['90', 'Ninety', '90 degrees', 'Ninety degrees']),
     200: question('What number does the Roman numeral L represent?', ['50', 'Fifty']),
     300: question('How many items are in a gross?', ['144', 'One hundred forty-four', 'One hundred and forty-four']),
     400: question('What is the smallest prime number greater than 100?', ['101', 'One hundred one', 'One hundred and one']),
