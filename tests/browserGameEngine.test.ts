@@ -772,4 +772,73 @@ describe('BrowserGameEngine production state', () => {
     expect(afterUndo).toBeGreaterThan(afterScore);
   });
 
+
+  it('runs Free Response as simultaneous answers while the turn player only selects the clue', () => {
+    const { engine, host } = setup({
+      gameMode: 'free-response',
+      gameLength: 'quick',
+      dailyDoublesEnabled: true,
+      dailyDoubleCount: 16,
+      finalRoundEnabled: false,
+      timerSeconds: 15,
+      allowNegativeScores: true
+    });
+    const one = addPlayer(engine, host.roomCode, 'One');
+    const two = addPlayer(engine, host.roomCode, 'Two');
+    engine.startGame(host.roomCode, host.hostToken);
+
+    const board = engine.snapshot(host.roomCode).board!;
+    expect(board.questions.every((question) => !question.dailyDouble)).toBe(true);
+    expect(engine.snapshot(host.roomCode).turnPlayerId).toBe(one.playerId);
+
+    const tile = firstUnused(engine, host.roomCode);
+    engine.selectQuestion(host.roomCode, host.hostToken, tile.questionId);
+    const open = engine.snapshot(host.roomCode);
+    expect(open.currentQuestion?.responseMode).toBe('text');
+    expect(open.currentQuestion?.participantIds).toEqual([one.playerId, two.playerId]);
+    expect(open.timer.running).toBe(true);
+
+    engine.submitTextResponse(host.roomCode, one.playerId, one.reconnectToken, 'first answer');
+    expect(engine.snapshot(host.roomCode).currentQuestion?.answerRevealed).toBe(false);
+    engine.submitTextResponse(host.roomCode, two.playerId, two.reconnectToken, 'second answer');
+
+    const revealed = engine.snapshot(host.roomCode);
+    const value = revealed.currentQuestion!.effectiveValue;
+    expect(revealed.currentQuestion?.answerRevealed).toBe(true);
+    expect(revealed.currentQuestion?.responsesClosed).toBe(true);
+
+    engine.resolveTextResponse(host.roomCode, host.hostToken, one.playerId, true);
+    engine.resolveTextResponse(host.roomCode, host.hostToken, two.playerId, false);
+    engine.advanceToBoard(host.roomCode, host.hostToken);
+
+    const after = engine.snapshot(host.roomCode);
+    expect(after.players.find((player) => player.id === one.playerId)?.score).toBe(value);
+    expect(after.players.find((player) => player.id === two.playerId)?.score).toBe(-value);
+    expect(after.turnPlayerId).toBe(two.playerId);
+  });
+
+  it('does not penalize only the selector when a Free Response timer expires', () => {
+    const { engine, host } = setup({
+      gameMode: 'free-response',
+      dailyDoublesEnabled: false,
+      finalRoundEnabled: false,
+      timerSeconds: 5,
+      allowNegativeScores: true
+    });
+    const one = addPlayer(engine, host.roomCode, 'One');
+    const two = addPlayer(engine, host.roomCode, 'Two');
+    engine.startGame(host.roomCode, host.hostToken);
+    const tile = firstUnused(engine, host.roomCode);
+    engine.selectQuestion(host.roomCode, host.hostToken, tile.questionId);
+    const endsAt = engine.snapshot(host.roomCode).timer.endsAt!;
+
+    engine.tick(endsAt + 1);
+
+    const state = engine.snapshot(host.roomCode);
+    expect(state.currentQuestion?.answerRevealed).toBe(true);
+    expect(state.currentQuestion?.responsesClosed).toBe(true);
+    expect(state.players.find((player) => player.id === one.playerId)?.score).toBe(0);
+    expect(state.players.find((player) => player.id === two.playerId)?.score).toBe(0);
+  });
+
 });
