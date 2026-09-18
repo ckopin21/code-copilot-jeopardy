@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { GameSettings, HostRoomCredentials, PackSummary, RoomSnapshot } from '../shared/types';
 import { clampDailyDoubleCount, DEFAULT_SETTINGS, QUESTION_VALUES, settingsForGameLength } from '../shared/config';
+import { GAME_MODES, gameModeDefinition } from '../shared/gameModes';
 import { autoGradeAnswer } from '../shared/validation';
 import { emitAck, socket } from '../lib/socket';
 import { audio } from '../lib/audio';
@@ -455,6 +456,7 @@ export function HostAppV3() {
     : null;
   const reviewPlayer = reviewPlayerId ? room.players.find((player) => player.id === reviewPlayerId) ?? null : null;
   const settings = room.settings;
+  const gameMode = gameModeDefinition(settings.gameMode);
   const updateSettings = (updates: Partial<GameSettings>) => perform('host:update-settings', { updates });
   const selectedPackQuestionCount = packs.find((pack) => pack.id === settings.selectedPackIds[0])?.questionCount;
   const dailyDoubleMax = selectedPackQuestionCount ?? Math.max(0, settings.dailyDoubleCount);
@@ -588,7 +590,7 @@ export function HostAppV3() {
         <article className="lobby-hero panel-v2">
           <div className="section-kicker">GAME ROOM</div>
           <h1>Take the stage.</h1>
-          <p className="lede">One shared game screen. Phones are controllers. Answers stay hidden until the reveal so the host can play too.</p>
+          <p className="lede">{gameMode.id === 'free-response' ? 'Everyone answers each board question at the same time. The player on turn chooses the next question, and the host grades the locked responses after the reveal.' : 'One shared game screen. Phones are controllers. Answers stay hidden until the reveal so the host can play too.'}</p>
           <div className="join-card-v2">
             {qr && <button type="button" className="qr-expand-trigger" onClick={() => setShowJoin(true)} title="Click to enlarge the QR code"><img src={qr} alt="QR code to join the game" /><span>Click to enlarge</span></button>}
             <div><small>SCAN TO JOIN</small><strong>{room.code}</strong><a href={credentials.joinUrl}>{credentials.joinUrl}</a></div>
@@ -605,6 +607,16 @@ export function HostAppV3() {
 
         <article className="settings-card panel-v2">
           <div className="section-kicker">SETUP</div>
+          <h2>Game mode</h2>
+          <p className="settings-helper">Same board and multiplayer system, different question flow.</p>
+          <div className="game-mode-grid-v2">
+            {GAME_MODES.map((mode) => {
+              const selected = settings.gameMode === mode.id;
+              return <button type="button" key={mode.id} aria-pressed={selected} className={`game-mode-card-v2 ${selected ? 'selected' : ''}`} onClick={() => void updateSettings({ gameMode: mode.id })}>
+                <strong>{mode.name}</strong><span>{mode.description}</span>
+              </button>;
+            })}
+          </div>
           <h2>Question pack</h2>
           <p className="settings-helper">Choose one pack for this game.</p>
           <div className="pack-grid-v2">{packs.map((pack) => {
@@ -619,7 +631,7 @@ export function HostAppV3() {
             <label data-tooltip="Quick uses 16 questions, Standard 25, and Marathon 36 including the $1000 row. Changing length resets Daily Doubles to 2, 4, or 6; you can still adjust that count manually afterward.">Game length<select value={settings.gameLength} onChange={(event) => void updateGameLength(event.target.value as GameSettings['gameLength'])}><option value="quick">Quick · 16 questions</option><option value="standard">Standard · 25 questions</option><option value="marathon">Marathon · 36 questions</option></select></label>
             <label data-tooltip="How long players have once answering or buzzing is active. Unlimited disables the countdown.">Answer timer<select value={settings.timerSeconds ?? 'none'} onChange={(event) => void updateSettings({ timerSeconds: event.target.value === 'none' ? null : Number(event.target.value) as GameSettings['timerSeconds'] })}>{[5,10,15,20,30].map((seconds)=><option key={seconds} value={seconds}>{seconds}s</option>)}<option value="none">Unlimited</option></select></label>
             <label data-tooltip="By default, question selection rotates through players in join order. Manual keeps the selected picker until you change it.">Turn rotation<select value={settings.turnOrderMode} onChange={(event) => void updateSettings({ turnOrderMode: event.target.value as GameSettings['turnOrderMode'] })}><option value="join-order">Join order · rotate</option><option value="manual">Manual · host selects</option></select></label>
-            <label data-tooltip={`How many hidden Daily Doubles are placed on the board. Maximum for this pack: ${dailyDoubleMax}.`}>Daily Doubles<input type="number" min="0" max={dailyDoubleMax} step="1" value={settings.dailyDoubleCount} onChange={(event) => void updateSettings({ dailyDoubleCount: Number(event.target.value), dailyDoublesEnabled: Number(event.target.value) > 0 })} onBlur={(event) => {
+            <label data-tooltip={gameMode.dailyDoubles ? `How many hidden Daily Doubles are placed on the board. Maximum for this pack: ${dailyDoubleMax}.` : 'Free Response keeps standard board questions open to everyone, so Daily Doubles are disabled in this mode.'}>Daily Doubles<input type="number" min="0" max={dailyDoubleMax} step="1" disabled={!gameMode.dailyDoubles} value={gameMode.dailyDoubles ? settings.dailyDoubleCount : 0} onChange={(event) => void updateSettings({ dailyDoubleCount: Number(event.target.value), dailyDoublesEnabled: Number(event.target.value) > 0 })} onBlur={(event) => {
               const dailyDoubleCount = clampDailyDoubleCount(Number(event.currentTarget.value), dailyDoubleMax);
               if (dailyDoubleCount !== settings.dailyDoubleCount) void updateSettings({ dailyDoubleCount, dailyDoublesEnabled: dailyDoubleCount > 0 });
             }} /></label>
@@ -628,11 +640,11 @@ export function HostAppV3() {
           <div className="toggle-grid-v2">
             <label className="toggle-v2" data-tooltip="Allow incorrect answers to push a player's score below zero."><input type="checkbox" checked={settings.allowNegativeScores} onChange={(event) => void updateSettings({ allowNegativeScores: event.target.checked })} /><span>Negative scores</span></label>
             <label className="toggle-v2" data-tooltip="The last six board questions are worth 2× and the last three are worth 3×."><input type="checkbox" checked={settings.lateGameModifiers} onChange={(event) => void updateSettings({ lateGameModifiers: event.target.checked })} /><span>Double / Triple finale</span></label>
-            <label className="toggle-v2" data-tooltip="Late-game 2× and 3× multipliers also multiply Daily Double wagers."><input type="checkbox" checked={settings.dailyDoubleStacksWithMultiplier} onChange={(event) => void updateSettings({ dailyDoubleStacksWithMultiplier: event.target.checked })} /><span>Stack Daily Double</span></label>
+            <label className="toggle-v2" data-tooltip={gameMode.dailyDoubles ? "Late-game 2× and 3× multipliers also multiply Daily Double wagers." : "Daily Doubles are disabled in Free Response mode."}><input type="checkbox" disabled={!gameMode.dailyDoubles} checked={settings.dailyDoubleStacksWithMultiplier} onChange={(event) => void updateSettings({ dailyDoubleStacksWithMultiplier: event.target.checked })} /><span>Stack Daily Double</span></label>
             <label className="toggle-v2" data-tooltip="Show On Fire and Cold Streak effects based on consecutive results."><input type="checkbox" checked={settings.streaksEnabled} onChange={(event) => void updateSettings({ streaksEnabled: event.target.checked })} /><span>Streaks</span></label>
             <label className="toggle-v2" data-tooltip="After the board, play a secret-wager final question."><input type="checkbox" checked={settings.finalRoundEnabled} onChange={(event) => void updateSettings({ finalRoundEnabled: event.target.checked })} /><span>Final Round</span></label>
-            <label className="toggle-v2" data-tooltip="Use number keys 1 through 5 as local buzzers on the host computer."><input type="checkbox" checked={settings.localBuzzersEnabled} onChange={(event) => void updateSettings({ localBuzzersEnabled: event.target.checked })} /><span>Keyboard buzzers</span></label>
-            <label className="toggle-v2" data-tooltip="Allow connected game controllers to buzz for players."><input type="checkbox" checked={settings.controllerBuzzersEnabled} onChange={(event) => void updateSettings({ controllerBuzzersEnabled: event.target.checked })} /><span>Gamepad buzzers</span></label>
+            <label className="toggle-v2" data-tooltip={gameMode.buzzerControls ? "Use number keys 1 through 5 as local buzzers on the host computer." : "Free Response uses simultaneous phone answers instead of buzzers."}><input type="checkbox" disabled={!gameMode.buzzerControls} checked={settings.localBuzzersEnabled} onChange={(event) => void updateSettings({ localBuzzersEnabled: event.target.checked })} /><span>Keyboard buzzers</span></label>
+            <label className="toggle-v2" data-tooltip={gameMode.buzzerControls ? "Allow connected game controllers to buzz for players." : "Free Response uses simultaneous phone answers instead of buzzers."}><input type="checkbox" disabled={!gameMode.buzzerControls} checked={settings.controllerBuzzersEnabled} onChange={(event) => void updateSettings({ controllerBuzzersEnabled: event.target.checked })} /><span>Gamepad buzzers</span></label>
           </div>
           <p className="reveal-first-note">The room stays open throughout the game so disconnected phones can reclaim their reserved seats.</p>
         </article>
@@ -640,7 +652,7 @@ export function HostAppV3() {
 
       {room.phase === 'board' && room.board && <section className="game-stage board-stage-v2 showcase-board-stage">
         <div className="board-header-v2">
-          <div><div className="section-kicker">ROUND IN PROGRESS</div><strong>{room.remainingQuestions} questions left</strong></div>
+          <div><div className="section-kicker">ROUND IN PROGRESS</div><strong>{room.remainingQuestions} questions left</strong><small className="game-mode-pill">{gameMode.name}</small></div>
           <div className="board-actions">
             {connectedPlayers.length > 0 && <label className="turn-selector">Turn<select value={controllerId} onChange={(event) => { const playerId = event.target.value; setControllerId(playerId); void perform('host:set-turn-player', { playerId }); }}>{connectedPlayers.map((player) => <option key={player.id} value={player.id}>{player.avatar} {player.name}</option>)}</select></label>}
             <button className="nav-button" onClick={() => void perform('host:pause')}>Pause</button>
@@ -661,7 +673,7 @@ export function HostAppV3() {
           <div className="question-meta-v2">
             <span>{current.category}</span>
             {current.dailyDouble ? <strong>{questionMultiplier > 1 && settings.dailyDoubleStacksWithMultiplier ? `WAGER ${(current.wager ?? 0).toLocaleString()} × ${questionMultiplier}` : `WAGER ${(current.wager ?? 0).toLocaleString()}`}</strong> : questionMultiplier > 1 ? <strong className={`inline-modifier x${questionMultiplier}`}>{current.baseValue} × {questionMultiplier} = {current.effectiveValue} POINTS</strong> : <strong>{current.effectiveValue} POINTS</strong>}
-            {current.responseMode === 'text' && <em>FREE RESPONSE</em>}
+            {current.responseMode === 'text' && <em>{gameMode.questionBadge}</em>}
           </div>
           {questionMultiplier > 1 && <div className={`question-modifier-strip x${questionMultiplier}`}>{questionMultiplier === 2 ? 'DOUBLE POINT QUESTION' : 'TRIPLE POINT QUESTION'}</div>}
           {current.dailyDouble && current.wager !== null && <div className="stake-banner-v2 daily-double-stake"><small>{dailyPlayer?.avatar} {dailyPlayer?.name} LOCKED IN</small><strong>{current.wager.toLocaleString()} WAGER</strong><span>{settings.dailyDoubleStacksWithMultiplier && questionMultiplier > 1 ? `${current.wager.toLocaleString()} × ${questionMultiplier} = ` : ''}{pointsAtStake.toLocaleString()} POINTS IN PLAY</span></div>}
