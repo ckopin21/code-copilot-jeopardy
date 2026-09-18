@@ -1,5 +1,6 @@
 import type { PackSummary, Player, RoomSnapshot } from '../shared/types';
 import { clampDailyDoubleCount } from '../shared/config';
+import { gameModeDefinition } from '../shared/gameModes';
 import { readActiveHostCredentials } from './hostCredentials';
 import { emitAck, socket } from './socket';
 
@@ -278,7 +279,7 @@ function renderTurnOrder(mount: HTMLElement, snapshot: RoomSnapshot): void {
   mount.append(section);
 }
 
-function enhanceExistingControls(settingsCard: HTMLElement): void {
+function enhanceExistingControls(settingsCard: HTMLElement, snapshot: RoomSnapshot): void {
   const settingsGrid = settingsCard.querySelector<HTMLElement>('.settings-grid-v2');
   if (!settingsGrid) return;
   const labels = [...settingsGrid.querySelectorAll<HTMLLabelElement>(':scope > label')];
@@ -291,13 +292,16 @@ function enhanceExistingControls(settingsCard: HTMLElement): void {
   turnLabel?.setAttribute('data-tooltip', 'Join order rotates by seat. Manual lets you drag players into a custom rotation order.');
 
   if (dailyLabel) {
+    const mode = gameModeDefinition(snapshot.settings.gameMode);
     dailyLabel.classList.remove('automatic-daily-double-control');
-    dailyLabel.setAttribute('data-tooltip', 'Choose how many hidden Daily Doubles appear on this board. Set 0 to disable them.');
+    dailyLabel.setAttribute('data-tooltip', mode.dailyDoubles
+      ? 'Choose how many hidden Daily Doubles appear on this board. Set 0 to disable them.'
+      : 'Daily Doubles are disabled in Free Response mode so every standard board question stays open to everyone.');
     const input = dailyLabel.querySelector<HTMLInputElement>('input');
     if (input) {
       input.readOnly = false;
       input.removeAttribute('aria-readonly');
-      input.title = 'Daily Double count';
+      input.title = mode.dailyDoubles ? 'Daily Double count' : 'Daily Doubles are unavailable in this game mode';
     }
   }
   coldLabel?.classList.add('cold-streak-hidden-control');
@@ -308,7 +312,7 @@ function ensureMounts(): { packMount: HTMLElement; turnMount: HTMLElement } | nu
   const settingsCard = document.querySelector<HTMLElement>('.showcase-lobby .settings-card');
   if (!settingsCard) return null;
   settingsCard.classList.add('enhanced-lobby-setup');
-  enhanceExistingControls(settingsCard);
+  enhanceExistingControls(settingsCard, room);
 
   const originalPackGrid = settingsCard.querySelector<HTMLElement>('.pack-grid-v2');
   if (!originalPackGrid) return null;

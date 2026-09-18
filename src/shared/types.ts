@@ -16,6 +16,7 @@ export type GamePhase =
 
 export type ConnectionState = 'connected' | 'reconnecting' | 'disconnected';
 export type GameLength = 'quick' | 'standard' | 'marathon';
+export type GameMode = 'classic' | 'free-response';
 export type Difficulty = 'easy' | 'medium' | 'hard' | 'mixed';
 export type ResponseMode = 'buzz' | 'text';
 export type AutoGradeConfidence = 'high' | 'medium' | 'low';
@@ -59,6 +60,7 @@ export interface QuestionPack {
 }
 
 export interface GameSettings {
+  gameMode: GameMode;
   gameLength: GameLength;
   selectedPackIds: string[];
   mixedPacks: boolean;

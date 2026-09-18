@@ -19,6 +19,7 @@ export function clampDailyDoubleCount(value: number, packQuestionCount: number):
 }
 
 export const DEFAULT_SETTINGS: GameSettings = {
+  gameMode: 'classic',
   gameLength: 'standard',
   selectedPackIds: ['disney'],
   mixedPacks: false,

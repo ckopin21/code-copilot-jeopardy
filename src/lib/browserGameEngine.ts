@@ -5,6 +5,7 @@ import { autoGradeAnswer } from '../shared/validation';
 import { packMap } from '../packs';
 import { calculateComebackAward } from './comebackScoring';
 import { finalWagerRules } from './finalWagerRules';
+import { gameModeAllowsDailyDoubles, gameModePenalizesTypedTimeout, isGameMode, responseModeForGameMode } from '../shared/gameModes';
 import { randomId } from './ids';
 
 export interface RoomRecord {
@@ -88,6 +89,7 @@ export class BrowserGameEngine {
       record.state.revision ??= 0;
       record.state.settings.lockRoomOnStart = false;
       record.state.settings.turnOrderMode ??= 'join-order';
+      record.state.settings.gameMode ??= 'classic';
       // Steals are not part of the current reveal-first product flow. Keep restored legacy rooms aligned with the live UI.
       record.state.settings.stealsEnabled = false;
       record.state.turnPlayerId ??= null;
@@ -477,7 +479,9 @@ export class BrowserGameEngine {
     if (room.state.phase !== 'lobby') throw new Error('Settings can only be changed in the lobby');
     const selectedPackIds = updates.selectedPackIds ?? room.state.settings.selectedPackIds;
     if (!selectedPackIds.length || selectedPackIds.some((packId) => !packMap.get(packId))) throw new Error('Select at least one valid pack');
-    room.state.settings = { ...room.state.settings, ...updates, selectedPackIds, lockRoomOnStart: false, stealsEnabled: false };
+    const gameMode = updates.gameMode ?? room.state.settings.gameMode ?? 'classic';
+    if (!isGameMode(gameMode)) throw new Error('Choose a valid game mode');
+    room.state.settings = { ...room.state.settings, ...updates, gameMode, selectedPackIds, lockRoomOnStart: false, stealsEnabled: false };
     room.state.selectedPackIds = selectedPackIds;
     this.persist();
     return this.snapshot(roomCode);
@@ -532,7 +536,7 @@ export class BrowserGameEngine {
         this.seenQuestionIds.add(chosenQuestion.id);
       }
     }
-    if (settings.dailyDoublesEnabled) {
+    if (settings.dailyDoublesEnabled && gameModeAllowsDailyDoubles(settings)) {
       const eligible = this.shuffle(boardQuestions.filter((entry) => questions[entry.questionId].dailyDoubleEligible !== false));
       for (const entry of eligible.slice(0, Math.min(settings.dailyDoubleCount, eligible.length))) entry.dailyDouble = true;
     }
@@ -620,8 +624,8 @@ export class BrowserGameEngine {
     const requestedTurnPlayer = dailyDoublePlayerId ? connected.find((player) => player.id === dailyDoublePlayerId) : null;
     if (requestedTurnPlayer) room.state.turnPlayerId = requestedTurnPlayer.id;
     const turnPlayer = this.ensureTurnPlayer(room);
-    const isPlayableDailyDouble = tile.dailyDouble && connected.length > 0;
-    const configuredResponseMode = isPlayableDailyDouble ? 'buzz' : (question.responseMode ?? 'buzz');
+    const isPlayableDailyDouble = gameModeAllowsDailyDoubles(room.state.settings) && tile.dailyDouble && connected.length > 0;
+    const configuredResponseMode = responseModeForGameMode(room.state.settings, question, isPlayableDailyDouble);
     // A typed-response clue cannot make progress with no phones. Practice mode falls back to the normal reveal flow.
     const responseMode = connected.length === 0 && configuredResponseMode === 'text' ? 'buzz' : configuredResponseMode;
     tile.used = true;
@@ -998,7 +1002,7 @@ export class BrowserGameEngine {
     if (room.state.phase === 'final-question') {
       this.closeFinalResponsesInternal(room);
     } else if (room.state.currentQuestion?.responseMode === 'text' && !room.state.currentQuestion.answerRevealed) {
-      this.penalizeUnansweredTurn(room);
+      if (gameModePenalizesTypedTimeout(room.state.settings)) this.penalizeUnansweredTurn(room);
       this.closeTextResponsesInternal(room);
     } else if (room.state.phase === 'daily-double-question' && room.state.currentQuestion && !room.state.currentQuestion.answerRevealed) {
       // Daily Double expiry only stops the clock; the host still judges the response.
