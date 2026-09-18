@@ -34,14 +34,12 @@ export const GAME_MODES: readonly GameModeDefinition[] = [
   }
 ] as const;
 
-const GAME_MODE_MAP = new Map<GameMode, GameModeDefinition>(GAME_MODES.map((mode) => [mode.id, mode]));
-
 export function isGameMode(value: unknown): value is GameMode {
   return value === 'classic' || value === 'free-response';
 }
 
 export function gameModeDefinition(mode: GameMode | undefined): GameModeDefinition {
-  return GAME_MODE_MAP.get(mode ?? 'classic') ?? GAME_MODE_MAP.get('classic')!;
+  return GAME_MODES.find((candidate) => candidate.id === mode) ?? GAME_MODES[0];
 }
 
 export function gameModeAllowsDailyDoubles(settings: Pick<GameSettings, 'gameMode'>): boolean {
