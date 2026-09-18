@@ -656,7 +656,7 @@ export function HostAppV3() {
 
       {room.phase === 'daily-double-wager' && current && <section className="question-stage daily-double-v2"><div className="question-card-v2"><div className="daily-double-burst">DAILY DOUBLE</div><h1>{dailyPlayer?.avatar} {dailyPlayer?.name}, choose your wager</h1><p className="helper-copy">Choose a preset here, or let {dailyPlayer?.name ?? 'the player'} choose on their phone.</p><div className="wager-grid fixed-wagers">{QUESTION_VALUES.map((value) => <button key={value} onClick={() => void perform('host:daily-double-wager', { wager: value })}>{value.toLocaleString()}</button>)}</div><button className="text-button" onClick={() => void perform('host:cancel-question')}>Exit question</button></div></section>}
 
-      {(room.phase === 'question' || room.phase === 'daily-double-question') && current && <section className={`question-stage ${current.dailyDouble ? 'daily-double-v2' : ''}`}>
+      {(room.phase === 'question' || room.phase === 'daily-double-question') && current && <section className={`question-stage ${current.dailyDouble ? 'daily-double-v2' : ''} ${current.answerRevealed ? 'answer-visible' : ''}`}>
         <article className="question-card-v2 showcase-question-card" data-question-id={current.questionId}>
           <div className="question-meta-v2">
             <span>{current.category}</span>
@@ -666,15 +666,15 @@ export function HostAppV3() {
           {questionMultiplier > 1 && <div className={`question-modifier-strip x${questionMultiplier}`}>{questionMultiplier === 2 ? 'DOUBLE POINT QUESTION' : 'TRIPLE POINT QUESTION'}</div>}
           {current.dailyDouble && current.wager !== null && <div className="stake-banner-v2 daily-double-stake"><small>{dailyPlayer?.avatar} {dailyPlayer?.name} LOCKED IN</small><strong>{current.wager.toLocaleString()} WAGER</strong><span>{settings.dailyDoubleStacksWithMultiplier && questionMultiplier > 1 ? `${current.wager.toLocaleString()} × ${questionMultiplier} = ` : ''}{pointsAtStake.toLocaleString()} POINTS IN PLAY</span></div>}
           <h1>{current.text}</h1>
-          <Timer timer={room.timer} serverNow={room.serverNow} />
+          {current.answerRevealed && <div className="answer-reveal-v2"><small>CORRECT ANSWER</small><strong>{current.acceptedAnswers?.join(' / ')}</strong></div>}
+          {!current.answerRevealed && <Timer timer={room.timer} serverNow={room.serverNow} />}
 
-          {current.responseMode !== 'text' && buzzerCountdown !== null && !current.buzzOpen && !current.buzzWinnerId && <div className="countdown-panel"><small>BUZZERS OPEN IN</small><strong>{buzzerCountdown || 'GO'}</strong></div>}
-          {current.responseMode !== 'text' && current.buzzOpen && !current.buzzWinnerId && <div className="buzzer-live-banner">BUZZERS LIVE</div>}
+          {current.responseMode !== 'text' && !current.answerRevealed && buzzerCountdown !== null && !current.buzzOpen && !current.buzzWinnerId && <div className="countdown-panel"><small>BUZZERS OPEN IN</small><strong>{buzzerCountdown || 'GO'}</strong></div>}
+          {current.responseMode !== 'text' && !current.answerRevealed && current.buzzOpen && !current.buzzWinnerId && <div className="buzzer-live-banner">BUZZERS LIVE</div>}
           {buzzWinner && <div className="winner-chip" style={{ '--accent': buzzWinner.accent } as React.CSSProperties}>{buzzWinner.avatar}<span>{buzzWinner.name}</span><b>BUZZED IN</b></div>}
 
           {current.responseMode === 'text' && !current.answerRevealed && <div className="response-progress"><strong>{textResponseCount}/{activeQuestionPlayers.length}</strong><span>responses locked in</span><small>The answer reveals automatically when every active player submits or the timer expires.</small></div>}
 
-          {current.answerRevealed && <div className="answer-reveal-v2"><small>CORRECT ANSWER</small><strong>{current.acceptedAnswers?.join(' / ')}</strong></div>}
 
           {current.responseMode === 'text' && current.answerRevealed && <div className="grading-grid">
             {room.players.map((player) => {
