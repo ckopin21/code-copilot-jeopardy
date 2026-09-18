@@ -158,7 +158,8 @@ function renderPackSelector(mount: HTMLElement, snapshot: RoomSnapshot): void {
   grid.className = 'enhanced-pack-grid';
   const selectedId = snapshot.settings.selectedPackIds[0];
 
-  for (const family of packFamilies(packs)) {
+  const compatiblePacks = packs.filter((pack) => pack.supportedGameModes.includes(snapshot.settings.gameMode));
+  for (const family of packFamilies(compatiblePacks)) {
     const selectedVariant = family.variants.find((variant) => variant.id === selectedId);
     const activeVariant = selectedVariant ?? family.variants[0];
     const card = document.createElement('article');

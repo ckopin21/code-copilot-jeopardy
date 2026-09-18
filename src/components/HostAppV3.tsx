@@ -457,8 +457,9 @@ export function HostAppV3() {
   const reviewPlayer = reviewPlayerId ? room.players.find((player) => player.id === reviewPlayerId) ?? null : null;
   const settings = room.settings;
   const gameMode = gameModeDefinition(settings.gameMode);
+  const compatiblePacks = packs.filter((pack) => pack.supportedGameModes.includes(settings.gameMode));
   const updateSettings = (updates: Partial<GameSettings>) => perform('host:update-settings', { updates });
-  const selectedPackQuestionCount = packs.find((pack) => pack.id === settings.selectedPackIds[0])?.questionCount;
+  const selectedPackQuestionCount = compatiblePacks.find((pack) => pack.id === settings.selectedPackIds[0])?.questionCount;
   const dailyDoubleMax = selectedPackQuestionCount ?? Math.max(0, settings.dailyDoubleCount);
   const updateGameLength = (gameLength: GameSettings['gameLength']) => {
     const next = settingsForGameLength(gameLength);
@@ -619,7 +620,7 @@ export function HostAppV3() {
           </div>
           <h2>Question pack</h2>
           <p className="settings-helper">Choose one pack for this game.</p>
-          <div className="pack-grid-v2">{packs.map((pack) => {
+          <div className="pack-grid-v2">{compatiblePacks.map((pack) => {
             const selected = settings.selectedPackIds[0] === pack.id;
             return <button key={pack.id} aria-pressed={selected} className={`pack-card-v2 ${selected ? 'selected' : ''}`} onClick={() => {
               const dailyDoubleCount = clampDailyDoubleCount(settings.dailyDoubleCount, pack.questionCount);

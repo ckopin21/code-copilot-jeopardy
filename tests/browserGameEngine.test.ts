@@ -841,4 +841,19 @@ describe('BrowserGameEngine production state', () => {
     expect(state.players.find((player) => player.id === two.playerId)?.score).toBe(0);
   });
 
+
+  it('keeps Classic and Free Response question packs isolated', () => {
+    const { engine, host } = setup();
+    expect(engine.snapshot(host.roomCode).settings.selectedPackIds).not.toContain('free-response-general-1');
+
+    const freeLobby = engine.updateSettings(host.roomCode, host.hostToken, { gameMode: 'free-response' });
+    expect(freeLobby.settings.gameMode).toBe('free-response');
+    expect(freeLobby.settings.selectedPackIds).toEqual(['free-response-general-1']);
+    expect(() => engine.updateSettings(host.roomCode, host.hostToken, { selectedPackIds: ['disney'] })).toThrow(/not available for this game mode/i);
+
+    engine.startGame(host.roomCode, host.hostToken);
+    const board = engine.snapshot(host.roomCode).board!;
+    expect(board.questions.every((question) => question.questionId.startsWith('free-response-general-1-'))).toBe(true);
+  });
+
 });

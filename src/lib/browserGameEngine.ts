@@ -2,7 +2,7 @@ import { DEFAULT_SETTINGS, GAME_LENGTH_CONFIG } from '../shared/config';
 import type { BoardQuestion, GameSettings, HostRoomCredentials, Player, PlayerJoinCredentials, Question, QuestionPack, RoomSnapshot, RoomState } from '../shared/types';
 import { QUESTION_VALUES } from '../shared/types';
 import { autoGradeAnswer } from '../shared/validation';
-import { packMap } from '../packs';
+import { packMap, packSupportsGameMode, packsForGameMode } from '../packs';
 import { calculateComebackAward } from './comebackScoring';
 import { finalWagerRules } from './finalWagerRules';
 import { gameModeAllowsDailyDoubles, gameModePenalizesTypedTimeout, isGameMode, responseModeForGameMode } from '../shared/gameModes';
@@ -274,7 +274,13 @@ export class BrowserGameEngine {
   createRoom(baseUrl: string, settings?: Partial<GameSettings>): HostRoomCredentials {
     const code = this.code();
     const hostToken = randomToken();
-    const selectedPackIds = settings?.selectedPackIds?.length ? settings.selectedPackIds : DEFAULT_SETTINGS.selectedPackIds;
+    const gameMode = settings?.gameMode ?? DEFAULT_SETTINGS.gameMode;
+    const requestedPackIds = settings?.selectedPackIds?.length ? settings.selectedPackIds : DEFAULT_SETTINGS.selectedPackIds;
+    const requestedPacks = requestedPackIds.map((packId) => packMap.get(packId)).filter((pack): pack is QuestionPack => Boolean(pack));
+    const requestedPacksCompatible = requestedPacks.length === requestedPackIds.length && requestedPacks.every((pack) => packSupportsGameMode(pack, gameMode));
+    const fallbackPack = packsForGameMode(gameMode)[0];
+    if (!fallbackPack && !requestedPacksCompatible) throw new Error(`No question packs are available for ${gameMode}`);
+    const selectedPackIds = requestedPacksCompatible ? requestedPackIds : [fallbackPack!.id];
     const state: RoomState = {
       code,
       phase: 'lobby',
@@ -285,7 +291,7 @@ export class BrowserGameEngine {
       hostConnected: true,
       locked: false,
       players: [],
-      settings: { ...DEFAULT_SETTINGS, ...settings, selectedPackIds, lockRoomOnStart: false, stealsEnabled: false },
+      settings: { ...DEFAULT_SETTINGS, ...settings, gameMode, selectedPackIds, lockRoomOnStart: false, stealsEnabled: false },
       board: null,
       currentQuestion: null,
       timer: emptyTimer(),
@@ -477,10 +483,22 @@ export class BrowserGameEngine {
   updateSettings(roomCode: string, hostToken: string, updates: Partial<GameSettings>): RoomSnapshot {
     const room = this.hostRoom(roomCode, hostToken);
     if (room.state.phase !== 'lobby') throw new Error('Settings can only be changed in the lobby');
-    const selectedPackIds = updates.selectedPackIds ?? room.state.settings.selectedPackIds;
-    if (!selectedPackIds.length || selectedPackIds.some((packId) => !packMap.get(packId))) throw new Error('Select at least one valid pack');
     const gameMode = updates.gameMode ?? room.state.settings.gameMode ?? 'classic';
     if (!isGameMode(gameMode)) throw new Error('Choose a valid game mode');
+
+    const requestedPackIds = updates.selectedPackIds ?? room.state.settings.selectedPackIds;
+    if (!requestedPackIds.length || requestedPackIds.some((packId) => !packMap.get(packId))) throw new Error('Select at least one valid pack');
+    const requestedPacks = requestedPackIds.map((packId) => packMap.get(packId)!);
+    const compatible = requestedPacks.every((pack) => packSupportsGameMode(pack, gameMode));
+    let selectedPackIds = requestedPackIds;
+
+    if (!compatible) {
+      if (updates.selectedPackIds) throw new Error('That question pack is not available for this game mode');
+      const fallbackPack = packsForGameMode(gameMode)[0];
+      if (!fallbackPack) throw new Error('No question packs are available for this game mode');
+      selectedPackIds = [fallbackPack.id];
+    }
+
     room.state.settings = { ...room.state.settings, ...updates, gameMode, selectedPackIds, lockRoomOnStart: false, stealsEnabled: false };
     room.state.selectedPackIds = selectedPackIds;
     this.persist();
@@ -500,6 +518,9 @@ export class BrowserGameEngine {
   private generateBoard(settings: GameSettings): { board: RoomState['board']; questions: Record<string, Question> } {
     const config = GAME_LENGTH_CONFIG[settings.gameLength];
     const selectedPacks = settings.selectedPackIds.map((packId) => this.getPack(packId)).filter((pack): pack is QuestionPack => Boolean(pack));
+    if (!selectedPacks.length || selectedPacks.some((pack) => !packSupportsGameMode(pack, settings.gameMode))) {
+      throw new Error('Selected question packs do not match this game mode');
+    }
     const pool = selectedPacks.flatMap((pack) => pack.questions.filter((question) => question.id !== pack.finalQuestionId));
     if (!pool.length) throw new Error('No questions available');
     const categoryGroups = new Map<string, Question[]>();
