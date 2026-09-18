@@ -22,15 +22,15 @@ const categories = [
     200: question('Who delivered the famous “I Have a Dream” speech in 1963?', ['Martin Luther King Jr.', 'Martin Luther King Jr', 'MLK', 'Martin Luther King']),
     300: question('Joan of Arc is a national heroine of which country?', 'France'),
     400: question('Which nurse became famous for her work during the Crimean War?', ['Florence Nightingale', 'Nightingale']),
-    500: question('Which scientist developed the theory of relativity?', ['Albert Einstein', 'Einstein']),
-    1000: question('Which English scientist is associated with the laws of motion and universal gravitation?', ['Isaac Newton', 'Newton'])
+    500: question('Which inventor is credited with patenting the telephone in 1876?', ['Alexander Graham Bell', 'Bell']),
+    1000: question('Which Italian artist painted the ceiling of the Sistine Chapel?', ['Michelangelo', 'Michelangelo Buonarroti'])
   }),
   category('Capitals & Countries III', {
     100: question('What is the capital of Italy?', 'Rome'),
     200: question('What is the capital of Mexico?', ['Mexico City', 'Ciudad de México', 'Ciudad de Mexico']),
     300: question('What is the capital of Egypt?', 'Cairo'),
     400: question('What is the capital of Argentina?', 'Buenos Aires'),
-    500: question('What is the capital of New Zealand?', 'Wellington'),
+    500: question('What is the capital of Norway?', 'Oslo'),
     1000: question('What is the capital of Vietnam?', 'Hanoi')
   }),
   category('U.S. Geography', {
@@ -43,16 +43,16 @@ const categories = [
   }),
   category('World Geography', {
     100: question('What is the largest country in the world by land area?', 'Russia'),
-    200: question('Which European country is often described as being shaped like a boot?', 'Italy'),
+    200: question('Which country shares the Iberian Peninsula with Spain?', 'Portugal'),
     300: question('Mount Fuji is located in which country?', 'Japan'),
     400: question('Most of the Amazon rainforest is located in which country?', 'Brazil'),
     500: question('Which sea lies between southern Europe and northern Africa?', ['Mediterranean Sea', 'Mediterranean']),
     1000: question('The historic city of Dubrovnik is in which country?', 'Croatia')
   }),
   category('Landmarks Around the World', {
-    100: question('Big Ben is located in which city?', 'London'),
-    200: question('The Colosseum is located in which city?', 'Rome'),
-    300: question('The Taj Mahal is located in which country?', 'India'),
+    100: question('The Hollywood Sign overlooks which U.S. city?', ['Los Angeles', 'LA']),
+    200: question('Buckingham Palace is located in which city?', 'London'),
+    300: question('The Golden Gate Bridge is located in which U.S. city?', ['San Francisco', 'SF']),
     400: question('Christ the Redeemer overlooks which Brazilian city?', ['Rio de Janeiro', 'Rio']),
     500: question('The Acropolis is located in which city?', 'Athens'),
     1000: question('Neuschwanstein Castle is located in which country?', 'Germany')
