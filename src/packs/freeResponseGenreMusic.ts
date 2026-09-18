@@ -13,7 +13,7 @@ const categories = [
     100: question('Which band recorded “Smells Like Teen Spirit”?', ['Nirvana']),
     200: question('Which band recorded “Boulevard of Broken Dreams”?', ['Green Day']),
     300: question('Which band recorded “Wonderwall”?', ['Oasis']),
-    400: question('Which band recorded “Dreams” on the album Rumours?', ['Fleetwood Mac']),
+    400: question('Which band recorded “Under the Bridge”?', ['Red Hot Chili Peppers', 'RHCP']),
     500: question('Which band recorded “Everlong”?', ['Foo Fighters', 'The Foo Fighters']),
     1000: question('Which band recorded “Take Me Out”?', ['Franz Ferdinand'])
   }),
