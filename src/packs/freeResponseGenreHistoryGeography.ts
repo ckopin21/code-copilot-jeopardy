@@ -36,7 +36,7 @@ const categories = [
   category('World Geography', {
     100: question('Which country occupies most of the Scandinavian Peninsula?', ['Sweden']),
     200: question('What sea separates northeastern Africa from the Arabian Peninsula?', ['Red Sea', 'The Red Sea']),
-    300: question('What is the largest island in the world that is not considered a continent?', ['Greenland']),
+    300: question('Lake Bled, known for its island church and Alpine setting, is in which country?', ['Slovenia']),
     400: question('Which country contains the Atacama Desert?', ['Chile']),
     500: question('Which strait separates Spain from Morocco?', ['Strait of Gibraltar', 'Gibraltar Strait']),
     1000: question('Which country has the exclave of Kaliningrad on the Baltic Sea?', ['Russia', 'Russian Federation'])
