@@ -4,7 +4,7 @@ const categories = [
   category('U.S. History', {
     100: question('What was the first permanent English settlement in what became the United States?', ['Jamestown']),
     200: question('In what year did the Boston Tea Party take place?', ['1773']),
-    300: question('Which president was in office when the Louisiana Purchase was completed?', ['Thomas Jefferson', 'Jefferson']),
+    300: question('Which U.S. secretary of state negotiated the purchase of Alaska from Russia in 1867?', ['William H. Seward', 'William Seward', 'Seward']),
     400: question('Which 1863 battle is often described as a turning point of the American Civil War?', ['Battle of Gettysburg', 'Gettysburg']),
     500: question('In which city was the U.S. Constitution drafted in 1787?', ['Philadelphia']),
     1000: question('Which president issued the Emancipation Proclamation?', ['Abraham Lincoln', 'Lincoln'])
