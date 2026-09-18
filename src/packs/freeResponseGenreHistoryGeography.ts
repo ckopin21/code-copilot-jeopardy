@@ -42,7 +42,7 @@ const categories = [
     1000: question('Which country has the exclave of Kaliningrad on the Baltic Sea?', ['Russia', 'Russian Federation'])
   }),
   category('Cities & Landmarks', {
-    100: question('In which U.S. city is the Golden Gate Bridge located?', ['San Francisco']),
+    100: question('In which U.S. city is the Cloud Gate sculpture nicknamed “The Bean”?', ['Chicago']),
     200: question('Which Brazilian city is overlooked by the Christ the Redeemer statue?', ['Rio de Janeiro', 'Rio']),
     300: question('In which city would you find the Burj Khalifa?', ['Dubai']),
     400: question('In which Spanish city is the Sagrada Família located?', ['Barcelona']),
