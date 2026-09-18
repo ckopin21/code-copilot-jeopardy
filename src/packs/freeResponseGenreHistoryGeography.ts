@@ -29,7 +29,7 @@ const categories = [
     100: question('What is the largest U.S. state by area?', ['Alaska']),
     200: question('In which state are the Everglades located?', ['Florida']),
     300: question('Which U.S. city is famous for the Gateway Arch?', ['St. Louis', 'Saint Louis']),
-    400: question('Which river forms much of the border between Texas and Mexico?', ['Rio Grande', 'The Rio Grande']),
+    400: question('Which U.S. state is home to Mount Rushmore?', ['South Dakota']),
     500: question('What is the highest mountain peak in the United States?', ['Denali', 'Mount Denali']),
     1000: question('Which U.S. state is the only one whose name has just one syllable?', ['Maine'])
   }),
