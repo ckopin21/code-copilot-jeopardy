@@ -330,6 +330,16 @@ function createHostPeerOnce(roomCode: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const peer = new Peer(hostPeerId(roomCode), peerOptions());
     let settled = false;
+    let hostSignalRetryTimer: number | null = null;
+    const scheduleHostSignalReconnect = () => {
+      if (hostSignalRetryTimer !== null || peer.destroyed || hostPeer !== peer) return;
+      hostSignalRetryTimer = window.setTimeout(() => {
+        hostSignalRetryTimer = null;
+        if (peer.destroyed || hostPeer !== peer || !peer.disconnected) return;
+        try { peer.reconnect(); } catch { /* retry below */ }
+        if (peer.disconnected && !peer.destroyed) scheduleHostSignalReconnect();
+      }, 1000);
+    };
     const finishError = (error: unknown) => {
       if (settled) return;
       settled = true;
@@ -337,6 +347,11 @@ function createHostPeerOnce(roomCode: string): Promise<void> {
       reject(error instanceof Error ? error : new Error('Could not start host connection'));
     };
     peer.on('open', () => {
+      if (hostSignalRetryTimer !== null) {
+        window.clearTimeout(hostSignalRetryTimer);
+        hostSignalRetryTimer = null;
+      }
+      hostStaleSweepBlockedUntil = Date.now() + HOST_STALE_SWEEP_GRACE_MS;
       socket.connected = true;
       emitLocal('connect');
       if (settled) {
@@ -355,13 +370,13 @@ function createHostPeerOnce(roomCode: string): Promise<void> {
       peer.on('disconnected', () => {
         socket.connected = false;
         emitLocal('disconnect');
-        const reconnect = () => {
-          if (!hostPeer || hostPeer.destroyed || !hostPeer.disconnected) return;
-          try { hostPeer.reconnect(); } catch { window.setTimeout(reconnect, 1000); }
-        };
-        window.setTimeout(reconnect, 500);
+        scheduleHostSignalReconnect();
       });
       peer.on('close', () => {
+        if (hostSignalRetryTimer !== null) {
+          window.clearTimeout(hostSignalRetryTimer);
+          hostSignalRetryTimer = null;
+        }
         releaseHostAuthority(roomCode, authorityId);
         if (hostPeer !== peer) return;
         hostPeer = null;
@@ -369,7 +384,7 @@ function createHostPeerOnce(roomCode: string): Promise<void> {
         socket.connected = false;
         emitLocal('disconnect');
       });
-      peer.on('error', () => { if (peer.disconnected && !peer.destroyed) { try { peer.reconnect(); } catch { /* next event retries */ } } });
+      peer.on('error', () => { if (peer.disconnected && !peer.destroyed) scheduleHostSignalReconnect(); });
       resolve();
     });
     peer.on('error', finishError);
