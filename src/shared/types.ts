@@ -52,6 +52,8 @@ export interface QuestionPack {
   accentColor?: string;
   /** Optional image URL/data URL for pack art. Pack logic never depends on this field. */
   titleArt?: string;
+  /** Game modes allowed to use this pack. Omitted legacy packs default to Classic only. */
+  supportedGameModes?: GameMode[];
   /** Optional preferred category order. Unlisted categories follow afterward. */
   categoryOrder?: string[];
   /** Optional explicit Final question. It must reference a question inside this pack. */
@@ -263,6 +265,7 @@ export interface PackSummary {
   questionCount: number;
   difficulty: Difficulty;
   approximateMinutes: number;
+  supportedGameModes: GameMode[];
   accentColor?: string;
   titleArt?: string;
 }
