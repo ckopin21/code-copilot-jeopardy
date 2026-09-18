@@ -43,7 +43,7 @@ const categories = [
   }),
   category('Cities & Landmarks', {
     100: question('In which U.S. city is the Cloud Gate sculpture nicknamed “The Bean”?', ['Chicago']),
-    200: question('Which Brazilian city is overlooked by the Christ the Redeemer statue?', ['Rio de Janeiro', 'Rio']),
+    200: question('The Atomium landmark is located in which European capital?', ['Brussels']),
     300: question('In which city would you find the Burj Khalifa?', ['Dubai']),
     400: question('In which Spanish city is the Sagrada Família located?', ['Barcelona']),
     500: question('Which South African city sits below Table Mountain?', ['Cape Town']),
