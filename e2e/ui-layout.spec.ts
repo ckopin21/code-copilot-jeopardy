@@ -39,7 +39,7 @@ for (const mode of ['Classic', 'Free Response']) {
       await expect(page.locator('.showcase-board-stage .board')).toBeVisible();
       await assertViewportFit(page, '.showcase-host');
 
-      await page.getByRole('button', { name: 'Presentation' }).click();
+      await page.getByRole('button', { name: 'Presentation', exact: true }).click();
       await expect(page.locator('.board-presentation-mode')).toBeVisible();
       await assertViewportFit(page, '.board-presentation-mode');
     });
