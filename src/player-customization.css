@@ -166,11 +166,37 @@
 .customization-accent-bar { align-self: stretch; width: 5px; border-radius: 999px; background: var(--accent); box-shadow: 0 0 12px var(--accent); }
 
 
-/* Effect choices preview immediately inside the player card. */
+/* Effect previews live in a dedicated lane so they never cover identity content. */
+.customization-preview.effect-mode {
+  grid-template-columns: 48px minmax(0,1fr) 86px 5px;
+}
+.effect-preview-slot {
+  position: relative;
+  width: 86px;
+  height: 44px;
+  justify-self: end;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb,var(--accent) 36%,rgba(255,255,255,.13));
+  border-radius: 9px;
+  background: rgba(1,17,29,.62);
+  box-shadow: inset 0 0 16px rgba(0,0,0,.24);
+  isolation: isolate;
+}
+.effect-preview-idle {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #769bad;
+  font-size: .46rem;
+  font-weight: 900;
+  line-height: 1.25;
+  letter-spacing: .08em;
+  text-align: center;
+}
 .effect-preview-layer {
   position: absolute;
   inset: 0;
-  z-index: 4;
   pointer-events: none;
   overflow: hidden;
   border-radius: inherit;
@@ -179,25 +205,27 @@
 .effect-preview-score,
 .effect-preview-stars {
   position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
   z-index: 3;
   font-family: 'Oswald', sans-serif;
   font-weight: 900;
-  letter-spacing: .08em;
+  letter-spacing: .07em;
   text-shadow: 0 2px 8px rgba(0,0,0,.72);
 }
 .effect-preview-buzz {
-  top: 8px;
-  right: 12px;
-  padding: 4px 8px;
+  margin: auto;
+  width: 64px;
+  height: 27px;
   border: 1px solid color-mix(in srgb,var(--accent) 75%,white);
   border-radius: 999px;
   background: color-mix(in srgb,var(--accent) 84%,#082943);
   color: #061521;
+  font-size: .7rem;
   animation: customization-buzz-preview .62s cubic-bezier(.2,.85,.25,1) both;
 }
 .effect-preview-score {
-  right: 13px;
-  bottom: 7px;
   color: #fff;
   font-size: 1rem;
 }
@@ -211,11 +239,11 @@
 .preview-score-spark .effect-preview-layer::after {
   content: "✦  ✧  ✦";
   position: absolute;
-  right: 5px;
-  bottom: 23px;
+  inset: 4px 0 auto;
   color: var(--accent);
-  font-size: .9rem;
-  letter-spacing: .12em;
+  font-size: .7rem;
+  letter-spacing: .1em;
+  text-align: center;
   animation: customization-spark-burst .8s ease-out both;
 }
 .preview-score-wave .effect-preview-score {
@@ -224,30 +252,26 @@
 .preview-score-wave .effect-preview-layer::before {
   content: "";
   position: absolute;
-  right: 22px;
-  bottom: 17px;
+  left: 50%;
+  top: 50%;
   width: 12px;
   height: 12px;
+  margin: -6px;
   border: 2px solid var(--accent);
   border-radius: 50%;
   animation: customization-wave-ring .86s ease-out both;
 }
 .effect-preview-stars {
-  top: 4px;
-  left: 12px;
   color: var(--accent);
-  font-size: 1rem;
+  font-size: .95rem;
   animation: customization-victory-stars 1.15s ease-in-out both;
 }
 .effect-preview-spotlight {
   position: absolute;
-  top: -65px;
-  left: 8px;
-  width: 112px;
-  height: 155px;
-  transform: rotate(13deg);
-  background: linear-gradient(180deg,color-mix(in srgb,var(--accent) 42%,transparent),transparent 78%);
-  clip-path: polygon(44% 0,56% 0,100% 100%,0 100%);
+  inset: -12px 8px -8px;
+  background: linear-gradient(180deg,color-mix(in srgb,var(--accent) 46%,transparent),transparent 76%);
+  clip-path: polygon(42% 0,58% 0,100% 100%,0 100%);
+  transform-origin: 50% 0;
   animation: customization-victory-spotlight 1.15s ease-out both;
 }
 .effect-preview-confetti {
@@ -263,65 +287,65 @@
   background: var(--accent);
   animation: customization-confetti-fall .95s ease-in both;
 }
-.effect-preview-confetti i:nth-child(1) { left: 9%; animation-delay: .02s; transform: rotate(12deg); }
+.effect-preview-confetti i:nth-child(1) { left: 9%; animation-delay: .02s; }
 .effect-preview-confetti i:nth-child(2) { left: 18%; animation-delay: .16s; background:#fff; }
-.effect-preview-confetti i:nth-child(3) { left: 29%; animation-delay: .08s; transform: rotate(35deg); }
+.effect-preview-confetti i:nth-child(3) { left: 29%; animation-delay: .08s; }
 .effect-preview-confetti i:nth-child(4) { left: 40%; animation-delay: .21s; background:#93c5fd; }
-.effect-preview-confetti i:nth-child(5) { left: 51%; animation-delay: .04s; transform: rotate(70deg); }
+.effect-preview-confetti i:nth-child(5) { left: 51%; animation-delay: .04s; }
 .effect-preview-confetti i:nth-child(6) { left: 61%; animation-delay: .18s; background:#f9a8d4; }
-.effect-preview-confetti i:nth-child(7) { left: 71%; animation-delay: .1s; transform: rotate(25deg); }
+.effect-preview-confetti i:nth-child(7) { left: 71%; animation-delay: .1s; }
 .effect-preview-confetti i:nth-child(8) { left: 80%; animation-delay: .24s; background:#86efac; }
-.effect-preview-confetti i:nth-child(9) { left: 89%; animation-delay: .06s; transform: rotate(55deg); }
+.effect-preview-confetti i:nth-child(9) { left: 89%; animation-delay: .06s; }
 .effect-preview-confetti i:nth-child(10) { left: 95%; animation-delay: .2s; background:#fff; }
 
 @keyframes customization-buzz-preview {
-  0% { opacity:0; transform:scale(.55) translateY(6px); }
-  28% { opacity:1; transform:scale(1.14) translateY(0); }
+  0% { opacity:0; transform:scale(.62); }
+  28% { opacity:1; transform:scale(1.08); }
   70% { opacity:1; transform:scale(1); }
   100% { opacity:0; transform:scale(.96); }
 }
 @keyframes customization-score-pulse {
   0% { opacity:0; transform:scale(.55); }
-  28% { opacity:1; transform:scale(1.35); filter:drop-shadow(0 0 8px var(--accent)); }
+  28% { opacity:1; transform:scale(1.28); filter:drop-shadow(0 0 7px var(--accent)); }
   64% { opacity:1; transform:scale(.96); }
   100% { opacity:0; transform:scale(1); }
 }
 @keyframes customization-score-spark {
-  0% { opacity:0; transform:translateY(7px) scale(.7); }
-  25% { opacity:1; transform:translateY(-2px) scale(1.18); filter:brightness(1.7) drop-shadow(0 0 8px var(--accent)); }
-  100% { opacity:0; transform:translateY(-11px) scale(.98); }
+  0% { opacity:0; transform:translateY(5px) scale(.7); }
+  25% { opacity:1; transform:translateY(-1px) scale(1.14); filter:brightness(1.7) drop-shadow(0 0 7px var(--accent)); }
+  100% { opacity:0; transform:translateY(-7px) scale(.98); }
 }
 @keyframes customization-spark-burst {
-  0% { opacity:0; transform:scale(.4) rotate(-8deg); }
-  34% { opacity:1; transform:scale(1.1) rotate(3deg); }
-  100% { opacity:0; transform:scale(1.35) translateY(-8px); }
+  0% { opacity:0; transform:scale(.45); }
+  34% { opacity:1; transform:scale(1.04); }
+  100% { opacity:0; transform:scale(1.18) translateY(-3px); }
 }
 @keyframes customization-score-wave-token {
-  0% { opacity:0; transform:translateY(6px); }
+  0% { opacity:0; transform:translateY(4px); }
   28% { opacity:1; transform:translateY(0); }
   72% { opacity:1; }
-  100% { opacity:0; transform:translateY(-5px); }
+  100% { opacity:0; transform:translateY(-4px); }
 }
 @keyframes customization-wave-ring {
   0% { opacity:.9; transform:scale(.2); }
-  100% { opacity:0; transform:scale(6.4); }
+  100% { opacity:0; transform:scale(4.2); }
 }
 @keyframes customization-victory-stars {
-  0% { opacity:0; transform:translateY(6px) scale(.65); }
-  35% { opacity:1; transform:translateY(-2px) scale(1.15); }
-  75% { opacity:1; transform:translateY(-5px) scale(1); }
-  100% { opacity:0; transform:translateY(-10px) scale(.95); }
+  0% { opacity:0; transform:scale(.7); }
+  35% { opacity:1; transform:scale(1.12); }
+  75% { opacity:1; transform:scale(1); }
+  100% { opacity:0; transform:scale(.94); }
 }
 @keyframes customization-victory-spotlight {
-  0% { opacity:0; transform:rotate(13deg) translateY(-25px); }
+  0% { opacity:0; transform:rotate(10deg) translateY(-10px); }
   30% { opacity:1; }
-  72% { opacity:.9; transform:rotate(-7deg) translateY(0); }
-  100% { opacity:0; transform:rotate(8deg) translateY(8px); }
+  72% { opacity:.9; transform:rotate(-6deg) translateY(0); }
+  100% { opacity:0; transform:rotate(4deg) translateY(4px); }
 }
 @keyframes customization-confetti-fall {
   0% { opacity:0; transform:translateY(-8px) rotate(0deg); }
   12% { opacity:1; }
-  100% { opacity:0; transform:translateY(78px) rotate(230deg); }
+  100% { opacity:0; transform:translateY(58px) rotate(230deg); }
 }
 
 .customization-tabs {
@@ -468,48 +492,63 @@
 .roster-avatar .player-avatar-art,
 .podium-avatar .player-avatar-art { font-size: inherit; }
 
-/* Score effects reuse the existing score-flight impact classes and only vary the impact signature. */
-[data-score-effect="spark"].score-impact-correct,
-[data-score-effect="spark"].score-impact-wrong {
+/* Score effects stay on the score glyph, never the entire player card. */
+[data-score-effect="spark"].score-impact-correct [data-player-score],
+[data-score-effect="spark"].score-impact-wrong [data-player-score] {
   animation: player-score-spark .64s ease-out;
 }
-[data-score-effect="wave"].score-impact-correct,
-[data-score-effect="wave"].score-impact-wrong {
+[data-score-effect="wave"].score-impact-correct [data-player-score],
+[data-score-effect="wave"].score-impact-wrong [data-player-score] {
   animation: player-score-wave .68s ease-out;
 }
 @keyframes player-score-spark {
-  0% { filter: brightness(1); }
-  28% { filter: brightness(1.7) drop-shadow(0 0 7px var(--accent)); transform: translateY(-2px) scale(1.02); }
+  0% { filter: brightness(1); transform: scale(1); }
+  28% { filter: brightness(1.7) drop-shadow(0 0 7px var(--accent)); transform: translateY(-2px) scale(1.08); }
   100% { filter: brightness(1); transform: none; }
 }
 @keyframes player-score-wave {
-  0% { box-shadow: inset 4px 0 0 var(--accent),0 0 0 0 color-mix(in srgb,var(--accent) 58%,transparent); }
-  55% { box-shadow: inset 4px 0 0 var(--accent),0 0 0 8px transparent,0 0 25px color-mix(in srgb,var(--accent) 40%,transparent); }
-  100% { box-shadow: inset 4px 0 0 var(--accent),0 6px 20px rgba(0,0,0,.24); }
+  0% { text-shadow: 0 0 0 transparent; transform: scale(1); }
+  48% { text-shadow: 0 0 18px var(--accent),0 0 28px color-mix(in srgb,var(--accent) 58%,transparent); transform: scale(1.08); }
+  100% { text-shadow: inherit; transform: none; }
 }
 
-/* Winners retain the existing podium reveal, then add the player's chosen signature. */
-.podium-card.winner { border-color: var(--accent) !important; }
+/* Victory signatures stay inside their identity surface and never cover nearby UI. */
+.podium-card.winner {
+  border-color: var(--accent) !important;
+  isolation: isolate;
+}
 .podium-card.winner[data-victory-effect="spotlight"] {
-  box-shadow: 0 -22px 58px color-mix(in srgb,var(--accent) 35%,transparent),0 0 0 2px color-mix(in srgb,var(--accent) 48%,transparent);
+  box-shadow: inset 0 0 34px color-mix(in srgb,var(--accent) 25%,transparent),0 0 0 2px color-mix(in srgb,var(--accent) 38%,transparent);
   animation: victory-spotlight 1.8s ease-in-out infinite alternate;
 }
-.podium-card.winner[data-victory-effect="stars"]::after {
-  content: "✦  ✧  ✦";
-  position: absolute;
-  inset: -24px 0 auto;
-  color: var(--accent);
-  font-size: clamp(1rem,2vw,1.7rem);
-  letter-spacing: .16em;
-  text-shadow: 0 0 10px var(--accent);
+.podium-card.winner[data-victory-effect="stars"] .podium-avatar,
+.presentation-winner-identity[data-victory-effect="stars"] > .player-avatar-art {
   animation: victory-stars 1.4s ease-in-out infinite;
 }
-.podium-card.winner[data-victory-effect="confetti"] .podium-avatar {
+.podium-card.winner[data-victory-effect="confetti"] .podium-avatar,
+.presentation-winner-identity[data-victory-effect="confetti"] > .player-avatar-art {
   animation: victory-pop 1.1s cubic-bezier(.2,.8,.2,1) both;
 }
-@keyframes victory-spotlight { to { filter: brightness(1.13); transform: translateY(-3px); } }
-@keyframes victory-stars { 50% { transform: translateY(-7px) scale(1.08); opacity: .62; } }
-@keyframes victory-pop { 0% { transform: scale(.76) rotate(-6deg); } 62% { transform: scale(1.1) rotate(2deg); } 100% { transform: none; } }
+.presentation-winner-identity[data-victory-effect="spotlight"] > .player-avatar-art {
+  animation: presentation-victory-spotlight 1.8s ease-in-out infinite alternate;
+}
+@keyframes victory-spotlight {
+  from { filter: brightness(1); }
+  to { filter: brightness(1.13) drop-shadow(0 0 10px color-mix(in srgb,var(--accent) 40%,transparent)); }
+}
+@keyframes presentation-victory-spotlight {
+  from { filter: brightness(1); }
+  to { filter: brightness(1.14) drop-shadow(0 0 18px color-mix(in srgb,var(--accent) 58%,transparent)); }
+}
+@keyframes victory-stars {
+  0%,100% { transform: scale(1); filter: drop-shadow(0 0 0 transparent); }
+  50% { transform: scale(1.06); filter: drop-shadow(0 0 10px var(--accent)); }
+}
+@keyframes victory-pop {
+  0% { transform: scale(.82); }
+  62% { transform: scale(1.08); }
+  100% { transform: none; }
+}
 
 @media (max-width: 680px) {
   .phone-join > .join-form-v2.phone-card {
@@ -518,6 +557,8 @@
   }
   .phone-join .player-customizer { gap: 5px; }
   .phone-join .customization-preview { min-height: 52px; grid-template-columns: 43px minmax(0,1fr) 4px; padding-block: 5px; }
+  .phone-join .customization-preview.effect-mode { grid-template-columns: 43px minmax(0,1fr) 78px 4px; gap: 7px; }
+  .phone-join .effect-preview-slot { width: 78px; height: 42px; }
   .phone-join .customization-preview-avatar { width: 43px; }
   .phone-join .customization-tabs button { min-height: 40px; }
   .phone-join .avatar-grid-v3 > button { min-height: 44px; }
@@ -525,6 +566,8 @@
 }
 @media (max-width: 380px), (max-height: 700px) {
   .phone-join .customization-preview { min-height: 46px; grid-template-columns: 38px minmax(0,1fr) 4px; }
+  .phone-join .customization-preview.effect-mode { grid-template-columns: 38px minmax(0,1fr) 70px 4px; gap: 6px; }
+  .phone-join .effect-preview-slot { width: 70px; height: 38px; }
   .phone-join .customization-preview-avatar { width: 38px; }
   .phone-join .customization-preview-copy small { display: none; }
   .phone-join .avatar-category-strip button { min-height: 38px; padding: 4px 8px; }
@@ -534,12 +577,12 @@
   .phone-join .accent-grid-v3 button { width: 40px; height: 40px; min-width: 40px; min-height: 40px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  [data-score-effect].score-impact-correct,
-  [data-score-effect].score-impact-wrong,
+  [data-score-effect].score-impact-correct [data-player-score],
+  [data-score-effect].score-impact-wrong [data-player-score],
   .effect-preview-layer *,
   .effect-preview-layer::before,
   .effect-preview-layer::after,
   .podium-card.winner,
-  .podium-card.winner::after,
-  .podium-card.winner .podium-avatar { animation: none !important; }
+  .podium-card.winner .podium-avatar,
+  .presentation-winner-identity > .player-avatar-art { animation: none !important; }
 }

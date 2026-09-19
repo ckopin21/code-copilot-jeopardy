@@ -151,6 +151,44 @@ const phoneViewports = [
   { width: 430, height: 932 }
 ];
 
+async function assertEffectPreviewContained(page) {
+  const result = await page.locator('[data-testid="player-customization-preview"]').evaluate((preview) => {
+    if (!(preview instanceof HTMLElement)) throw new Error('Missing customization preview');
+    const rect = (selector) => {
+      const element = preview.querySelector(selector);
+      if (!(element instanceof HTMLElement)) return null;
+      const box = element.getBoundingClientRect();
+      return { left: box.left, top: box.top, right: box.right, bottom: box.bottom };
+    };
+    const overlap = (a, b) => Boolean(a && b && a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top);
+    const previewBox = preview.getBoundingClientRect();
+    const slot = preview.querySelector('[data-testid="effect-preview-slot"]');
+    if (!(slot instanceof HTMLElement)) return { hasSlot: false, contained: false, overlapsProtected: true, clipped: false };
+    const slotBox = slot.getBoundingClientRect();
+    const slotRect = { left: slotBox.left, top: slotBox.top, right: slotBox.right, bottom: slotBox.bottom };
+    const protectedRects = [
+      rect('.customization-preview-avatar'),
+      rect('.customization-preview-copy'),
+      rect('.customization-accent-bar')
+    ].filter(Boolean);
+    return {
+      hasSlot: true,
+      contained:
+        slotBox.left >= previewBox.left - 1 &&
+        slotBox.right <= previewBox.right + 1 &&
+        slotBox.top >= previewBox.top - 1 &&
+        slotBox.bottom <= previewBox.bottom + 1,
+      overlapsProtected: protectedRects.some((item) => overlap(slotRect, item)),
+      clipped: getComputedStyle(slot).overflow === 'hidden'
+    };
+  });
+
+  expect(result.hasSlot).toBe(true);
+  expect(result.contained).toBe(true);
+  expect(result.overlapsProtected).toBe(false);
+  expect(result.clipped).toBe(true);
+}
+
 for (const viewport of phoneViewports) {
   test(`player customization stays usable at ${viewport.width}x${viewport.height}`, async ({ page }) => {
     await page.setViewportSize(viewport);
@@ -177,20 +215,35 @@ for (const viewport of phoneViewports) {
     await expect(page.locator('[data-testid="player-customization-preview"]')).toHaveCSS('--accent', '#5eead4');
 
     await page.getByRole('tab', { name: 'Effects' }).click();
+    await expect(page.locator('[data-testid="effect-preview-slot"]')).toBeVisible();
+    await assertEffectPreviewContained(page);
 
-    await page.getByRole('button', { name: 'Classic' }).click();
-    await expect(page.locator('[data-testid="player-customization-preview"]')).toHaveAttribute('data-preview-kind', 'buzzer');
-    await expect(page.locator('.effect-preview-buzz')).toBeVisible();
+    for (const buzzer of ['Classic', 'Laser', 'Chime', 'Arcade']) {
+      await page.locator('.customization-effects-panel').getByRole('button', { name: buzzer, exact: true }).click();
+      await expect(page.locator('[data-testid="player-customization-preview"]')).toHaveAttribute('data-preview-kind', 'buzzer');
+      await expect(page.locator('.effect-preview-buzz')).toBeVisible();
+      await assertEffectPreviewContained(page);
+    }
 
-    await page.getByRole('button', { name: 'Wave' }).click();
-    await expect(page.locator('[data-testid="player-customization-preview"]')).toHaveAttribute('data-score-effect', 'wave');
-    await expect(page.locator('[data-testid="player-customization-preview"]')).toHaveAttribute('data-preview-kind', 'score');
-    await expect(page.locator('.effect-preview-score')).toBeVisible();
+    for (const score of [['Pulse', 'pulse'], ['Spark', 'spark'], ['Wave', 'wave']]) {
+      await page.locator('.customization-effects-panel').getByRole('button', { name: score[0], exact: true }).click();
+      await expect(page.locator('[data-testid="player-customization-preview"]')).toHaveAttribute('data-score-effect', score[1]);
+      await expect(page.locator('[data-testid="player-customization-preview"]')).toHaveAttribute('data-preview-kind', 'score');
+      await expect(page.locator('.effect-preview-score')).toBeVisible();
+      await assertEffectPreviewContained(page);
+    }
 
-    await page.getByRole('button', { name: 'Stars' }).click();
-    await expect(page.locator('[data-testid="player-customization-preview"]')).toHaveAttribute('data-victory-effect', 'stars');
-    await expect(page.locator('[data-testid="player-customization-preview"]')).toHaveAttribute('data-preview-kind', 'victory');
-    await expect(page.locator('.effect-preview-stars')).toBeVisible();
+    for (const victory of [['Confetti', 'confetti'], ['Spotlight', 'spotlight'], ['Stars', 'stars']]) {
+      await page.locator('.customization-effects-panel').getByRole('button', { name: victory[0], exact: true }).click();
+      await expect(page.locator('[data-testid="player-customization-preview"]')).toHaveAttribute('data-victory-effect', victory[1]);
+      await expect(page.locator('[data-testid="player-customization-preview"]')).toHaveAttribute('data-preview-kind', 'victory');
+      await assertEffectPreviewContained(page);
+    }
+
+    const effectsBounds = await card.boundingBox();
+    expect(effectsBounds).not.toBeNull();
+    expect(effectsBounds!.y).toBeGreaterThanOrEqual(0);
+    expect(effectsBounds!.y + effectsBounds!.height).toBeLessThanOrEqual(viewport.height + 1);
 
     await page.getByRole('tab', { name: 'Avatar' }).click();
     await page.getByRole('button', { name: 'Robots' }).click();

@@ -71,10 +71,11 @@ export function PlayerJoinCustomization(props: Props) {
   };
 
   const previewClass = effectPreview ? ` preview-${effectPreview.kind}-${effectPreview.id}` : '';
+  const effectMode = tab === 'effects';
 
   return <section className="player-customizer" style={{ '--accent': props.accent } as React.CSSProperties}>
     <div
-      className={`customization-preview${previewClass}`}
+      className={`customization-preview${effectMode ? ' effect-mode' : ''}${previewClass}`}
       data-testid="player-customization-preview"
       data-score-effect={props.scoreEffect}
       data-victory-effect={props.victoryEffect}
@@ -87,15 +88,18 @@ export function PlayerJoinCustomization(props: Props) {
         <strong>{props.name.trim() || 'Your name'}</strong>
         <span>{titleLabel ?? 'No title'} · {FRAME_STYLES.find((item) => item.id === props.frameStyle)?.label}</span>
       </div>
-      <i className="customization-accent-bar" aria-hidden="true" />
-
-      {effectPreview && <div className="effect-preview-layer" key={effectPreview.nonce} aria-hidden="true">
-        {effectPreview.kind === 'buzzer' && <span className="effect-preview-buzz">BUZZ!</span>}
-        {effectPreview.kind === 'score' && <span className="effect-preview-score">+100</span>}
-        {effectPreview.kind === 'victory' && effectPreview.id === 'confetti' && <span className="effect-preview-confetti">{Array.from({ length: 10 }, (_, index) => <i key={index} />)}</span>}
-        {effectPreview.kind === 'victory' && effectPreview.id === 'spotlight' && <span className="effect-preview-spotlight" />}
-        {effectPreview.kind === 'victory' && effectPreview.id === 'stars' && <span className="effect-preview-stars">✦ ✧ ✦</span>}
+      {effectMode && <div className="effect-preview-slot" data-testid="effect-preview-slot" aria-hidden="true">
+        {effectPreview
+          ? <div className="effect-preview-layer" key={effectPreview.nonce}>
+              {effectPreview.kind === 'buzzer' && <span className="effect-preview-buzz">BUZZ!</span>}
+              {effectPreview.kind === 'score' && <span className="effect-preview-score">+100</span>}
+              {effectPreview.kind === 'victory' && effectPreview.id === 'confetti' && <span className="effect-preview-confetti">{Array.from({ length: 10 }, (_, index) => <i key={index} />)}</span>}
+              {effectPreview.kind === 'victory' && effectPreview.id === 'spotlight' && <span className="effect-preview-spotlight" />}
+              {effectPreview.kind === 'victory' && effectPreview.id === 'stars' && <span className="effect-preview-stars">✦ ✧ ✦</span>}
+            </div>
+          : <span className="effect-preview-idle">TAP<br/>TO PREVIEW</span>}
       </div>}
+      <i className="customization-accent-bar" aria-hidden="true" />
       <span className="sr-only" aria-live="polite">
         {effectPreview ? `Previewing ${effectPreview.id} ${effectPreview.kind} effect` : ''}
       </span>
