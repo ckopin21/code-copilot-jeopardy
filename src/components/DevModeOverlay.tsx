@@ -7,6 +7,7 @@ import { analyzeDevScenario, type DevLateMultiplier, type DevPlayerCount } from 
 import { PlayerStrip } from './PlayerStrip';
 import { ScoreFlight, type ScoreFlightState } from './ScoreFlight';
 import { ComebackBoostNotice } from './ComebackBoostNotice';
+import { useOutsideDismiss } from '../lib/useOutsideDismiss';
 
 type CardState = 'ready' | 'active' | 'fire' | 'cold';
 type RevealBeat = 0 | 1 | 2 | 3 | 4;
@@ -47,6 +48,10 @@ export function DevModeOverlay() {
   const [revealBeat, setRevealBeat] = useState<RevealBeat>(0);
   const [showComebackBanner, setShowComebackBanner] = useState(false);
   const timersRef = useRef<number[]>([]);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const panelRef = useRef<HTMLElement | null>(null);
+
+  useOutsideDismiss(open, () => setOpen(false), panelRef, triggerRef);
 
   useEffect(() => {
     const onState = (snapshot: RoomSnapshot) => setRoom(snapshot);
@@ -206,9 +211,9 @@ export function DevModeOverlay() {
   const spectacleText = revealBeat === 1 ? 'LOCK IT IN' : revealBeat === 2 ? 'NO MORE CHANGES' : revealBeat === 3 ? 'THE ANSWER IS…' : 'REVEALED';
 
   return <>
-    <button className={`dev-mode-trigger ${open ? 'active' : ''}`} onClick={() => setOpen((value) => !value)} aria-expanded={open} aria-label="Open developer mode">DEV</button>
+    <button ref={triggerRef} className={`dev-mode-trigger ${open ? 'active' : ''}`} onClick={() => setOpen((value) => !value)} aria-expanded={open} aria-label="Open developer mode">DEV</button>
 
-    {open && <aside className="dev-mode-panel" aria-label="Developer mode test bench">
+    {open && <aside ref={panelRef} className="dev-mode-panel" aria-label="Developer mode test bench">
       <header className="dev-mode-header">
         <div><small>DEVELOPER MODE</small><strong>Feature Test Bench</strong><span>Sandbox only. Live game state is never changed.</span></div>
         <button onClick={() => setOpen(false)} aria-label="Close developer mode">×</button>
