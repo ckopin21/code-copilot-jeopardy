@@ -178,6 +178,13 @@
   text-overflow: ellipsis;
 }
 
+.presentation-board .question-tile.used.has-result .used-result-chip > b,
+.presentation-board-fill .question-tile.used.has-result .used-result-chip > b,
+.board-presentation-mode .question-tile.used.has-result .used-result-chip > b {
+  gap: clamp(10px, .75vw, 14px) !important;
+}
+
+
 .presentation-board .question-tile.used.has-result .used-result-avatar-art,
 .presentation-board-fill .question-tile.used.has-result .used-result-avatar-art,
 .board-presentation-mode .question-tile.used.has-result .used-result-avatar-art {
