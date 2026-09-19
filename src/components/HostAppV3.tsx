@@ -725,7 +725,7 @@ export function HostAppV3() {
             {current.responseMode !== 'text' && !current.answerRevealed && <button className="secondary-button reveal-button" disabled={revealBeat > 0} onClick={() => void revealAnswer()}>Reveal Answer</button>}
             {current.answerRevealed && current.responseMode !== 'text' && (!spokenPlayer || current.timedOut) && <button className="primary-button" onClick={() => void perform('host:advance-board')}>Continue to Board</button>}
             {current.answerRevealed && current.responseMode === 'text' && unresolvedTextCount > 0 && <button className="primary-button confirm-grades-button" disabled={busy} onClick={() => void confirmTextGrades()}>Confirm Results</button>}
-            {current.answerRevealed && current.responseMode === 'text' && unresolvedTextCount === 0 && <button className="primary-button" onClick={() => void perform('host:advance-board')}>Continue to Board</button>}
+            {current.answerRevealed && current.responseMode === 'text' && Object.keys(current.textResponses ?? {}).length === 0 && <button className="primary-button" onClick={() => void perform('host:advance-board')}>Continue to Board</button>}
             {!current.answerRevealed && current.attemptedPlayerIds.length === 0 && Object.keys(current.textResponses ?? {}).length === 0 && current.wager === null && <button className="secondary-button" onClick={() => { autoBuzzQuestionRef.current = ''; void perform('host:cancel-question'); }}>Exit Without Answering</button>}
           </div>
         </article>
