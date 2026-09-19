@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { GameSettings, HostRoomCredentials, PackSummary, RoomSnapshot } from '../shared/types';
 import { clampDailyDoubleCount, DEFAULT_SETTINGS, QUESTION_VALUES, settingsForGameLength } from '../shared/config';
 import { GAME_MODES, gameModeDefinition } from '../shared/gameModes';
+import { freeResponseReadingTimer } from '../lib/freeResponseFlow';
 import { autoGradeAnswer } from '../shared/validation';
 import { emitAck, socket } from '../lib/socket';
 import { audio } from '../lib/audio';
@@ -471,6 +472,7 @@ export function HostAppV3() {
   const textResponses = current?.textResponses ?? {};
   const textResponseCount = activeQuestionPlayers.filter((player) => Boolean(textResponses[player.id])).length;
   const unresolvedTextCount = Object.values(textResponses).filter((response) => response.resolvedCorrect === null).length;
+  const readingTimer = freeResponseReadingTimer(current, settings, room.serverNow);
   const questionMultiplier = current ? Math.max(1, Math.round(current.effectiveValue / Math.max(1, current.baseValue))) : 1;
   const finalParticipants = room.finalRound
     ? connectedPlayers.filter((player) => room.finalRound!.participantIds.includes(player.id))
@@ -525,18 +527,33 @@ export function HostAppV3() {
     await perform('host:advance-board');
   };
 
-  const resolveText = async (playerId: string, correct: boolean) => {
-    const shouldAdvance = unresolvedTextCount <= 1;
-    const flight = prepareScoreFlight(playerId, correct);
-    const ok = await perform('host:resolve-text', { playerId, correct });
+  const setTextGrade = async (playerId: string, correct: boolean) => {
+    await perform('host:resolve-text', { playerId, correct });
+  };
+
+  const confirmTextGrades = async () => {
+    const pending = Object.entries(textResponses)
+      .filter(([, response]) => response.resolvedCorrect === null)
+      .map(([playerId, response]) => ({
+        playerId,
+        correct: response.reviewCorrect ?? response.autoCorrect
+      }));
+    if (!pending.length) return;
+
+    const prepared = pending.map(({ playerId, correct }) => ({
+      playerId,
+      correct,
+      flight: prepareScoreFlight(playerId, correct)
+    }));
+    const ok = await perform('host:confirm-text-grades');
     if (!ok) {
-      cancelPreparedScore(playerId);
+      prepared.forEach(({ playerId }) => cancelPreparedScore(playerId));
       return;
     }
-    if (flight) setScoreFlights((previous) => [...previous, flight]);
-    recordAttempt(playerId, correct);
-    audio.cue(correct ? 'correct' : 'wrong');
-    if (shouldAdvance) await perform('host:advance-board');
+    const flights = prepared.flatMap(({ flight }) => flight ? [flight] : []);
+    if (flights.length) setScoreFlights((previous) => [...previous, ...flights]);
+    prepared.forEach(({ playerId, correct }) => recordAttempt(playerId, correct));
+    audio.cue('locked');
   };
 
   const revealAnswer = async () => {
@@ -631,6 +648,7 @@ export function HostAppV3() {
           <div className="settings-grid-v2">
             <label data-tooltip="Quick uses 16 questions, Standard 25, and Marathon 36 including the $1000 row. Changing length resets Daily Doubles to 2, 4, or 6; you can still adjust that count manually afterward.">Game length<select value={settings.gameLength} onChange={(event) => void updateGameLength(event.target.value as GameSettings['gameLength'])}><option value="quick">Quick · 16 questions</option><option value="standard">Standard · 25 questions</option><option value="marathon">Marathon · 36 questions</option></select></label>
             <label data-tooltip="How long players have once answering or buzzing is active. Unlimited disables the countdown.">Answer timer<select value={settings.timerSeconds ?? 'none'} onChange={(event) => void updateSettings({ timerSeconds: event.target.value === 'none' ? null : Number(event.target.value) as GameSettings['timerSeconds'] })}>{[5,10,15,20,30].map((seconds)=><option key={seconds} value={seconds}>{seconds}s</option>)}<option value="none">Unlimited</option></select></label>
+            <label data-tooltip={gameMode.id === 'free-response' ? 'How long everyone gets to read the question before answer boxes open.' : 'Reading time only applies to Free Response mode.'}>Reading time<select disabled={gameMode.id !== 'free-response'} value={settings.freeResponseReadSeconds} onChange={(event) => void updateSettings({ freeResponseReadSeconds: Number(event.target.value) })}>{[0,3,5,7,10,15].map((seconds)=><option key={seconds} value={seconds}>{seconds === 0 ? 'Off' : `${seconds}s`}</option>)}</select></label>
             <label data-tooltip="By default, question selection rotates through players in join order. Manual keeps the selected picker until you change it.">Turn rotation<select value={settings.turnOrderMode} onChange={(event) => void updateSettings({ turnOrderMode: event.target.value as GameSettings['turnOrderMode'] })}><option value="join-order">Join order · rotate</option><option value="manual">Manual · host selects</option></select></label>
             <label data-tooltip={gameMode.dailyDoubles ? `How many hidden Daily Doubles are placed on the board. Maximum for this pack: ${dailyDoubleMax}.` : 'Free Response keeps standard board questions open to everyone, so Daily Doubles are disabled in this mode.'}>Daily Doubles<input type="number" min="0" max={dailyDoubleMax} step="1" disabled={!gameMode.dailyDoubles} value={gameMode.dailyDoubles ? settings.dailyDoubleCount : 0} onChange={(event) => void updateSettings({ dailyDoubleCount: Number(event.target.value), dailyDoublesEnabled: Number(event.target.value) > 0 })} onBlur={(event) => {
               const dailyDoubleCount = clampDailyDoubleCount(Number(event.currentTarget.value), dailyDoubleMax);
@@ -686,7 +704,8 @@ export function HostAppV3() {
           {current.responseMode !== 'text' && !current.answerRevealed && current.buzzOpen && !current.buzzWinnerId && <div className="buzzer-live-banner">BUZZERS LIVE</div>}
           {buzzWinner && <div className="winner-chip" style={{ '--accent': buzzWinner.accent } as React.CSSProperties}>{buzzWinner.avatar}<span>{buzzWinner.name}</span><b>BUZZED IN</b></div>}
 
-          {current.responseMode === 'text' && !current.answerRevealed && <div className="response-progress"><strong>{textResponseCount}/{activeQuestionPlayers.length}</strong><span>responses locked in</span><small>The answer reveals automatically when every active player submits or the timer expires.</small></div>}
+          {current.responseMode === 'text' && !current.answerRevealed && readingTimer && <div className="reading-countdown-v2"><small>READING TIME · ANSWERS OPEN IN</small><Timer timer={readingTimer} serverNow={room.serverNow} /><span>Answer entry stays locked until this countdown finishes.</span></div>}
+          {current.responseMode === 'text' && !current.answerRevealed && !readingTimer && <div className="response-progress"><strong>{textResponseCount}/{activeQuestionPlayers.length}</strong><span>responses locked in</span><small>Answer entry is open. The answer reveals automatically when every active player submits or the answer timer expires.</small></div>}
 
 
           {current.responseMode === 'text' && current.answerRevealed && <div className="grading-grid">
@@ -694,7 +713,8 @@ export function HostAppV3() {
               const response = textResponses[player.id];
               if (!response) return <div className="grading-row muted-row" key={player.id}><span>{player.avatar}</span><div><strong>{player.name}</strong><p>No response</p></div><b>NO SCORE</b></div>;
               const autoLabel = response.autoCorrect ? 'Auto: likely correct' : 'Auto: likely incorrect';
-              return <div className="grading-row" key={player.id}><span>{player.avatar}</span><div><strong>{player.name}</strong><p>{response.answer || 'Response locked'}</p><small>{autoLabel} · {response.autoConfidence} confidence</small></div>{response.resolvedCorrect === null ? <div className="grade-actions"><button className="correct-button" onClick={() => void resolveText(player.id, true)}>Award</button><button className="wrong-button" onClick={() => void resolveText(player.id, false)}>Reject</button></div> : <b className={response.resolvedCorrect ? 'grade-correct' : 'grade-wrong'}>{response.resolvedCorrect ? 'AWARDED' : 'REJECTED'}</b>}</div>;
+              const draftCorrect = response.reviewCorrect ?? response.autoCorrect;
+              return <div className="grading-row" key={player.id}><span>{player.avatar}</span><div><strong>{player.name}</strong><p>{response.answer || 'Response locked'}</p><small>{autoLabel} · {response.autoConfidence} confidence</small></div>{response.resolvedCorrect === null ? <div className="grade-actions" role="group" aria-label={`Grade ${player.name}`}><button aria-pressed={draftCorrect} className={`correct-button grade-choice ${draftCorrect ? 'selected' : ''}`} onClick={() => void setTextGrade(player.id, true)}>Correct</button><button aria-pressed={!draftCorrect} className={`wrong-button grade-choice ${!draftCorrect ? 'selected' : ''}`} onClick={() => void setTextGrade(player.id, false)}>Incorrect</button></div> : <b className={response.resolvedCorrect ? 'grade-correct' : 'grade-wrong'}>{response.resolvedCorrect ? 'AWARDED' : 'REJECTED'}</b>}</div>;
             })}
           </div>}
 
@@ -704,7 +724,8 @@ export function HostAppV3() {
             {current.responseMode !== 'text' && !current.dailyDouble && !current.buzzWinnerId && !current.answerRevealed && <button className="primary-button" onClick={() => { audio.cue('open'); void perform(current.buzzOpen ? 'host:close-buzzers' : 'host:open-buzzers'); }}>{current.buzzOpen ? 'Lock Buzzers' : 'Open Buzzers Now'}</button>}
             {current.responseMode !== 'text' && !current.answerRevealed && <button className="secondary-button reveal-button" disabled={revealBeat > 0} onClick={() => void revealAnswer()}>Reveal Answer</button>}
             {current.answerRevealed && current.responseMode !== 'text' && (!spokenPlayer || current.timedOut) && <button className="primary-button" onClick={() => void perform('host:advance-board')}>Continue to Board</button>}
-            {current.answerRevealed && current.responseMode === 'text' && Object.keys(current.textResponses ?? {}).length === 0 && <button className="primary-button" onClick={() => void perform('host:advance-board')}>Continue to Board</button>}
+            {current.answerRevealed && current.responseMode === 'text' && unresolvedTextCount > 0 && <button className="primary-button confirm-grades-button" disabled={busy} onClick={() => void confirmTextGrades()}>Confirm Results</button>}
+            {current.answerRevealed && current.responseMode === 'text' && unresolvedTextCount === 0 && <button className="primary-button" onClick={() => void perform('host:advance-board')}>Continue to Board</button>}
             {!current.answerRevealed && current.attemptedPlayerIds.length === 0 && Object.keys(current.textResponses ?? {}).length === 0 && current.wager === null && <button className="secondary-button" onClick={() => { autoBuzzQuestionRef.current = ''; void perform('host:cancel-question'); }}>Exit Without Answering</button>}
           </div>
         </article>
