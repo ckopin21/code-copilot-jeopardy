@@ -71,3 +71,88 @@
     grid-template-columns: 1fr;
   }
 }
+
+
+/* Free Response reading gate and host confirmation flow. */
+.reading-countdown-v2,
+.reading-lock-panel,
+.presentation-reading-countdown {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.reading-countdown-v2 {
+  width: min(560px, 100%);
+  padding: 14px 18px;
+  border: 1px solid rgba(147,197,253,.32);
+  border-radius: 14px;
+  background: rgba(8,34,54,.62);
+}
+
+.reading-countdown-v2 > small,
+.presentation-reading-countdown > small {
+  color: #9fc8ef;
+  font-size: .64rem;
+  font-weight: 900;
+  letter-spacing: .12em;
+}
+
+.reading-countdown-v2 > span,
+.reading-lock-panel > p {
+  margin: 0;
+  color: #9fb0c4;
+  font-size: .78rem;
+}
+
+.reading-lock-panel {
+  width: min(560px, 100%);
+  margin: 0 auto;
+  padding: 18px;
+  border: 1px solid rgba(147,197,253,.26);
+  border-radius: 16px;
+  background: rgba(4,30,48,.56);
+}
+
+.reading-lock-panel h3 {
+  margin: 0;
+}
+
+.reading-lock-panel .timer,
+.reading-countdown-v2 .timer,
+.presentation-reading-countdown .timer {
+  width: min(420px, 100%);
+}
+
+.presentation-reading-countdown {
+  width: min(560px, 82vw);
+}
+
+.grade-choice {
+  opacity: .62;
+}
+
+.grade-choice.selected {
+  opacity: 1;
+  box-shadow: inset 0 0 0 2px rgba(255,255,255,.28);
+}
+
+.correct-button.grade-choice.selected {
+  border-color: #70dfa9;
+}
+
+.wrong-button.grade-choice.selected {
+  border-color: #f28d98;
+}
+
+.confirm-grades-button {
+  min-width: 190px;
+}
+
+@media (max-width: 720px) {
+  .grade-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+}
