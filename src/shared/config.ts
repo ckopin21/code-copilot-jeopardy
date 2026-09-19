@@ -104,5 +104,6 @@ export const GAME_LENGTH_CONFIG = {
   marathon: { categories: 6, rows: 6 }
 } as const;
 
-export const AVATARS = ['🎬', '🚀', '🐭', '🦊', '🧠', '⭐', '🎮', '🧪', '🌙', '🏆'];
-export const ACCENT_COLORS = ['#ffd166', '#5eead4', '#93c5fd', '#f9a8d4', '#c4b5fd', '#fb923c', '#86efac'];
+/** Legacy emoji fallbacks remain available for old rooms and compact text-only surfaces. */
+export const AVATARS = AVATAR_CATALOG.map((avatar) => avatar.fallback);
+export const ACCENT_COLORS = PLAYER_ACCENT_COLORS;
