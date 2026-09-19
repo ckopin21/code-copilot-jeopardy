@@ -475,6 +475,15 @@ export function HostAppV3() {
   const unresolvedTextCount = Object.values(textResponses).filter((response) => response.resolvedCorrect === null).length;
   const missingTextResponseCount = questionParticipants.filter((player) => !textResponses[player.id]).length;
   const pendingTextResultCount = unresolvedTextCount + missingTextResponseCount;
+  const groupMissMercyActive = Boolean(
+    current?.responseMode === 'text'
+    && current.answerRevealed
+    && questionParticipants.length > 0
+    && questionParticipants.every((player) => {
+      const response = textResponses[player.id];
+      return !response || !(response.reviewCorrect ?? response.autoCorrect);
+    })
+  );
   const readingTimer = freeResponseReadingTimer(current, settings, room.serverNow);
   const questionMultiplier = current ? Math.max(1, Math.round(current.effectiveValue / Math.max(1, current.baseValue))) : 1;
   const finalParticipants = room.finalRound
@@ -490,13 +499,13 @@ export function HostAppV3() {
   const showTurnIndicator = turnIndicatorVisible(room.phase);
   const turnLabel = turnIndicatorLabel(room.phase);
 
-  const prepareScoreFlight = (playerId: string, correct: boolean): ScoreFlightState | null => {
+  const prepareScoreFlight = (playerId: string, correct: boolean, incorrectPoints = pointsAtStake): ScoreFlightState | null => {
     if (!current) return null;
     const player = room.players.find((item) => item.id === playerId);
     if (!player) return null;
     const comeback = correct && !current.dailyDouble ? calculateComebackAward(room, player, pointsAtStake) : null;
     const awardedPoints = comeback?.points ?? pointsAtStake;
-    const signedDelta = correct ? awardedPoints : settings.allowNegativeScores ? -pointsAtStake : -Math.min(Math.max(0, player.score), pointsAtStake);
+    const signedDelta = correct ? awardedPoints : settings.allowNegativeScores ? -incorrectPoints : -Math.min(Math.max(0, player.score), incorrectPoints);
     setScoreOverrides((previous) => ({ ...previous, [player.id]: player.score }));
     return {
       id: randomId('score-flight'),
@@ -548,10 +557,11 @@ export function HostAppV3() {
       .filter((entry): entry is { playerId: string; correct: boolean } => Boolean(entry));
     if (!pending.length) return;
 
+    const missPenalty = groupMissMercyActive ? Math.round(pointsAtStake / 2) : pointsAtStake;
     const prepared = pending.map(({ playerId, correct }) => ({
       playerId,
       correct,
-      flight: prepareScoreFlight(playerId, correct)
+      flight: prepareScoreFlight(playerId, correct, missPenalty)
     }));
     const ok = await perform('host:confirm-text-grades');
     if (!ok) {
@@ -716,15 +726,21 @@ export function HostAppV3() {
           {current.responseMode === 'text' && !current.answerRevealed && !readingTimer && <div className="response-progress"><strong>{textResponseCount}/{activeQuestionPlayers.length}</strong><span>responses locked in</span><small>Answer entry is open. The answer reveals automatically when every active player submits or the answer timer expires.</small></div>}
 
 
-          {current.responseMode === 'text' && current.answerRevealed && <div className="grading-grid">
+          {current.responseMode === 'text' && current.answerRevealed && <>
+            {groupMissMercyActive && <p className="helper-copy"><strong>GROUP MISS MERCY:</strong> nobody is currently marked correct, so each miss will cost half points.</p>}
+            <div className="grading-grid">
             {questionParticipants.map((player) => {
               const response = textResponses[player.id];
-              if (!response) return <div className="grading-row muted-row" key={player.id}><span>{player.avatar}</span><div><strong>{player.name}</strong><p>No response</p><small>Counts as an incorrect answer</small></div><b className="grade-wrong">-{pointsAtStake.toLocaleString()}</b></div>;
+              if (!response) {
+                const noResponsePenalty = groupMissMercyActive ? Math.round(pointsAtStake / 2) : pointsAtStake;
+                return <div className="grading-row muted-row" key={player.id}><span>{player.avatar}</span><div><strong>{player.name}</strong><p>No response</p><small>Counts as an incorrect answer</small></div><b className="grade-wrong">-{noResponsePenalty.toLocaleString()}</b></div>;
+              }
               const autoLabel = response.autoCorrect ? 'Auto: likely correct' : 'Auto: likely incorrect';
               const draftCorrect = response.reviewCorrect ?? response.autoCorrect;
               return <div className="grading-row" key={player.id}><span>{player.avatar}</span><div><strong>{player.name}</strong><p>{response.answer || 'Response locked'}</p><small>{autoLabel} · {response.autoConfidence} confidence</small></div>{response.resolvedCorrect === null ? <div className="grade-actions" role="group" aria-label={`Grade ${player.name}`}><button aria-pressed={draftCorrect} className={`correct-button grade-choice ${draftCorrect ? 'selected' : ''}`} onClick={() => void setTextGrade(player.id, true)}>Correct</button><button aria-pressed={!draftCorrect} className={`wrong-button grade-choice ${!draftCorrect ? 'selected' : ''}`} onClick={() => void setTextGrade(player.id, false)}>Incorrect</button></div> : <b className={response.resolvedCorrect ? 'grade-correct' : 'grade-wrong'}>{response.resolvedCorrect ? 'AWARDED' : 'REJECTED'}</b>}</div>;
             })}
-          </div>}
+            </div>
+          </>}
 
           {current.responseMode !== 'text' && current.answerRevealed && spokenPlayer && !current.timedOut && !judgedAttempt && <div className="judge-after-reveal"><small>NOW JUDGE THE RESPONSE</small><strong>{spokenPlayer.avatar} {spokenPlayer.name}</strong><div><button className="correct-button judge-big" onClick={() => void resolveSpoken(true)}>Correct</button><button className="wrong-button judge-big" onClick={() => void resolveSpoken(false)}>Incorrect</button></div></div>}
 

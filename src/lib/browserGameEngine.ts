@@ -974,6 +974,12 @@ export class BrowserGameEngine {
 
     if (!pending.length && !noResponsePlayers.length) throw new Error('There are no response grades awaiting confirmation');
 
+    const anyCorrect = participantIds.some((playerId) => {
+      const response = responses[playerId];
+      return Boolean(response && (response.resolvedCorrect ?? response.reviewCorrect ?? response.autoCorrect));
+    });
+    const missPenalty = anyCorrect ? current.effectiveValue : Math.round(current.effectiveValue / 2);
+
     this.checkpointScore(room);
     for (const [playerId, response] of pending) {
       const player = room.state.players.find((item) => item.id === playerId);
@@ -981,7 +987,7 @@ export class BrowserGameEngine {
       const correct = response.reviewCorrect ?? response.autoCorrect;
       response.reviewCorrect = correct;
       response.resolvedCorrect = correct;
-      const points = correct ? calculateComebackAward(room.state, player, current.effectiveValue).points : current.effectiveValue;
+      const points = correct ? calculateComebackAward(room.state, player, current.effectiveValue).points : missPenalty;
       const scoreDelta = this.addScore(player, correct ? points : -points, room.state.settings);
       this.recordBoardResult(room, player, correct, scoreDelta);
       if (correct) player.stats.correct += 1; else player.stats.incorrect += 1;
@@ -989,7 +995,7 @@ export class BrowserGameEngine {
     }
 
     for (const player of noResponsePlayers) {
-      const scoreDelta = this.addScore(player, -current.effectiveValue, room.state.settings);
+      const scoreDelta = this.addScore(player, -missPenalty, room.state.settings);
       this.recordBoardResult(room, player, false, scoreDelta);
       player.stats.incorrect += 1;
       this.applyStreak(player, false, room.state.settings);
