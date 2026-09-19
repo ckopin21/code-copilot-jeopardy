@@ -133,6 +133,7 @@ export function triggerScoreImpactEffect({ scoreTarget, effect, delta, reducedMo
     window.clearTimeout(timer);
     layer.remove();
     scoreTarget.classList.remove(
+      'score-impact-host',
       'score-impact-active',
       'score-impact-pulse',
       'score-impact-spark',

@@ -38,6 +38,8 @@ type EffectPreview =
   | { kind: 'victory'; id: PlayerVictoryEffect; nonce: number }
   | null;
 
+const SELECTABLE_FRAME_STYLES = FRAME_STYLES.filter((item) => item.id !== 'clean');
+
 export function PlayerJoinCustomization(props: Props) {
   const [tab, setTab] = useState<'avatar' | 'style' | 'effects'>('avatar');
   const selected = AVATAR_CATALOG.find((avatar) => avatar.id === props.avatarId) ?? AVATAR_CATALOG[0];
@@ -130,7 +132,7 @@ export function PlayerJoinCustomization(props: Props) {
       </div>
       <div className="customization-field">
         <span className="customization-label">Frame <small>Around your avatar</small></span>
-        <div className="choice-row-v3">{FRAME_STYLES.map((item) => <button type="button" key={item.id} aria-pressed={props.frameStyle === item.id} className={props.frameStyle === item.id ? 'selected' : ''} onClick={() => props.onFrameStyle(item.id)}>{item.label}</button>)}</div>
+        <div className="choice-row-v3 three">{SELECTABLE_FRAME_STYLES.map((item) => <button type="button" key={item.id} aria-pressed={props.frameStyle === item.id} className={props.frameStyle === item.id ? 'selected' : ''} onClick={() => props.onFrameStyle(item.id)}>{item.label}</button>)}</div>
       </div>
     </div>}
 

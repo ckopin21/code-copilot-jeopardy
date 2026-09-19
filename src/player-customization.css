@@ -144,9 +144,9 @@
   border-radius: 12px;
   background: linear-gradient(110deg,color-mix(in srgb,var(--accent) 11%,rgba(4,28,45,.9)),rgba(3,24,40,.78));
 }
-.customization-preview-avatar { width: 48px; height: 48px; font-size: 2rem; }
+.customization-preview-avatar { width: 48px; height: 48px; font-size: 2rem; z-index: 0; }
 .avatar-grid-v3 .player-avatar-art { width: 100%; height: 100%; font-size: 1.55rem; }
-.customization-preview-copy { min-width: 0; display: grid; gap: 1px; }
+.customization-preview-copy { position: relative; z-index: 1; min-width: 0; display: grid; gap: 1px; }
 .customization-preview-copy small {
   color: color-mix(in srgb,var(--accent) 82%,white);
   font-size: .54rem;
@@ -437,7 +437,6 @@
 
 /* Shared score effects. The preview and live game both use the same runtime classes. */
 .score-impact-host {
-  position: relative;
   overflow: visible;
   isolation: isolate;
 }
@@ -561,32 +560,278 @@
 }
 
 @media (max-width: 680px) {
-  .phone-join > .join-form-v2.phone-card {
-    gap: 6px !important;
+  .phone-shell.phone-join {
+    --join-inline-gutter: clamp(10px, 2.5vw, 14px);
+    --join-card-padding: clamp(10px, 3vw, 13px);
+    --join-section-gap: 6px;
+    --join-control-height: 42px;
+    --join-touch-target: 40px;
+    --join-preview-avatar: 42px;
+    --join-effect-slot: 72px;
+    box-sizing: border-box;
+    width: 100%;
+    height: 100dvh;
+    min-height: 100svh;
+    max-height: 100dvh;
+    place-items: center;
     overflow: hidden;
+    padding-top: max(8px, env(safe-area-inset-top));
+    padding-right: max(var(--join-inline-gutter), env(safe-area-inset-right));
+    padding-bottom: max(8px, env(safe-area-inset-bottom));
+    padding-left: max(var(--join-inline-gutter), env(safe-area-inset-left));
   }
-  .phone-join .player-customizer { gap: 5px; }
-  .phone-join .customization-preview { min-height: 52px; grid-template-columns: 43px minmax(0,1fr) 4px; padding-block: 5px; }
-  .phone-join .customization-preview.effect-mode { grid-template-columns: 43px minmax(0,1fr) 78px 4px; gap: 7px; }
-  .phone-join .effect-preview-slot { width: 78px; height: 42px; }
-  .phone-join .customization-preview-avatar { width: 43px; height: 43px; place-self: center; }
-  .phone-join .customization-preview-avatar .player-avatar-emoji { transform: translateY(-0.05em); }
-  .phone-join .customization-tabs button { min-height: 40px; }
-  .phone-join .avatar-grid-v3 > button { min-height: 44px; }
-  .phone-join .choice-row-v3 button { min-height: 40px; font-size: .62rem; }
+
+  .phone-join > .join-form-v2.phone-card {
+    box-sizing: border-box;
+    width: min(420px, 100%);
+    max-width: 100%;
+    max-height: 100%;
+    margin: auto;
+    padding: var(--join-card-padding);
+    gap: var(--join-section-gap);
+    border-radius: 16px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .phone-join .phone-brand {
+    width: 100%;
+    margin: 0;
+    justify-self: center;
+    text-align: center;
+  }
+
+  .phone-join .phone-brand span {
+    font-size: .58rem;
+  }
+
+  .phone-join .phone-brand strong {
+    font-size: 1.5rem;
+  }
+
+  .phone-join .join-code-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .phone-join .join-code-row > label,
+  .phone-join .join-form-v2 > label {
+    min-width: 0;
+    margin: 0;
+    line-height: 1.2;
+  }
+
+  .phone-join .join-form-v2 input {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: var(--join-control-height);
+    margin-top: 3px;
+    padding: .5rem .65rem;
+  }
+
+  .phone-join .scan-qr-button {
+    min-height: var(--join-control-height);
+    padding: .5rem .68rem;
+    align-self: end;
+    white-space: nowrap;
+  }
+
+  .phone-join .player-customizer {
+    width: 100%;
+    min-width: 0;
+    gap: 5px;
+  }
+
+  .phone-join .customization-preview {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    min-height: 50px;
+    grid-template-columns: var(--join-preview-avatar) minmax(0, 1fr) 4px;
+    gap: 7px;
+    padding: 4px 7px;
+  }
+
+  .phone-join .customization-preview.effect-mode {
+    grid-template-columns: var(--join-preview-avatar) minmax(0, 1fr) minmax(0, var(--join-effect-slot)) 4px;
+    gap: 9px;
+  }
+
+  .phone-join .customization-preview-avatar {
+    width: var(--join-preview-avatar);
+    height: var(--join-preview-avatar);
+    place-self: center;
+    left: -1px;
+    top: -1px;
+  }
+
+  .phone-join .customization-preview-avatar .player-avatar-emoji {
+    transform: translateY(-0.025em);
+  }
+
+  .phone-join .effect-preview-slot {
+    width: 100%;
+    max-width: var(--join-effect-slot);
+    height: 40px;
+    justify-self: end;
+  }
+
+  .phone-join .customization-tabs {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .phone-join .customization-tabs button,
+  .phone-join .choice-row-v3 button,
+  .phone-join .avatar-category-strip button {
+    box-sizing: border-box;
+    min-width: 0;
+    min-height: var(--join-touch-target);
+  }
+
+  .phone-join .customization-tabs button {
+    width: 100%;
+    padding-inline: 4px;
+    text-align: center;
+  }
+
+  .phone-join .customization-panel {
+    width: 100%;
+    min-width: 0;
+    gap: 5px;
+  }
+
+  .phone-join .avatar-category-strip {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    justify-content: safe center;
+    scroll-padding-inline: 4px;
+    scroll-snap-type: inline proximity;
+    touch-action: pan-x;
+  }
+
+  .phone-join .avatar-category-strip button {
+    padding: 4px 9px;
+    scroll-snap-align: start;
+  }
+
+  .phone-join .avatar-grid-v3 {
+    width: 100%;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 5px;
+  }
+
+  .phone-join .avatar-grid-v3 > button {
+    box-sizing: border-box;
+    min-width: 0;
+    min-height: 44px;
+    padding: 3px;
+  }
+
+  .phone-join .customization-style-panel,
+  .phone-join .customization-effects-panel {
+    gap: 5px;
+  }
+
+  .phone-join .customization-field {
+    gap: 4px;
+  }
+
+  .phone-join .customization-label {
+    min-width: 0;
+    font-size: .63rem;
+  }
+
+  .phone-join .customization-label small {
+    min-width: 0;
+    font-size: .53rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .phone-join .accent-grid-v3 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 5px;
+  }
+
+  .phone-join .accent-grid-v3 button {
+    width: var(--join-touch-target);
+    height: var(--join-touch-target);
+    min-width: var(--join-touch-target);
+    min-height: var(--join-touch-target);
+  }
+
+  .phone-join .choice-row-v3,
+  .phone-join .choice-row-v3.three {
+    gap: 4px;
+  }
+
+  .phone-join .choice-row-v3 button {
+    min-height: var(--join-touch-target);
+    padding: 4px;
+    font-size: .62rem;
+    overflow-wrap: anywhere;
+  }
+
+  .phone-join .join-form-v2 .giant {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 44px;
+    padding: .62rem 1rem;
+    font-size: .92rem;
+  }
+
+  .phone-join .join-form-v2 > .text-button {
+    min-height: var(--join-touch-target);
+    width: auto;
+    justify-self: center;
+    padding: .4rem .7rem;
+    line-height: 1.1;
+  }
 }
-@media (max-width: 380px), (max-height: 700px) {
-  .phone-join .customization-preview { min-height: 46px; grid-template-columns: 38px minmax(0,1fr) 4px; }
-  .phone-join .customization-preview.effect-mode { grid-template-columns: 38px minmax(0,1fr) 70px 4px; gap: 6px; }
-  .phone-join .effect-preview-slot { width: 70px; height: 38px; }
-  .phone-join .customization-preview-avatar { width: 38px; height: 38px; place-self: center; }
-  .phone-join .customization-preview-copy small { display: none; }
-  .phone-join .avatar-category-strip button { min-height: 38px; padding: 4px 8px; }
-  .phone-join .avatar-grid-v3 { gap: 4px; }
-  .phone-join .avatar-grid-v3 > button { min-height: 44px; padding: 3px; }
-  .phone-join .customization-label small { display: none; }
-  .phone-join .accent-grid-v3 button { width: 40px; height: 40px; min-width: 40px; min-height: 40px; }
+
+@media (max-width: 380px) {
+  .phone-shell.phone-join {
+    --join-card-padding: 10px;
+    --join-section-gap: 5px;
+    --join-preview-avatar: 40px;
+    --join-effect-slot: 68px;
+  }
+
+  .phone-join .customization-preview {
+    min-height: 48px;
+    gap: 6px;
+    padding-inline: 6px;
+  }
+
+  .phone-join .customization-preview.effect-mode {
+    gap: 8px;
+  }
+
+  .phone-join .customization-preview-copy small {
+    display: none;
+  }
+
+  .phone-join .avatar-category-strip button {
+    padding-inline: 8px;
+  }
+
+  .phone-join .customization-label small {
+    display: none;
+  }
+
+  .phone-join .choice-row-v3 button {
+    font-size: .6rem;
+  }
 }
+
 @media (prefers-reduced-motion: reduce) {
   .score-impact-active,
   .score-impact-layer i,
