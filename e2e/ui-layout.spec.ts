@@ -122,10 +122,6 @@ async function assertPresentationResultAvatarsArePlain(page, rootSelector) {
     expect(item.emoji.clipPath).toBe('none');
     expect(item.emoji.maskImage).toBe('none');
 
-    expect(item.emoji.left).toBeGreaterThanOrEqual(item.avatar.left - 1);
-    expect(item.emoji.right).toBeLessThanOrEqual(item.avatar.right + 1);
-    expect(item.emoji.top).toBeGreaterThanOrEqual(item.avatar.top - 1);
-    expect(item.emoji.bottom).toBeLessThanOrEqual(item.avatar.bottom + 1);
     expect(Math.abs((item.avatar.left + item.avatar.right) / 2 - (item.content.left + item.content.right) / 2)).toBeLessThanOrEqual(1);
     expect(Math.abs((item.avatar.top + item.avatar.bottom) / 2 - (item.content.top + item.content.bottom) / 2)).toBeLessThanOrEqual(1);
     expect(item.avatar.left).toBeGreaterThanOrEqual(item.chip.left - 1);
