@@ -155,7 +155,7 @@
 .customization-tabs button,
 .choice-row-v3 button,
 .avatar-category-strip button {
-  min-height: 34px;
+  min-height: 40px;
   border: 1px solid rgba(255,255,255,.11);
   border-radius: 8px;
   background: rgba(255,255,255,.045);
@@ -186,8 +186,8 @@
 .avatar-category-strip::-webkit-scrollbar { display: none; }
 .avatar-category-strip button {
   flex: 0 0 auto;
-  min-height: 30px;
-  padding: 4px 9px;
+  min-height: 40px;
+  padding: 5px 10px;
   font-size: .62rem;
   white-space: nowrap;
 }
@@ -198,7 +198,7 @@
 }
 .avatar-grid-v3 > button {
   min-width: 0;
-  min-height: 51px;
+  min-height: 48px;
   aspect-ratio: 1;
   padding: 4px;
   border: 1px solid rgba(255,255,255,.12);
@@ -225,11 +225,11 @@
   font-weight: 900;
 }
 .customization-label small { color: #769bad; font-size: .55rem; font-weight: 700; text-align: right; }
-.accent-grid-v3 { display: grid; grid-template-columns: repeat(8,1fr); gap: 6px; }
+.accent-grid-v3 { display: grid; grid-template-columns: repeat(4,1fr); gap: 6px; }
 .accent-grid-v3 button {
   position: relative;
-  min-width: 30px;
-  min-height: 30px;
+  min-width: 40px;
+  min-height: 40px;
   border: 2px solid rgba(255,255,255,.2);
   border-radius: 50%;
   background: var(--swatch);
@@ -333,19 +333,19 @@
   .phone-join .player-customizer { gap: 5px; }
   .phone-join .customization-preview { min-height: 52px; grid-template-columns: 43px minmax(0,1fr) 4px; padding-block: 5px; }
   .phone-join .customization-preview-avatar { width: 43px; }
-  .phone-join .customization-tabs button { min-height: 31px; }
-  .phone-join .avatar-grid-v3 > button { min-height: 46px; }
-  .phone-join .choice-row-v3 button { min-height: 32px; font-size: .62rem; }
+  .phone-join .customization-tabs button { min-height: 40px; }
+  .phone-join .avatar-grid-v3 > button { min-height: 44px; }
+  .phone-join .choice-row-v3 button { min-height: 40px; font-size: .62rem; }
 }
 @media (max-width: 380px), (max-height: 700px) {
   .phone-join .customization-preview { min-height: 46px; grid-template-columns: 38px minmax(0,1fr) 4px; }
   .phone-join .customization-preview-avatar { width: 38px; }
   .phone-join .customization-preview-copy small { display: none; }
-  .phone-join .avatar-category-strip button { min-height: 27px; padding: 3px 7px; }
+  .phone-join .avatar-category-strip button { min-height: 38px; padding: 4px 8px; }
   .phone-join .avatar-grid-v3 { gap: 4px; }
-  .phone-join .avatar-grid-v3 > button { min-height: 42px; padding: 3px; }
+  .phone-join .avatar-grid-v3 > button { min-height: 44px; padding: 3px; }
   .phone-join .customization-label small { display: none; }
-  .phone-join .accent-grid-v3 button { min-width: 27px; min-height: 27px; }
+  .phone-join .accent-grid-v3 button { min-width: 38px; min-height: 38px; }
 }
 @media (prefers-reduced-motion: reduce) {
   [data-score-effect].score-impact-correct,
