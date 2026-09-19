@@ -51,7 +51,8 @@ describe('dynamic UI layout regression', () => {
       '.presentation-winner-identity > .player-avatar-art'
     ]) expect(css).toContain(selector);
 
-    expect(css).toContain('.player-avatar-frame');
+    expect(css).not.toContain('.player-avatar-frame');
+    expect(css).not.toContain('[data-frame=');
     expect(css).toContain('.player-avatar-content');
     expect(css).not.toContain('.player-title-badge');
   });
