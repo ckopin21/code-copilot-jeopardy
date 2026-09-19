@@ -25,15 +25,19 @@ describe('menu layout ownership', () => {
     expect(menuLayout).toMatch(/\.showcase-menu\.menu-fullscreen \.menu-card-v2\s*\{[\s\S]*?border:\s*0\s*!important/);
   });
 
-  it('centers and constrains the desktop host and join controls', () => {
+  it('keeps the desktop panel group compact and centers its controls', () => {
     expect(interactionPolish).not.toMatch(/\.showcase-menu \.menu-actions\s*\{[\s\S]*?width:/);
 
-    expect(menuLayout).toMatch(/\.showcase-menu \.host-menu-actions\s*\{[\s\S]*?width:\s*min\(680px,\s*88%\)\s*!important/);
-    expect(menuLayout).toMatch(/\.showcase-menu \.host-menu-actions\s*\{[\s\S]*?max-width:\s*680px\s*!important/);
+    expect(menuLayout).toMatch(/\.showcase-menu \.menu-mode-grid\s*\{[\s\S]*?width:\s*min\(1280px,/);
+    expect(menuLayout).toMatch(/\.showcase-menu \.menu-mode-grid\s*\{[\s\S]*?max-width:\s*1280px/);
+
+    expect(menuLayout).toMatch(/\.showcase-menu \.host-menu-actions\s*\{[\s\S]*?width:\s*min\(760px,\s*92%\)\s*!important/);
+    expect(menuLayout).toMatch(/\.showcase-menu \.host-menu-actions\s*\{[\s\S]*?max-width:\s*760px\s*!important/);
     expect(menuLayout).toMatch(/\.showcase-menu \.host-menu-actions\s*\{[\s\S]*?justify-self:\s*center/);
 
+    expect(menuLayout).toMatch(/\.showcase-menu \.player-menu-section\s*\{[\s\S]*?grid-template-rows:\s*auto minmax\(0,\s*1fr\)/);
     expect(menuLayout).toMatch(/\.showcase-menu \.join-game-button\s*\{[\s\S]*?width:\s*min\(340px,\s*88%\)\s*!important/);
-    expect(menuLayout).toMatch(/\.showcase-menu \.join-game-button\s*\{[\s\S]*?height:\s*auto\s*!important/);
-    expect(menuLayout).toMatch(/\.showcase-menu \.join-game-button\s*\{[\s\S]*?min-height:\s*clamp\(92px,\s*12vh,\s*128px\)\s*!important/);
+    expect(menuLayout).toMatch(/\.showcase-menu \.join-game-button\s*\{[\s\S]*?align-self:\s*center/);
+    expect(menuLayout).toMatch(/\.showcase-menu \.join-game-button\s*\{[\s\S]*?min-height:\s*clamp\(78px,\s*9vh,\s*96px\)\s*!important/);
   });
 });

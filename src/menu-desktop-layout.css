@@ -40,7 +40,6 @@
   /* Keep the controls readable on ultrawide/4K screens while the stage itself remains edge-to-edge. */
   .showcase-menu .menu-logo-v2,
   .showcase-menu .menu-subtitle-v2,
-  .showcase-menu .menu-mode-grid,
   .showcase-menu .menu-tool-row {
     width: min(1680px, calc(100vw - clamp(48px, 7vw, 160px)));
     max-width: none;
@@ -63,18 +62,26 @@
   }
 
   .showcase-menu .menu-mode-grid {
+    width: min(1280px, calc(100vw - clamp(72px, 10vw, 220px)));
+    max-width: 1280px;
+    margin-left: auto;
+    margin-right: auto;
     grid-template-columns: minmax(0, 1.65fr) minmax(300px, .78fr) !important;
-    gap: clamp(14px, 1.5vw, 28px) !important;
+    gap: clamp(14px, 1.5vw, 24px) !important;
   }
 
   .showcase-menu .menu-mode-section {
-    padding: clamp(16px, min(1.6vw, 2.2vh), 28px) !important;
-    gap: clamp(9px, 1.2vh, 16px) !important;
+    padding: clamp(14px, min(1.25vw, 1.8vh), 22px) !important;
+    gap: clamp(8px, 1vh, 12px) !important;
+  }
+
+  .showcase-menu .player-menu-section {
+    grid-template-rows: auto minmax(0, 1fr);
   }
 
   .showcase-menu .host-menu-actions {
-    width: min(680px, 88%) !important;
-    max-width: 680px !important;
+    width: min(760px, 92%) !important;
+    max-width: 760px !important;
     margin-inline: auto;
     justify-self: center;
     gap: clamp(9px, 1.2vh, 15px) !important;
@@ -82,7 +89,7 @@
 
   .showcase-menu .host-menu-actions .menu-new-game,
   .showcase-menu .saved-game-inline {
-    min-height: clamp(72px, 10vh, 112px) !important;
+    min-height: clamp(66px, 8vh, 88px) !important;
   }
 
   .showcase-menu .saved-game-inline {
@@ -110,10 +117,10 @@
     width: min(340px, 88%) !important;
     max-width: 340px !important;
     height: auto !important;
-    min-height: clamp(92px, 12vh, 128px) !important;
+    min-height: clamp(78px, 9vh, 96px) !important;
     margin-inline: auto;
     justify-self: center;
-    align-self: start;
+    align-self: center;
   }
 
   .showcase-menu .menu-tool-button {
@@ -166,17 +173,17 @@
   }
 
   .showcase-menu .menu-mode-section {
-    padding-block: 9px !important;
-    gap: 6px !important;
+    padding-block: 8px !important;
+    gap: 5px !important;
   }
 
   .showcase-menu .host-menu-actions .menu-new-game,
   .showcase-menu .saved-game-inline {
-    min-height: 58px !important;
+    min-height: 54px !important;
   }
 
   .showcase-menu .join-game-button {
-    min-height: 92px !important;
+    min-height: 74px !important;
   }
 
   .showcase-menu .menu-tool-button {
