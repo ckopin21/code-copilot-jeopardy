@@ -392,6 +392,13 @@ function createHostPeerOnce(roomCode: string): Promise<void> {
     window.setTimeout(() => finishError(new Error('Timed out starting the host connection')), 8000);
   });
 }
+function hostPeerIdIsTaken(error: unknown): boolean {
+  const type = typeof error === 'object' && error !== null && 'type' in error
+    ? String((error as { type?: unknown }).type ?? '')
+    : '';
+  return type === 'unavailable-id' || /ID .+ is taken/i.test(failMessage(error));
+}
+
 async function startHostPeer(roomCode: string, retryUnavailable: boolean): Promise<void> {
   if (hostPeer && hostRoomCode === roomCode && !hostPeer.destroyed) {
     if (ownsHostAuthority(roomCode)) {
@@ -406,14 +413,38 @@ async function startHostPeer(roomCode: string, retryUnavailable: boolean): Promi
     try { stalePeer.destroy(); } catch { /* stale peer */ }
   }
   let lastError: Error | null = null;
+  let sawPeerIdTaken = false;
+  let takeoverAuthorityId = '';
   const attempts = retryUnavailable ? 12 : 1;
-  for (let attempt = 0; attempt < attempts; attempt += 1) {
-    try { await createHostPeerOnce(roomCode); return; }
-    catch (error) {
-      lastError = error instanceof Error ? error : new Error('Could not start host connection');
-      if (!retryUnavailable) break;
-      await new Promise((resolve) => window.setTimeout(resolve, 500));
+
+  try {
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+      try {
+        await createHostPeerOnce(roomCode);
+        return;
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error('Could not start host connection');
+        const peerIdTaken = hostPeerIdIsTaken(error);
+        sawPeerIdTaken ||= peerIdTaken;
+        if (!retryUnavailable) break;
+
+        if (peerIdTaken && !takeoverAuthorityId) {
+          // A saved room opened in a second tab can legitimately collide with the first tab's
+          // PeerJS id. Claiming local authority tells the old tab to release that peer so the
+          // saved room can move to this tab instead of getting stuck in an "ID is taken" loop.
+          takeoverAuthorityId = randomId('host-takeover');
+          claimHostAuthority(roomCode, takeoverAuthorityId);
+        }
+
+        await new Promise((resolve) => window.setTimeout(resolve, peerIdTaken ? 650 : 500));
+      }
     }
+  } finally {
+    if (takeoverAuthorityId) releaseHostAuthority(roomCode, takeoverAuthorityId);
+  }
+
+  if (sawPeerIdTaken) {
+    throw new Error('Another host screen is still using this saved room. Close that host screen, then retry');
   }
   throw lastError ?? new Error('Could not start host connection');
 }
