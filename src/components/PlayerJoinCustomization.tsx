@@ -87,7 +87,7 @@ export function PlayerJoinCustomization(props: Props) {
         <strong>{props.name.trim() || 'Your name'}</strong>
         <span>{FRAME_STYLES.find((item) => item.id === props.frameStyle)?.label} frame</span>
       </div>
-      {effectMode && <div className="effect-preview-slot" data-testid="effect-preview-slot" aria-hidden="true">
+      {effectMode && <div className="effect-preview-slot" data-testid="effect-preview-slot" data-score-impact-root="preview" aria-hidden="true">
         {effectPreview
           ? <div className="effect-preview-layer" key={effectPreview.nonce}>
               {effectPreview.kind === 'buzzer' && <span className="effect-preview-buzz">BUZZ!</span>}
