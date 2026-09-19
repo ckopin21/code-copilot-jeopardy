@@ -591,6 +591,7 @@ describe('BrowserGameEngine production state', () => {
       expect(engine.snapshot(host.roomCode).currentQuestion?.textResponses?.[player.playerId]).toBeTruthy();
       engine.revealAnswer(host.roomCode, host.hostToken);
       engine.resolveTextResponse(host.roomCode, host.hostToken, player.playerId, false);
+      engine.confirmTextResponses(host.roomCode, host.hostToken);
       engine.advanceToBoard(host.roomCode, host.hostToken);
     }
 
@@ -781,6 +782,7 @@ describe('BrowserGameEngine production state', () => {
       dailyDoubleCount: 16,
       finalRoundEnabled: false,
       timerSeconds: 15,
+      freeResponseReadSeconds: 0,
       allowNegativeScores: true
     });
     const one = addPlayer(engine, host.roomCode, 'One');
@@ -809,12 +811,21 @@ describe('BrowserGameEngine production state', () => {
 
     engine.resolveTextResponse(host.roomCode, host.hostToken, one.playerId, true);
     engine.resolveTextResponse(host.roomCode, host.hostToken, two.playerId, false);
-    engine.advanceToBoard(host.roomCode, host.hostToken);
 
-    const after = engine.snapshot(host.roomCode);
-    expect(after.players.find((player) => player.id === one.playerId)?.score).toBe(value);
-    expect(after.players.find((player) => player.id === two.playerId)?.score).toBe(-value);
-    expect(after.turnPlayerId).toBe(two.playerId);
+    const drafted = engine.snapshot(host.roomCode);
+    expect(drafted.players.find((player) => player.id === one.playerId)?.score).toBe(0);
+    expect(drafted.players.find((player) => player.id === two.playerId)?.score).toBe(0);
+    expect(drafted.currentQuestion?.textResponses?.[one.playerId].reviewCorrect).toBe(true);
+    expect(drafted.currentQuestion?.textResponses?.[two.playerId].reviewCorrect).toBe(false);
+    expect(() => engine.advanceToBoard(host.roomCode, host.hostToken)).toThrow(/grade each submitted response/i);
+
+    engine.confirmTextResponses(host.roomCode, host.hostToken);
+    const confirmed = engine.snapshot(host.roomCode);
+    expect(confirmed.players.find((player) => player.id === one.playerId)?.score).toBe(value);
+    expect(confirmed.players.find((player) => player.id === two.playerId)?.score).toBe(-value);
+
+    engine.advanceToBoard(host.roomCode, host.hostToken);
+    expect(engine.snapshot(host.roomCode).turnPlayerId).toBe(two.playerId);
   });
 
   it('does not penalize only the selector when a Free Response timer expires', () => {
@@ -823,6 +834,7 @@ describe('BrowserGameEngine production state', () => {
       dailyDoublesEnabled: false,
       finalRoundEnabled: false,
       timerSeconds: 5,
+      freeResponseReadSeconds: 0,
       allowNegativeScores: true
     });
     const one = addPlayer(engine, host.roomCode, 'One');
@@ -841,6 +853,50 @@ describe('BrowserGameEngine production state', () => {
     expect(state.players.find((player) => player.id === two.playerId)?.score).toBe(0);
   });
 
+
+  it('holds Free Response input closed for the configured reading time and auto-selects a draft grade', () => {
+    const { engine, host } = setup({
+      gameMode: 'free-response',
+      dailyDoublesEnabled: false,
+      finalRoundEnabled: false,
+      timerSeconds: 15,
+      freeResponseReadSeconds: 5
+    });
+    const player = addPlayer(engine, host.roomCode, 'Reader');
+    engine.startGame(host.roomCode, host.hostToken);
+    const tile = firstUnused(engine, host.roomCode);
+    engine.selectQuestion(host.roomCode, host.hostToken, tile.questionId);
+
+    const reading = engine.snapshot(host.roomCode);
+    expect(reading.settings.freeResponseReadSeconds).toBe(5);
+    expect(reading.currentQuestion?.responseOpensAt).toBeTypeOf('number');
+    expect(reading.timer.running).toBe(false);
+    expect(() => engine.submitTextResponse(host.roomCode, player.playerId, player.reconnectToken, 'early'))
+      .toThrow(/not open yet/i);
+
+    const opensAt = reading.currentQuestion!.responseOpensAt!;
+    engine.tick(opensAt);
+
+    const open = engine.snapshot(host.roomCode);
+    expect(open.currentQuestion?.responseOpensAt).toBeNull();
+    expect(open.timer.running).toBe(true);
+    expect(open.timer.durationMs).toBe(15_000);
+
+    const rooms = (engine as unknown as { rooms: Map<string, { questions: Record<string, { acceptedAnswers: string[] }> }> }).rooms;
+    const accepted = rooms.get(host.roomCode)!.questions[tile.questionId].acceptedAnswers[0];
+    engine.submitTextResponse(host.roomCode, player.playerId, player.reconnectToken, accepted);
+
+    const revealed = engine.snapshot(host.roomCode);
+    const response = revealed.currentQuestion?.textResponses?.[player.playerId];
+    expect(revealed.currentQuestion?.answerRevealed).toBe(true);
+    expect(response?.autoCorrect).toBe(true);
+    expect(response?.reviewCorrect).toBe(true);
+    expect(response?.resolvedCorrect).toBeNull();
+    expect(revealed.players.find((candidate) => candidate.id === player.playerId)?.score).toBe(0);
+
+    engine.confirmTextResponses(host.roomCode, host.hostToken);
+    expect(engine.snapshot(host.roomCode).currentQuestion?.textResponses?.[player.playerId].resolvedCorrect).toBe(true);
+  });
 
   it('keeps Classic and Free Response question packs isolated', () => {
     const { engine, host } = setup();
