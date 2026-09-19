@@ -53,7 +53,7 @@ const categories = [
 
 export const freeResponseGenreMusicPack = buildPack({
   id: 'free-response-music',
-  title: 'Free Response: Music',
+  title: 'Music',
   theme: 'Pop, rock, hip-hop, albums, bands, and music terminology',
   description: 'A music all-play pack with new songs, artists, albums, and theory facts separate from Classic.',
   difficulty: 'mixed',

@@ -53,7 +53,7 @@ const categories = [
 
 export const freeResponseGenreDisneyPack = buildPack({
   id: 'free-response-disney',
-  title: 'Free Response: Disney',
+  title: 'Disney',
   theme: 'Disney animation, Pixar, parks, villains, characters, and studio history',
   description: 'A Disney-focused all-play pack with completely separate questions from the Classic Disney pack.',
   difficulty: 'mixed',

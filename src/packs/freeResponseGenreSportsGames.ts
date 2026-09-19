@@ -53,7 +53,7 @@ const categories = [
 
 export const freeResponseGenreSportsGamesPack = buildPack({
   id: 'free-response-sports-games',
-  title: 'Free Response: Sports & Games',
+  title: 'Sports & Games',
   theme: 'Football, basketball, baseball, soccer, board games, and international sports',
   description: 'A sports-and-games all-play pack with new facts separate from the Classic Sports & Games set.',
   difficulty: 'mixed',

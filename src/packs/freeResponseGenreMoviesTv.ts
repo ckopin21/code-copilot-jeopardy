@@ -53,7 +53,7 @@ const categories = [
 
 export const freeResponseGenreMoviesTvPack = buildPack({
   id: 'free-response-movies-tv',
-  title: 'Free Response: Movies & TV',
+  title: 'Movies & TV',
   theme: 'Blockbusters, television, animation, actors, sci-fi, and screen terminology',
   description: 'A screen-entertainment all-play pack using new facts separate from the Classic Movies & TV set.',
   difficulty: 'mixed',
