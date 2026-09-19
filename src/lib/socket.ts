@@ -412,7 +412,6 @@ async function startHostPeer(roomCode: string, retryUnavailable: boolean): Promi
     socket.connected = false;
     try { stalePeer.destroy(); } catch { /* stale peer */ }
   }
-
   let lastError: Error | null = null;
   let sawPeerIdTaken = false;
   let takeoverAuthorityId = '';
