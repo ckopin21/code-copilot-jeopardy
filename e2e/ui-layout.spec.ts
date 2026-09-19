@@ -194,7 +194,7 @@ for (const viewport of phoneViewports) {
 
     await page.getByRole('tab', { name: 'Avatar' }).click();
     await page.getByRole('button', { name: 'Robots' }).click();
-    await page.getByRole('button', { name: 'Robot' }).click();
+    await page.getByRole('button', { name: 'Robot', exact: true }).click();
     const selectedAvatar = page.locator('[data-testid="player-customization-preview"] [data-avatar-id="bot-atlas"]');
     await expect(selectedAvatar).toBeVisible();
     await expect(selectedAvatar.locator('.player-avatar-emoji')).toHaveText('🤖');
