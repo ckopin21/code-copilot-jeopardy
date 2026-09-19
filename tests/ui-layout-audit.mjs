@@ -126,6 +126,29 @@ async function auditLayout(page, label) {
       }
     }
 
+    for (const element of document.querySelectorAll('.showcase-host:not(.host-presentation-mode) .player-name strong')) {
+      if (!visible(element) || !element.textContent?.trim()) continue;
+      const style = getComputedStyle(element);
+      const lineHeight = Number.parseFloat(style.lineHeight);
+      if (Number.isFinite(lineHeight) && lineHeight > 0) {
+        const lines = Math.round(element.getBoundingClientRect().height / lineHeight);
+        if (lines > 3) failures.push(`${auditLabel}: player name wraps to ${lines} lines: "${element.textContent.trim()}"`);
+      }
+    }
+
+    for (const list of document.querySelectorAll('.used-result-list')) {
+      if (!visible(list)) continue;
+      const chips = [...list.querySelectorAll(':scope > .used-result-chip')].filter(visible);
+      for (let index = 1; index < chips.length; index += 1) {
+        const previous = box(chips[index - 1].getBoundingClientRect());
+        const current = box(chips[index].getBoundingClientRect());
+        if (intersectionArea(previous, current) > 1) {
+          failures.push(`${auditLabel}: used result rows overlap`);
+          break;
+        }
+      }
+    }
+
     const containment = [
       ['.showcase-player-card', '.player-avatar-large,.player-card-main,.streak-ribbon,.player-status-stack,.turn-beacon'],
       ['.question-tile.used.has-result', '.used-tile-result,.used-result-chip,.used-question-modifiers,.used-result-modifiers'],
@@ -199,30 +222,21 @@ async function hostAction(page, event, payload = {}) {
 
 async function hostSnapshot(page) {
   return page.evaluate(async () => {
-    const { socket } = await import('/src/lib/socket.ts');
-    return new Promise((resolve, reject) => {
-      const timeout = window.setTimeout(() => {
-        socket.off('room:state', onState);
-        reject(new Error('Timed out waiting for host room state'));
-      }, 4_000);
-      const onState = (snapshot) => {
-        window.clearTimeout(timeout);
-        socket.off('room:state', onState);
-        resolve(snapshot);
-      };
-      socket.on('room:state', onState);
-    });
+    const [{ readLocalUiAuditSnapshot }, { readActiveHostCredentials }] = await Promise.all([
+      import('/src/lib/socket.ts'),
+      import('/src/lib/hostCredentials.ts')
+    ]);
+    const credentials = readActiveHostCredentials();
+    if (!credentials) throw new Error('Host credentials unavailable');
+    return readLocalUiAuditSnapshot(credentials.roomCode);
   });
 }
 
-async function playerAction(page, event, payload = {}) {
-  return page.evaluate(async ({ eventName, body }) => {
-    const raw = localStorage.getItem('blue-stage-player');
-    if (!raw) throw new Error('Player credentials unavailable');
-    const credentials = JSON.parse(raw);
-    const { emitAck } = await import('/src/lib/socket.ts');
-    return emitAck(eventName, { ...credentials, ...body });
-  }, { eventName: event, body: payload });
+async function playerAction(hostPage, credentials, event, payload = {}) {
+  return hostPage.evaluate(async ({ playerCredentials, eventName, body }) => {
+    const { emitLocalUiAuditAck } = await import('/src/lib/socket.ts');
+    return emitLocalUiAuditAck(eventName, { ...playerCredentials, ...body });
+  }, { playerCredentials: credentials, eventName: event, body: payload });
 }
 
 async function waitForAny(page, selectors, timeout = 8_000) {
@@ -271,19 +285,13 @@ async function runHarnessAudits(browser) {
   }
 }
 
-async function openPlayers(browser, roomCode, count = 5) {
-  const names = ['Alexandria Montgomery', 'Christopher Rodriguez', 'Maximilian Kensington', 'Samantha OCallaghan', 'Benjamin Fitzpatrick'];
-  const players = [];
-  for (let index = 0; index < count; index += 1) {
-    const context = await browser.newContext({ viewport: { width: 430, height: 860 } });
-    const page = await context.newPage();
-    await page.goto(`${baseUrl}?mode=player&room=${roomCode}`, { waitUntil: 'domcontentloaded' });
-    await page.getByPlaceholder('Player name').fill(names[index]);
-    await page.getByRole('button', { name: 'Join Game' }).click();
-    await page.waitForSelector('.player-phone-v2', { state: 'visible', timeout: 15_000 });
-    players.push({ context, page });
-  }
-  return players;
+async function seedAuditPlayers(hostPage, roomCode) {
+  const credentials = await hostPage.evaluate(async (code) => {
+    const { seedLocalUiAuditPlayers } = await import('/src/lib/socket.ts');
+    return seedLocalUiAuditPlayers(code);
+  }, roomCode);
+  await hostPage.waitForFunction(() => document.querySelectorAll('.roster-row').length >= 5, null, { timeout: 8_000 });
+  return credentials;
 }
 
 async function runDevDynamicAudit(hostPage, labelPrefix) {
@@ -325,38 +333,39 @@ async function runDevDynamicAudit(hostPage, labelPrefix) {
   await hostPage.getByRole('button', { name: 'Close developer mode' }).click();
 }
 
-async function playQuestion({ hostPage, players, mode, questionIndex, gameStartedAt, playerIds }) {
+async function playQuestion({ hostPage, playerCredentials, mode, questionIndex, gameStartedAt }) {
   const tile = hostPage.locator('.showcase-board-stage .question-tile:not(.used):not(.empty)').first();
   const questionId = await tile.getAttribute('data-question-id');
   if (!questionId) throw new Error('No selectable board question found');
 
+  const selectedPlayer = playerCredentials[questionIndex % playerCredentials.length];
   await hostAction(hostPage, 'host:select-question', {
     questionId,
-    dailyDoublePlayerId: playerIds[questionIndex % playerIds.length]
+    dailyDoublePlayerId: selectedPlayer.playerId
   });
   await waitForAny(hostPage, ['.question-stage', '.daily-double-burst']);
 
   if (await hostPage.locator('.daily-double-burst').count()) {
-    await auditLayout(hostPage, `${mode}-daily-double-wager`);
+    await auditLayout(hostPage, `${mode}-daily-double-wager-${questionIndex}`);
     await hostAction(hostPage, 'host:daily-double-wager', { wager: 100 });
     await waitForAny(hostPage, ['.question-stage']);
-    await auditLayout(hostPage, `${mode}-daily-double-question`);
+    await auditLayout(hostPage, `${mode}-daily-double-question-${questionIndex}`);
     await hostAction(hostPage, 'host:reveal-answer');
-    await hostAction(hostPage, 'host:resolve-answer', { playerId: playerIds[questionIndex % playerIds.length], correct: questionIndex % 2 === 0 });
+    await hostAction(hostPage, 'host:resolve-answer', { playerId: selectedPlayer.playerId, correct: questionIndex % 2 === 0 });
     await hostAction(hostPage, 'host:advance-board');
     return { dailyDouble: true };
   }
 
   if (mode === 'classic') {
-    const playerId = questionIndex < 4 ? playerIds[0] : playerIds[questionIndex % playerIds.length];
+    const player = questionIndex < 4 ? playerCredentials[0] : selectedPlayer;
     await hostAction(hostPage, 'host:open-buzzers');
-    await hostAction(hostPage, 'host:local-buzz', { playerId });
+    await hostAction(hostPage, 'host:local-buzz', { playerId: player.playerId });
     await hostAction(hostPage, 'host:reveal-answer');
     await auditLayout(hostPage, `${mode}-question-revealed-${questionIndex}`);
-    await hostAction(hostPage, 'host:resolve-answer', { playerId, correct: questionIndex < 4 || questionIndex % 2 === 0 });
+    await hostAction(hostPage, 'host:resolve-answer', { playerId: player.playerId, correct: questionIndex < 4 || questionIndex % 2 === 0 });
   } else {
-    for (let index = 0; index < players.length; index += 1) {
-      await playerAction(players[index].page, 'player:text-response', {
+    for (let index = 0; index < playerCredentials.length; index += 1) {
+      await playerAction(hostPage, playerCredentials[index], 'player:text-response', {
         answer: `simultaneous answer ${index + 1}`,
         questionId,
         gameStartedAt
@@ -364,8 +373,11 @@ async function playQuestion({ hostPage, players, mode, questionIndex, gameStarte
     }
     await hostAction(hostPage, 'host:reveal-answer');
     await auditLayout(hostPage, `${mode}-multi-response-reveal-${questionIndex}`);
-    for (let index = 0; index < playerIds.length; index += 1) {
-      await hostAction(hostPage, 'host:resolve-text', { playerId: playerIds[index], correct: (questionIndex + index) % 2 === 0 });
+    for (let index = 0; index < playerCredentials.length; index += 1) {
+      await hostAction(hostPage, 'host:resolve-text', {
+        playerId: playerCredentials[index].playerId,
+        correct: (questionIndex + index) % 2 === 0
+      });
     }
     await hostAction(hostPage, 'host:confirm-text-grades');
   }
@@ -378,27 +390,15 @@ async function runLiveGame(browser, mode, viewport) {
   const hostContext = await browser.newContext({ viewport });
   const hostPage = await hostContext.newPage();
   const labelPrefix = `live-${mode}-${viewport.width}x${viewport.height}`;
-  await hostPage.goto(`${baseUrl}?mode=host&fresh=1`, { waitUntil: 'domcontentloaded' });
-  await hostPage.waitForSelector('.showcase-lobby', { state: 'visible', timeout: 20_000 });
-  const roomCode = (await hostPage.locator('.room-code strong').textContent())?.trim();
-  if (!roomCode) throw new Error('Room code missing');
 
-  const players = await openPlayers(browser, roomCode, 5);
   try {
-    await hostPage.waitForFunction(() => document.querySelectorAll('.roster-row').length >= 5, null, { timeout: 15_000 });
-    const playerIds = await hostPage.locator('.roster-row').evaluateAll((rows) => rows.map((row) => row.getAttribute('data-player-id')).filter(Boolean));
-    let ids = playerIds;
-    if (ids.length < 5) {
-      ids = await hostPage.evaluate(async () => {
-        const { socket } = await import('/src/lib/socket.ts');
-        return new Promise((resolve, reject) => {
-          const timer = setTimeout(() => { socket.off('room:state', onState); reject(new Error('No room snapshot')); }, 4_000);
-          const onState = (room) => { clearTimeout(timer); socket.off('room:state', onState); resolve(room.players.filter((player) => player.connected).map((player) => player.id)); };
-          socket.on('room:state', onState);
-        });
-      });
-    }
-    if (ids.length !== 5) throw new Error(`Expected 5 live players, found ${ids.length}`);
+    await hostPage.goto(`${baseUrl}?mode=host&fresh=1&uiAudit=1`, { waitUntil: 'domcontentloaded' });
+    await hostPage.waitForSelector('.showcase-lobby', { state: 'visible', timeout: 20_000 });
+    const roomCode = (await hostPage.locator('.room-code strong').textContent())?.trim();
+    if (!roomCode) throw new Error('Room code missing');
+
+    const playerCredentials = await seedAuditPlayers(hostPage, roomCode);
+    await auditLayout(hostPage, `${labelPrefix}-five-player-lobby`);
 
     await hostAction(hostPage, 'host:update-settings', {
       updates: {
@@ -422,8 +422,9 @@ async function runLiveGame(browser, mode, viewport) {
     await hostAction(hostPage, 'host:start-game');
     await waitForAny(hostPage, ['.showcase-board-stage']);
     await hostPage.waitForTimeout(150);
-    const transition = hostPage.locator('.game-transition-overlay');
-    if (await transition.count()) await auditLayout(hostPage, `${labelPrefix}-round-start-transition`);
+    if (await hostPage.locator('.game-transition-overlay').count()) {
+      await auditLayout(hostPage, `${labelPrefix}-round-start-transition`);
+    }
     await hostPage.waitForTimeout(5_500);
     await auditLayout(hostPage, `${labelPrefix}-early-board`);
 
@@ -446,46 +447,61 @@ async function runLiveGame(browser, mode, viewport) {
     let sawDailyDouble = mode !== 'classic';
     let sawDouble = false;
     let sawTriple = false;
+
     while (await hostPage.locator('.showcase-board-stage .question-tile:not(.used):not(.empty)').count()) {
-      const result = await playQuestion({ hostPage, players, mode, questionIndex, gameStartedAt, playerIds: ids });
+      const result = await playQuestion({ hostPage, playerCredentials, mode, questionIndex, gameStartedAt });
       sawDailyDouble ||= result.dailyDouble;
       questionIndex += 1;
+      await hostPage.waitForTimeout(120);
 
       if (await hostPage.locator('.showcase-board-stage').count()) {
-        if (questionIndex === 1 || result.dailyDouble) await auditLayout(hostPage, `${labelPrefix}-board-results-${questionIndex}`);
+        if (questionIndex === 1 || result.dailyDouble || questionIndex % 4 === 0) {
+          await auditLayout(hostPage, `${labelPrefix}-board-results-${questionIndex}`);
+        }
         if (!sawDouble && await hostPage.locator('.modifier-banner.x2').count()) {
           sawDouble = true;
           await auditLayout(hostPage, `${labelPrefix}-double-points-board`);
-          if (await hostPage.locator('.modifier-reveal-overlay.x2').count()) await auditLayout(hostPage, `${labelPrefix}-double-points-reveal`);
+          if (await hostPage.locator('.modifier-reveal-overlay.x2').count()) {
+            await auditLayout(hostPage, `${labelPrefix}-double-points-reveal`);
+          }
         }
         if (!sawTriple && await hostPage.locator('.modifier-banner.x3').count()) {
           sawTriple = true;
           await auditLayout(hostPage, `${labelPrefix}-triple-points-board`);
-          if (await hostPage.locator('.modifier-reveal-overlay.x3').count()) await auditLayout(hostPage, `${labelPrefix}-triple-points-reveal`);
+          if (await hostPage.locator('.modifier-reveal-overlay.x3').count()) {
+            await auditLayout(hostPage, `${labelPrefix}-triple-points-reveal`);
+          }
         }
       }
+
       if (questionIndex > 24) throw new Error('Game did not progress to endgame');
     }
 
     if (!sawDailyDouble) throw new Error('Classic live pass never triggered its Daily Double');
     if (!sawDouble || !sawTriple) throw new Error(`Late modifiers missing: double=${sawDouble} triple=${sawTriple}`);
 
-    await waitForAny(hostPage, ['.final-stage-v2', '.final-stage', '.question-stage', '.full-state', '.game-transition-overlay'], 10_000);
+    await waitForAny(hostPage, ['.final-stage-v2', '.final-stage', '.full-state', '.game-transition-overlay'], 10_000);
     await auditLayout(hostPage, `${labelPrefix}-final-category`);
+
     await hostAction(hostPage, 'host:begin-final-wagers');
     await hostPage.waitForTimeout(100);
     await auditLayout(hostPage, `${labelPrefix}-final-wager`);
 
-    for (const player of players) {
-      await playerAction(player.page, 'player:final-wager', { wager: 0, gameStartedAt });
+    for (const credentials of playerCredentials) {
+      await playerAction(hostPage, credentials, 'player:final-wager', { wager: 0, gameStartedAt });
     }
+
     await hostAction(hostPage, 'host:open-final-question');
     await hostPage.waitForTimeout(100);
     await auditLayout(hostPage, `${labelPrefix}-final-question`);
 
-    for (let index = 0; index < players.length; index += 1) {
-      await playerAction(players[index].page, 'player:final-answer', { answer: `final answer ${index + 1}`, gameStartedAt });
+    for (let index = 0; index < playerCredentials.length; index += 1) {
+      await playerAction(hostPage, playerCredentials[index], 'player:final-answer', {
+        answer: `final answer ${index + 1}`,
+        gameStartedAt
+      });
     }
+
     await hostAction(hostPage, 'host:begin-final-review');
     await hostPage.waitForTimeout(100);
     await auditLayout(hostPage, `${labelPrefix}-final-review`);
@@ -493,7 +509,8 @@ async function runLiveGame(browser, mode, viewport) {
     for (let guard = 0; guard < 8; guard += 1) {
       const snapshot = await hostSnapshot(hostPage);
       if (snapshot.phase !== 'final-review') break;
-      const playerId = snapshot.finalRound?.reviewPlayerId ?? snapshot.finalRound?.participantIds?.[snapshot.finalRound?.reviewPlayerIndex ?? 0];
+      const playerId = snapshot.finalRound?.reviewPlayerId
+        ?? snapshot.finalRound?.participantIds?.[snapshot.finalRound?.reviewPlayerIndex ?? 0];
       if (!playerId) throw new Error('Final review player missing');
       await hostAction(hostPage, 'host:resolve-final', { playerId, correct: guard % 2 === 0 });
       await hostPage.waitForTimeout(80);
@@ -503,6 +520,7 @@ async function runLiveGame(browser, mode, viewport) {
     await auditLayout(hostPage, `${labelPrefix}-results-hold`);
     await hostPage.waitForTimeout(7_100);
     await auditLayout(hostPage, `${labelPrefix}-podium`);
+
     const statsButton = hostPage.getByRole('button', { name: 'View Game Stats' });
     if (await statsButton.isVisible()) {
       await statsButton.click();
@@ -510,7 +528,6 @@ async function runLiveGame(browser, mode, viewport) {
       await auditLayout(hostPage, `${labelPrefix}-results-stats`);
     }
   } finally {
-    for (const player of players) await player.context.close();
     await hostContext.close();
   }
 }
@@ -543,4 +560,4 @@ if (failures.length) {
   throw new Error(failures.join('\n\n'));
 }
 
-console.log('UI layout audit passed: deterministic stress harness + full Classic/Free Response live games.');
+console.log('UI layout audit passed: deterministic stress harness + full local-engine Classic/Free Response live games.');
