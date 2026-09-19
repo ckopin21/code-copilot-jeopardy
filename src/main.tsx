@@ -10,6 +10,7 @@ import { applyMusicVolumePolicy } from './lib/musicVolumePolicy';
 import { installModeAwareAudioPolicy } from './lib/audioModePolicy';
 import { DevModeOverlay } from './components/DevModeOverlay';
 import { DevPresentationLab } from './components/DevPresentationLab';
+import { DevLayoutAuditHarness } from './components/DevLayoutAuditHarness';
 import './responsive-player-cards.css';
 import './endgame-menu-fixes.css';
 import './menu-desktop-layout.css';
@@ -28,10 +29,14 @@ import './presentation-micro-polish.css';
 import './game-ui-polish-v2.css';
 import './game-modes.css';
 import './normal-host-layout.css';
+import './ui-layout-regression.css';
 
 applyMusicVolumePolicy();
 installModeAwareAudioPolicy();
 
-ReactDOM.createRoot(document.getElementById('root')!).render(<React.StrictMode><App/><DevModeOverlay/><DevPresentationLab/></React.StrictMode>);
+const layoutAudit = new URLSearchParams(location.search).get('layoutAudit') === '1';
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>{layoutAudit ? <DevLayoutAuditHarness/> : <><App/><DevModeOverlay/><DevPresentationLab/></>}</React.StrictMode>
+);
 
 // Late-loaded regression styles intentionally win cascade conflicts in game overlays.

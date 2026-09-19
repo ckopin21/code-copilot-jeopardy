@@ -1,0 +1,516 @@
+/* Final UI/UX regression layer.
+   Keeps dynamic game content readable and geometrically contained across host and presentation surfaces. */
+
+:where(
+  .player-name strong,
+  .presentation-player-main strong,
+  .presentation-name-card strong,
+  .presentation-final-player h1,
+  .presentation-scores-v2 span,
+  .used-result-chip b,
+  .turn-beacon b,
+  .roster-row strong,
+  .score-controls-v2 span,
+  .attempt-row strong,
+  .submission-list-v2 strong,
+  .podium-name,
+  .recap-player-heading h2
+) {
+  min-width: 0;
+  max-width: 100%;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  white-space: normal !important;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+/* Player status is a real grid column, not a badge floating over names or scores. */
+.showcase-player-card.player-card {
+  min-width: 0;
+}
+.showcase-player-card .player-card-main {
+  min-width: 0;
+}
+.showcase-player-card > .streak-ribbon,
+.showcase-player-card .player-status-stack,
+.showcase-player-card.is-turn .turn-beacon {
+  position: static !important;
+  inset: auto !important;
+  transform: none !important;
+  grid-column: 3;
+  grid-row: 1;
+  align-self: center;
+  justify-self: end;
+  width: max-content;
+  max-width: min(100%, 10.5rem) !important;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  white-space: normal !important;
+}
+.showcase-player-card .player-status-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+}
+.showcase-player-card .player-status-stack .streak-ribbon,
+.showcase-player-card .player-status-stack .turn-beacon {
+  width: 100%;
+  max-width: 100% !important;
+  white-space: normal !important;
+}
+.showcase-player-card.is-turn:is(.is-fire,.is-cold) {
+  padding-right: inherit !important;
+}
+
+/* Compact host cards may grow when a long player name or combined status needs another line. */
+@media (min-width: 760px) {
+  .showcase-host:not(.host-presentation-mode) .showcase-player-strip.player-strip[data-player-count] .showcase-player-card.player-card {
+    height: auto !important;
+    min-height: 54px !important;
+    grid-template-columns: 34px minmax(0, 1fr) minmax(0, auto) !important;
+    align-items: center;
+  }
+  .showcase-host:not(.host-presentation-mode) .showcase-player-card > .streak-ribbon,
+  .showcase-host:not(.host-presentation-mode) .showcase-player-card .player-status-stack,
+  .showcase-host:not(.host-presentation-mode) .showcase-player-card.is-turn .turn-beacon {
+    max-width: 7.5rem !important;
+  }
+}
+
+/* Five-player presentation layouts must be fluid. Fixed minimum columns previously exceeded 1024-1280px screens. */
+.showcase-host.host-presentation-mode > .showcase-player-strip.player-strip[data-player-count="1"],
+.presentation-shell > .showcase-player-strip.player-strip[data-player-count="1"] {
+  grid-template-columns: minmax(0, min(100%, 700px)) !important;
+}
+.showcase-host.host-presentation-mode > .showcase-player-strip.player-strip[data-player-count="2"],
+.presentation-shell > .showcase-player-strip.player-strip[data-player-count="2"] {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+}
+.showcase-host.host-presentation-mode > .showcase-player-strip.player-strip[data-player-count="3"],
+.presentation-shell > .showcase-player-strip.player-strip[data-player-count="3"] {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+}
+.showcase-host.host-presentation-mode > .showcase-player-strip.player-strip[data-player-count="4"],
+.presentation-shell > .showcase-player-strip.player-strip[data-player-count="4"] {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+}
+.showcase-host.host-presentation-mode > .showcase-player-strip.player-strip[data-player-count="5"],
+.presentation-shell > .showcase-player-strip.player-strip[data-player-count="5"] {
+  grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+}
+.showcase-host.host-presentation-mode > .showcase-player-strip.player-strip[data-player-count] .showcase-player-card.player-card,
+.presentation-shell > .showcase-player-strip.player-strip[data-player-count] .showcase-player-card.player-card {
+  width: 100%;
+  min-width: 0;
+  height: auto !important;
+}
+.showcase-host.host-presentation-mode > .showcase-player-strip .showcase-player-card.player-card {
+  min-height: clamp(112px, 16vh, 142px) !important;
+  grid-template-columns: clamp(44px, 4.2vw, 68px) minmax(0,1fr) minmax(0,auto) !important;
+}
+.showcase-host.host-presentation-mode > .showcase-player-strip .showcase-player-card > .streak-ribbon,
+.showcase-host.host-presentation-mode > .showcase-player-strip .showcase-player-card .player-status-stack,
+.showcase-host.host-presentation-mode > .showcase-player-strip .showcase-player-card.is-turn .turn-beacon,
+.presentation-shell > .showcase-player-strip .showcase-player-card > .streak-ribbon,
+.presentation-shell > .showcase-player-strip .showcase-player-card .player-status-stack,
+.presentation-shell > .showcase-player-strip .showcase-player-card.is-turn .turn-beacon {
+  max-width: clamp(70px, 9vw, 140px) !important;
+}
+
+/* Used-question results keep values, modifiers, names, and deltas in flow. */
+.question-tile.used.has-result {
+  min-width: 0;
+}
+.question-tile.used.has-result .used-tile-result {
+  min-width: 0;
+  grid-template-rows: auto minmax(0, 1fr) !important;
+}
+.question-tile.used.has-result .used-tile-topline,
+.presentation-board .used-tile-topline,
+.board-presentation-mode .used-tile-topline {
+  position: static !important;
+  display: grid !important;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 100%;
+  min-height: 0 !important;
+}
+.question-tile.used.has-result .used-tile-value,
+.presentation-board .question-tile.used.has-result .used-tile-value,
+.board-presentation-mode .question-tile.used.has-result .used-tile-value {
+  position: static !important;
+  inset: auto !important;
+  transform: none !important;
+  justify-self: center;
+  margin: 0 !important;
+}
+.question-tile.used.has-result .used-question-modifiers,
+.presentation-board .used-question-modifiers,
+.board-presentation-mode .used-question-modifiers {
+  position: static !important;
+  inset: auto !important;
+  transform: none !important;
+  max-width: none !important;
+  display: flex !important;
+  align-items: center;
+  justify-content: flex-start;
+  flex-wrap: wrap !important;
+  gap: 2px;
+  overflow: visible !important;
+}
+.question-tile.used.has-result .used-result-chip {
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  grid-auto-rows: auto;
+  align-items: center;
+}
+.question-tile.used.has-result .used-result-chip b {
+  line-height: 1.12;
+}
+.question-tile.used.has-result .used-result-modifiers {
+  grid-column: 1 / -1;
+  min-width: 0;
+  display: flex !important;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 2px;
+  overflow: visible !important;
+}
+.question-tile.used.has-result .used-result-modifiers i {
+  white-space: normal !important;
+  overflow-wrap: anywhere;
+}
+
+/* Desktop boards retain equal columns while dynamic tile contents stay visible and contained. */
+@media (min-width: 900px) {
+  .showcase-host:not(.host-presentation-mode) .showcase-board-stage > .board,
+  .board-presentation-mode .board,
+  .presentation-shell .presentation-board .board {
+    grid-template-columns: repeat(var(--cols), minmax(0, 1fr)) !important;
+  }
+  .showcase-host:not(.host-presentation-mode) .question-tile.used.has-result,
+  .board-presentation-mode .question-tile.used.has-result,
+  .presentation-shell .presentation-board .question-tile.used.has-result {
+    overflow: visible !important;
+  }
+  .showcase-host:not(.host-presentation-mode) .question-tile.used.has-result .used-result-chip {
+    min-height: 0 !important;
+    padding: 3px 5px !important;
+    gap: 4px !important;
+  }
+  .showcase-host:not(.host-presentation-mode) .question-tile.used.has-result .used-result-chip b {
+    font-size: clamp(.52rem, .68vw, .76rem) !important;
+  }
+  .showcase-host:not(.host-presentation-mode) .question-tile.used.has-result .used-result-chip em {
+    font-size: clamp(.5rem, .62vw, .7rem) !important;
+  }
+}
+
+/* Presentation surfaces use the remaining viewport after the scoreboard instead of assuming a 105px header. */
+.presentation-shell {
+  min-height: 100dvh;
+  max-width: 100vw;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+}
+.presentation-shell > .showcase-player-strip.player-strip {
+  flex: 0 0 auto;
+  width: 100%;
+}
+.presentation-shell > .presentation-center,
+.presentation-shell > .presentation-question,
+.presentation-shell > .presentation-board.game-stage {
+  flex: 1 1 auto;
+  min-height: 0 !important;
+  width: 100%;
+}
+.presentation-shell > .presentation-center,
+.presentation-shell > .presentation-question {
+  padding: clamp(12px, 2.4vh, 30px);
+}
+.presentation-shell .presentation-question > article {
+  max-width: min(1200px, calc(100vw - 32px));
+  gap: clamp(10px, 2.2vh, 22px);
+}
+.presentation-shell .presentation-question h1 {
+  max-width: 100%;
+  font-size: clamp(2rem, min(6vw, 8vh), 6.8rem);
+  overflow-wrap: anywhere;
+}
+.presentation-shell .presentation-center > h1 {
+  max-width: 100%;
+  font-size: clamp(2.4rem, min(8vw, 10vh), 8rem);
+  overflow-wrap: anywhere;
+}
+.presentation-shell > .presentation-board.game-stage {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  align-content: stretch;
+  overflow: hidden;
+}
+.presentation-shell > .presentation-board.game-stage > .board {
+  height: 100%;
+  min-height: 0;
+  align-self: stretch;
+}
+
+/* Host Presentation board owns a full viewport and gives header/player cards a dedicated row. */
+.board-presentation-mode {
+  display: flex !important;
+  flex-direction: column;
+  width: 100vw;
+  height: 100dvh;
+  max-width: 100vw;
+  max-height: 100dvh;
+  overflow: hidden;
+}
+.board-presentation-header {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+.presentation-name-strip {
+  min-width: 0;
+}
+.presentation-name-strip[data-player-count="1"] { grid-template-columns: minmax(0, 1fr) !important; }
+.presentation-name-strip[data-player-count="2"] { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+.presentation-name-strip[data-player-count="3"] { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+.presentation-name-strip[data-player-count="4"] { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
+.presentation-name-strip[data-player-count="5"] { grid-template-columns: repeat(5, minmax(0, 1fr)) !important; }
+.presentation-name-card {
+  min-width: 0;
+  width: 100%;
+}
+.presentation-name-card .presentation-player-main {
+  min-width: 0;
+}
+.presentation-name-card .presentation-player-main small {
+  white-space: normal !important;
+  overflow-wrap: anywhere;
+}
+.presentation-board-fill {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+}
+.presentation-board-fill > .board {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+}
+
+/* A comeback banner gets a reserved band instead of covering the scoreboard or board. */
+.comeback-host {
+  top: 64px;
+  width: min(760px, calc(100vw - 24px));
+}
+body:has(.comeback-host) .showcase-host:not(.host-presentation-mode) > .showcase-player-strip.player-strip {
+  margin-top: 94px !important;
+}
+body:has(.comeback-host) .board-presentation-mode .board-presentation-header {
+  padding-top: 94px !important;
+}
+
+/* Late-game overlays are allowed to overlay the game, but the overlay card itself must always fit. */
+.modifier-reveal-card,
+.final-reveal-card,
+.game-transition-overlay > section {
+  max-width: calc(100vw - 32px);
+  max-height: calc(100dvh - 32px);
+  box-sizing: border-box;
+  overflow-wrap: anywhere;
+}
+.game-transition-overlay .category-intro-grid {
+  max-width: 100%;
+}
+
+/* Result and podium names wrap rather than escaping their cards. */
+.podium-card,
+.recap-card-v2,
+.presentation-scores-v2 > div {
+  min-width: 0;
+}
+.podium-name,
+.recap-player-heading h2,
+.presentation-scores-v2 span {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 1180px) and (min-width: 760px) {
+  .presentation-shell > .showcase-player-strip.player-strip {
+    padding-inline: 10px !important;
+    gap: 8px !important;
+  }
+  .presentation-shell > .showcase-player-strip.player-strip[data-player-count] .showcase-player-card.player-card,
+  .showcase-host.host-presentation-mode > .showcase-player-strip.player-strip[data-player-count] .showcase-player-card.player-card {
+    grid-template-columns: clamp(34px, 4.5vw, 54px) minmax(0, 1fr) minmax(0, auto) !important;
+    gap: 7px !important;
+    padding: 10px !important;
+  }
+  .presentation-shell > .showcase-player-strip .showcase-player-card .player-name,
+  .showcase-host.host-presentation-mode > .showcase-player-strip .showcase-player-card .player-name {
+    font-size: clamp(.76rem, 1.45vw, 1.15rem) !important;
+  }
+  .presentation-shell > .showcase-player-strip .showcase-player-card .score,
+  .showcase-host.host-presentation-mode > .showcase-player-strip .showcase-player-card .score {
+    font-size: clamp(1.7rem, 3vw, 2.55rem) !important;
+  }
+  .presentation-shell > .showcase-player-strip .showcase-player-card > .streak-ribbon,
+  .presentation-shell > .showcase-player-strip .showcase-player-card .player-status-stack,
+  .presentation-shell > .showcase-player-strip .showcase-player-card.is-turn .turn-beacon,
+  .showcase-host.host-presentation-mode > .showcase-player-strip .showcase-player-card > .streak-ribbon,
+  .showcase-host.host-presentation-mode > .showcase-player-strip .showcase-player-card .player-status-stack,
+  .showcase-host.host-presentation-mode > .showcase-player-strip .showcase-player-card.is-turn .turn-beacon {
+    max-width: 72px !important;
+    font-size: .46rem !important;
+  }
+}
+
+@media (max-height: 760px) and (min-width: 900px) {
+  .comeback-host {
+    top: 58px;
+    padding-block: 7px;
+  }
+  body:has(.comeback-host) .showcase-host:not(.host-presentation-mode) > .showcase-player-strip.player-strip {
+    margin-top: 82px !important;
+  }
+  body:has(.comeback-host) .board-presentation-mode .board-presentation-header {
+    padding-top: 82px !important;
+  }
+  .presentation-shell > .showcase-player-strip.player-strip[data-player-count] .showcase-player-card.player-card {
+    min-height: 86px !important;
+    padding-block: 8px !important;
+  }
+  .presentation-shell .presentation-question h1 {
+    font-size: clamp(1.8rem, min(5vw, 7vh), 4.6rem);
+  }
+}
+
+
+/* 1366×768 and similarly dense desktop layouts need player status below the identity,
+   not in a third column that starves long names of horizontal room. */
+@media (min-width: 760px) {
+  .showcase-host:not(.host-presentation-mode) .showcase-player-strip.player-strip[data-player-count] .showcase-player-card.player-card {
+    grid-template-columns: 34px minmax(0, 1fr) !important;
+    grid-template-rows: auto auto !important;
+    min-height: 62px !important;
+    height: auto !important;
+    align-items: center;
+  }
+  .showcase-host:not(.host-presentation-mode) .showcase-player-card > .player-avatar-large {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+  }
+  .showcase-host:not(.host-presentation-mode) .showcase-player-card > .player-card-main {
+    grid-column: 2;
+    grid-row: 1;
+    min-width: 0;
+  }
+  .showcase-host:not(.host-presentation-mode) .showcase-player-card > .streak-ribbon,
+  .showcase-host:not(.host-presentation-mode) .showcase-player-card > .player-status-stack,
+  .showcase-host:not(.host-presentation-mode) .showcase-player-card > .turn-beacon {
+    grid-column: 2 !important;
+    grid-row: 2 !important;
+    justify-self: start !important;
+    width: auto;
+    max-width: 100% !important;
+  }
+  .showcase-host:not(.host-presentation-mode) .showcase-player-card > .player-status-stack {
+    flex-direction: row !important;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .showcase-host:not(.host-presentation-mode) .showcase-player-card > .player-status-stack .streak-ribbon,
+  .showcase-host:not(.host-presentation-mode) .showcase-player-card > .player-status-stack .turn-beacon {
+    width: auto;
+    max-width: 100% !important;
+  }
+}
+
+/* A playing host screen should spend the remaining viewport on the board.
+   Rich result rows can claim their minimum content height while untouched rows share the rest. */
+@media (min-width: 900px) {
+  .showcase-host:has(> .showcase-board-stage) {
+    min-height: 100dvh;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .showcase-host:has(> .showcase-board-stage) > .showcase-board-stage {
+    flex: 1 1 0 !important;
+    min-height: 0;
+    height: auto !important;
+  }
+  .showcase-host:has(> .showcase-board-stage) > .showcase-board-stage > .board,
+  .board-presentation-mode .presentation-board-fill > .board,
+  .presentation-shell .presentation-board > .board {
+    height: 100% !important;
+    min-height: 0;
+    grid-auto-rows: minmax(min-content, 1fr) !important;
+  }
+  .showcase-host:has(> .showcase-board-stage) .question-tile.used.has-result {
+    min-height: max-content;
+  }
+}
+
+/* Dense played tiles keep every result in flow without squeezing badges over names. */
+.question-tile.used.has-result .used-tile-result {
+  overflow: visible !important;
+}
+.question-tile.used.has-result .used-result-list {
+  min-width: 0;
+  display: grid !important;
+  grid-auto-rows: max-content;
+  align-content: start;
+  gap: 2px !important;
+  overflow: visible !important;
+}
+.question-tile.used.has-result .used-result-chip {
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+.question-tile.used.has-result .used-result-chip b,
+.question-tile.used.has-result .used-result-chip em {
+  min-width: 0;
+}
+
+@media (max-height: 800px) and (min-width: 900px) {
+  .showcase-host:not(.host-presentation-mode) .question-tile.used.has-result .used-tile-result {
+    padding: 2px 3px !important;
+    gap: 2px !important;
+  }
+  .showcase-host:not(.host-presentation-mode) .question-tile.used.has-result .used-tile-topline {
+    gap: 2px !important;
+  }
+  .showcase-host:not(.host-presentation-mode) .question-tile.used.has-result .used-question-modifiers > span {
+    font-size: clamp(.38rem, .52vw, .52rem) !important;
+    padding: 1px 3px !important;
+    line-height: 1.05 !important;
+  }
+  .showcase-host:not(.host-presentation-mode) .question-tile.used.has-result .used-result-chip {
+    padding: 2px 3px !important;
+    gap: 2px 4px !important;
+  }
+  .showcase-host:not(.host-presentation-mode) .question-tile.used.has-result .used-result-chip b {
+    font-size: clamp(.5rem, .62vw, .68rem) !important;
+    line-height: 1.04 !important;
+  }
+  .showcase-host:not(.host-presentation-mode) .question-tile.used.has-result .used-result-chip em {
+    font-size: clamp(.48rem, .58vw, .64rem) !important;
+    line-height: 1 !important;
+  }
+  .showcase-host:not(.host-presentation-mode) .question-tile.used.has-result .used-result-modifiers i {
+    font-size: clamp(.34rem, .44vw, .46rem) !important;
+    padding: 1px 2px !important;
+    line-height: 1 !important;
+  }
+}
