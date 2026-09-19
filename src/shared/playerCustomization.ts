@@ -30,16 +30,16 @@ export const AVATAR_CATALOG: readonly AvatarOption[] = [
   { id: 'shark', label: 'Shark', category: 'animals', fallback: '🦈', primary: '#5c9fd6', secondary: '#d8eefc', variant: 3 },
   { id: 'panda', label: 'Panda', category: 'animals', fallback: '🐼', primary: '#e9eef2', secondary: '#17283a', variant: 4 },
 
-  { id: 'bot-atlas', label: 'Atlas Bot', category: 'robots', fallback: '🤖', primary: '#7eb6ff', secondary: '#d9f3ff', variant: 0 },
-  { id: 'bot-bolt', label: 'Bolt Bot', category: 'robots', fallback: '⚙️', primary: '#f0b84f', secondary: '#fff3c4', variant: 1 },
-  { id: 'bot-cube', label: 'Cube Bot', category: 'robots', fallback: '🧊', primary: '#72e2d1', secondary: '#d7fff8', variant: 2 },
-  { id: 'bot-scout', label: 'Scout Bot', category: 'robots', fallback: '📡', primary: '#c49cff', secondary: '#f1e6ff', variant: 3 },
-  { id: 'bot-byte', label: 'Byte Bot', category: 'robots', fallback: '💾', primary: '#ff7fb1', secondary: '#ffe1ed', variant: 4 },
+  { id: 'bot-atlas', label: 'Robot', category: 'robots', fallback: '🤖', primary: '#7eb6ff', secondary: '#d9f3ff', variant: 0 },
+  { id: 'bot-bolt', label: 'Mech Arm', category: 'robots', fallback: '🦾', primary: '#f0b84f', secondary: '#fff3c4', variant: 1 },
+  { id: 'bot-cube', label: 'Mech Leg', category: 'robots', fallback: '🦿', primary: '#72e2d1', secondary: '#d7fff8', variant: 2 },
+  { id: 'bot-scout', label: 'Satellite Bot', category: 'robots', fallback: '📡', primary: '#c49cff', secondary: '#f1e6ff', variant: 3 },
+  { id: 'bot-byte', label: 'Gear Bot', category: 'robots', fallback: '⚙️', primary: '#ff7fb1', secondary: '#ffe1ed', variant: 4 },
 
-  { id: 'mage', label: 'Mage', category: 'fantasy', fallback: '🧙', primary: '#7f6cf2', secondary: '#e7e1ff', variant: 0 },
-  { id: 'knight', label: 'Knight', category: 'fantasy', fallback: '🛡️', primary: '#6d8ca7', secondary: '#e6edf4', variant: 1 },
+  { id: 'mage', label: 'Mage', category: 'fantasy', fallback: '🧙‍♂️', primary: '#7f6cf2', secondary: '#e7e1ff', variant: 0 },
+  { id: 'knight', label: 'Elf', category: 'fantasy', fallback: '🧝', primary: '#6d8ca7', secondary: '#e6edf4', variant: 1 },
   { id: 'dragon', label: 'Dragon', category: 'fantasy', fallback: '🐉', primary: '#4bc58e', secondary: '#d9ffec', variant: 2 },
-  { id: 'rune', label: 'Rune Spirit', category: 'fantasy', fallback: '🔮', primary: '#b16ce6', secondary: '#f4ddff', variant: 3 },
+  { id: 'rune', label: 'Fairy', category: 'fantasy', fallback: '🧚', primary: '#b16ce6', secondary: '#f4ddff', variant: 3 },
   { id: 'crown', label: 'Crownling', category: 'fantasy', fallback: '👑', primary: '#f0bd46', secondary: '#fff2bd', variant: 4 },
 
   { id: 'astro', label: 'Astronaut', category: 'space', fallback: '🧑‍🚀', primary: '#d9e4ef', secondary: '#76b5ff', variant: 0 },
@@ -55,10 +55,10 @@ export const AVATAR_CATALOG: readonly AvatarOption[] = [
   { id: 'berry', label: 'Berry', category: 'food', fallback: '🍓', primary: '#dd4b64', secondary: '#8dda77', variant: 4 },
 
   { id: 'ghost', label: 'Ghost', category: 'monsters', fallback: '👻', primary: '#d7e6f4', secondary: '#8eb1cc', variant: 0 },
-  { id: 'cyclops', label: 'Cyclops', category: 'monsters', fallback: '👁️', primary: '#8a72d6', secondary: '#ffe05c', variant: 1 },
-  { id: 'slime', label: 'Slime', category: 'monsters', fallback: '🟢', primary: '#58d58d', secondary: '#d7ffe8', variant: 2 },
+  { id: 'cyclops', label: 'Zombie', category: 'monsters', fallback: '🧟', primary: '#8a72d6', secondary: '#ffe05c', variant: 1 },
+  { id: 'slime', label: 'Ogre', category: 'monsters', fallback: '👺', primary: '#58d58d', secondary: '#d7ffe8', variant: 2 },
   { id: 'horned', label: 'Horned Beast', category: 'monsters', fallback: '👹', primary: '#d95d66', secondary: '#ffd0d4', variant: 3 },
-  { id: 'yeti', label: 'Yeti', category: 'monsters', fallback: '❄️', primary: '#d8edf5', secondary: '#65a9c9', variant: 4 },
+  { id: 'yeti', label: 'Troll', category: 'monsters', fallback: '🧌', primary: '#d8edf5', secondary: '#65a9c9', variant: 4 },
 
   { id: 'camera', label: 'Camera', category: 'objects', fallback: '📷', primary: '#667b91', secondary: '#d9e5ee', variant: 0 },
   { id: 'cassette', label: 'Cassette', category: 'objects', fallback: '📼', primary: '#8f7bd7', secondary: '#e9e1ff', variant: 1 },
@@ -66,23 +66,23 @@ export const AVATAR_CATALOG: readonly AvatarOption[] = [
   { id: 'trophy', label: 'Trophy', category: 'objects', fallback: '🏆', primary: '#e6b341', secondary: '#fff0a8', variant: 3 },
   { id: 'boombox', label: 'Boombox', category: 'objects', fallback: '📻', primary: '#d15f8f', secondary: '#ffd9e8', variant: 4 },
 
-  { id: 'pixel-hero', label: 'Pixel Hero', category: 'retro', fallback: '🕹️', primary: '#65c6ff', secondary: '#dff5ff', variant: 0 },
-  { id: 'joystick', label: 'Joystick', category: 'retro', fallback: '🕹️', primary: '#db5e6e', secondary: '#ffe0e4', variant: 1 },
-  { id: 'arcade', label: 'Arcade', category: 'retro', fallback: '🎮', primary: '#8f70e8', secondary: '#eae0ff', variant: 2 },
+  { id: 'pixel-hero', label: 'Arcade Stick', category: 'retro', fallback: '🕹️', primary: '#65c6ff', secondary: '#dff5ff', variant: 0 },
+  { id: 'joystick', label: 'Gamepad', category: 'retro', fallback: '🎮', primary: '#db5e6e', secondary: '#ffe0e4', variant: 1 },
+  { id: 'arcade', label: 'Retro TV', category: 'retro', fallback: '📺', primary: '#8f70e8', secondary: '#eae0ff', variant: 2 },
   { id: 'pixel-alien', label: 'Pixel Alien', category: 'retro', fallback: '👾', primary: '#7fda73', secondary: '#e1ffdc', variant: 3 },
   { id: 'floppy', label: 'Floppy', category: 'retro', fallback: '💾', primary: '#5579c8', secondary: '#dfe8ff', variant: 4 },
 
-  { id: 'eyeball', label: 'Eyeball', category: 'weird', fallback: '👁️', primary: '#f3eadc', secondary: '#6ac2ef', variant: 0 },
+  { id: 'eyeball', label: 'Lucky Eye', category: 'weird', fallback: '🧿', primary: '#f3eadc', secondary: '#6ac2ef', variant: 0 },
   { id: 'sock', label: 'Sock', category: 'weird', fallback: '🧦', primary: '#e6718e', secondary: '#ffdce5', variant: 1 },
   { id: 'cloud', label: 'Cloud', category: 'weird', fallback: '☁️', primary: '#dbe9f2', secondary: '#8cc0dd', variant: 2 },
   { id: 'noodle', label: 'Noodle', category: 'weird', fallback: '🍜', primary: '#f0b453', secondary: '#fff0bd', variant: 3 },
-  { id: 'cone', label: 'Cone', category: 'weird', fallback: '🔺', primary: '#ff875c', secondary: '#ffe1d4', variant: 4 },
+  { id: 'cone', label: 'Moai', category: 'weird', fallback: '🗿', primary: '#ff875c', secondary: '#ffe1d4', variant: 4 },
 
   { id: 'prism', label: 'Prism', category: 'abstract', fallback: '🔷', primary: '#67bfff', secondary: '#c8eaff', variant: 0 },
-  { id: 'orb', label: 'Orb', category: 'abstract', fallback: '🔵', primary: '#6f83f3', secondary: '#dce1ff', variant: 1 },
+  { id: 'orb', label: 'Crystal Orb', category: 'abstract', fallback: '🔮', primary: '#6f83f3', secondary: '#dce1ff', variant: 1 },
   { id: 'spark', label: 'Spark', category: 'abstract', fallback: '✨', primary: '#f0c752', secondary: '#fff2b7', variant: 2 },
   { id: 'wave', label: 'Wave', category: 'abstract', fallback: '🌊', primary: '#49b8d7', secondary: '#d6f7ff', variant: 3 },
-  { id: 'void', label: 'Void', category: 'abstract', fallback: '⚫', primary: '#5d4d8c', secondary: '#b4a6e8', variant: 4 }
+  { id: 'void', label: 'Void', category: 'abstract', fallback: '🕳️', primary: '#5d4d8c', secondary: '#b4a6e8', variant: 4 }
 ];
 
 export const PLAYER_ACCENTS = [

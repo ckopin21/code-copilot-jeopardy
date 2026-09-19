@@ -167,21 +167,37 @@ for (const viewport of phoneViewports) {
 
     await page.getByRole('tab', { name: 'Style' }).click();
     await page.getByRole('button', { name: 'Mint' }).click();
+    const accentSwatch = page.getByRole('button', { name: 'Mint' });
+    const accentBounds = await accentSwatch.boundingBox();
+    expect(accentBounds).not.toBeNull();
+    expect(Math.abs(accentBounds!.width - accentBounds!.height)).toBeLessThanOrEqual(1);
     await page.getByRole('button', { name: 'Halo' }).click();
     await page.locator('.customization-select select').selectOption('professor');
     await expect(page.locator('[data-testid="player-customization-preview"] [data-frame="halo"]')).toBeVisible();
     await expect(page.locator('[data-testid="player-customization-preview"]')).toHaveCSS('--accent', '#5eead4');
 
     await page.getByRole('tab', { name: 'Effects' }).click();
+
+    await page.getByRole('button', { name: 'Classic' }).click();
+    await expect(page.locator('[data-testid="player-customization-preview"]')).toHaveAttribute('data-preview-kind', 'buzzer');
+    await expect(page.locator('.effect-preview-buzz')).toBeVisible();
+
     await page.getByRole('button', { name: 'Wave' }).click();
-    await page.getByRole('button', { name: 'Stars' }).click();
     await expect(page.locator('[data-testid="player-customization-preview"]')).toHaveAttribute('data-score-effect', 'wave');
+    await expect(page.locator('[data-testid="player-customization-preview"]')).toHaveAttribute('data-preview-kind', 'score');
+    await expect(page.locator('.effect-preview-score')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Stars' }).click();
     await expect(page.locator('[data-testid="player-customization-preview"]')).toHaveAttribute('data-victory-effect', 'stars');
+    await expect(page.locator('[data-testid="player-customization-preview"]')).toHaveAttribute('data-preview-kind', 'victory');
+    await expect(page.locator('.effect-preview-stars')).toBeVisible();
 
     await page.getByRole('tab', { name: 'Avatar' }).click();
     await page.getByRole('button', { name: 'Robots' }).click();
-    await page.getByRole('button', { name: 'Atlas Bot' }).click();
-    await expect(page.locator('[data-testid="player-customization-preview"] [data-avatar-id="bot-atlas"]')).toBeVisible();
+    await page.getByRole('button', { name: 'Robot', exact: true }).click();
+    const selectedAvatar = page.locator('[data-testid="player-customization-preview"] [data-avatar-id="bot-atlas"]');
+    await expect(selectedAvatar).toBeVisible();
+    await expect(selectedAvatar.locator('.player-avatar-emoji')).toHaveText('🤖');
 
     const touchTargets = await page.locator('.customization-tabs button, .avatar-grid-v3 > button').evaluateAll((buttons) =>
       buttons.map((button) => {
