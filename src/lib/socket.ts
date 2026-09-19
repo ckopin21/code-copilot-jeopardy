@@ -694,6 +694,11 @@ export async function emitLocalUiAuditAck<T = unknown>(event: string, payload: u
   if (roomCode) emitRoom(roomCode);
   return result as T;
 }
+export function readLocalUiAuditSnapshot(roomCode: string): RoomSnapshot {
+  requireUiAuditMode();
+  return engine.snapshot(roomCode);
+}
+
 
 function jsonResponse(value: unknown, status = 200): Response {
   return new Response(JSON.stringify(value), { status, headers: { 'content-type': 'application/json' } });
