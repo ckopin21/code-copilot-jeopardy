@@ -38,4 +38,21 @@ describe('dynamic UI layout regression', () => {
     expect(css).toContain('.presentation-name-strip[data-player-count="5"] .presentation-player-main small');
     expect(css).toContain('display: block !important;');
   });
+
+  it('keeps avatar sizing anchors across host, presentation, results, and player UI without title spacing', () => {
+    const css = read('../src/player-customization.css');
+    for (const selector of [
+      '.player-avatar-large .player-avatar-art',
+      '.presentation-player-avatar .player-avatar-art',
+      '.roster-avatar .player-avatar-art',
+      '.podium-avatar .player-avatar-art',
+      '.phone-header-v2 .phone-avatar .player-avatar-art',
+      '.recap-player-heading > .player-avatar-art',
+      '.presentation-winner-identity > .player-avatar-art'
+    ]) expect(css).toContain(selector);
+
+    expect(css).toContain('.player-avatar-frame');
+    expect(css).toContain('.player-avatar-content');
+    expect(css).not.toContain('.player-title-badge');
+  });
 });
