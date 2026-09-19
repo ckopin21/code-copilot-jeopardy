@@ -42,6 +42,34 @@ async function assertUsedResultTilesContained(page, rootSelector) {
   expect(issues).toEqual([]);
 }
 
+async function assertPresentationResultAvatarsMatchIdentityStyle(page, rootSelector) {
+  const styles = await page.locator(rootSelector).evaluate((root) => {
+    const identity = root.querySelector('.presentation-player-avatar');
+    const resultAvatar = root.querySelector('.used-result-avatar-art');
+    if (!(identity instanceof HTMLElement) || !(resultAvatar instanceof HTMLElement)) {
+      throw new Error('Missing presentation avatar comparison targets');
+    }
+    const identityStyle = getComputedStyle(identity);
+    const resultStyle = getComputedStyle(resultAvatar);
+    return {
+      identity: {
+        borderColor: identityStyle.borderTopColor,
+        borderRadius: identityStyle.borderRadius,
+        backgroundColor: identityStyle.backgroundColor
+      },
+      result: {
+        borderColor: resultStyle.borderTopColor,
+        borderRadius: resultStyle.borderRadius,
+        backgroundColor: resultStyle.backgroundColor
+      }
+    };
+  });
+
+  expect(styles.result.borderColor).toBe(styles.identity.borderColor);
+  expect(styles.result.borderRadius).toBe(styles.identity.borderRadius);
+  expect(styles.result.backgroundColor).toBe(styles.identity.backgroundColor);
+}
+
 async function assertViewportFit(page, rootSelector = 'body') {
   const issues = await page.locator(rootSelector).evaluate((root) => {
     const vw = document.documentElement.clientWidth;
@@ -163,6 +191,7 @@ for (const viewport of viewports) {
     await expect(lab.locator('.presentation-name-card')).toHaveCount(5);
     await assertViewportFit(page, '.dev-board-presentation');
     await assertUsedResultTilesContained(page, '.dev-board-presentation');
+    await assertPresentationResultAvatarsMatchIdentityStyle(page, '.dev-board-presentation');
 
     const geometry = await lab.evaluate((element) => {
       const rect = element.getBoundingClientRect();
