@@ -1,7 +1,7 @@
 import type { RoomSnapshot } from '../shared/types';
 import { Board, type BoardResultMap } from './Board';
 import { PlayerAvatar } from './PlayerAvatar';
-import { getPlayerTitleLabel, normalizePlayerCustomization } from '../shared/playerCustomization';
+import { normalizePlayerCustomization } from '../shared/playerCustomization';
 
 export function BoardPresentation({ room, onBack, onSelect, onReview, results = {}, scoreOverrides = {} }: { room: RoomSnapshot; onBack: () => void; onSelect: (id: string) => void; onReview?: (id: string) => void; results?: BoardResultMap; scoreOverrides?: Record<string, number> }) {
   if (!room.board) return null;
@@ -20,10 +20,9 @@ export function BoardPresentation({ room, onBack, onSelect, onReview, results = 
                 : 'READY';
           const displayedScore = scoreOverrides[player.id] ?? player.score;
           const customization = normalizePlayerCustomization(player);
-          const title = getPlayerTitleLabel(customization.title);
           return <div data-player-id={player.id} data-score-effect={customization.scoreEffect} className={`presentation-name-card ${room.turnPlayerId === player.id ? 'is-turn' : ''} ${player.onFire ? 'is-fire' : ''} ${player.isCold ? 'is-cold' : ''}`} key={player.id} style={{ '--accent': player.accent } as React.CSSProperties}>
             <span className="presentation-player-avatar"><PlayerAvatar avatarId={player.avatarId} fallback={player.avatar} frameStyle={customization.frameStyle} accent={player.accent} /></span>
-            <div className="presentation-player-main"><strong>{player.name}</strong>{title && <span className="player-title-badge">{title}</span>}<small>{status}</small></div>
+            <div className="presentation-player-main"><strong>{player.name}</strong><small>{status}</small></div>
             <b data-player-score={player.id}>{displayedScore.toLocaleString()}</b>
           </div>;
         }) : <div className="presentation-name-card practice"><strong>PRACTICE MODE</strong></div>}
