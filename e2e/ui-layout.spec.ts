@@ -65,12 +65,44 @@ async function assertViewportFit(page, rootSelector = 'body') {
   expect(issues).toEqual([]);
 }
 
-async function openBoardHarness(page, gameMode) {
+async function instrumentFullscreenTarget(page) {
+  await page.addInitScript(() => {
+    const originalRequestFullscreen = Element.prototype.requestFullscreen;
+    Object.defineProperty(Element.prototype, 'requestFullscreen', {
+      configurable: true,
+      value: async function (this: Element) {
+        this.setAttribute('data-playwright-fullscreen-target', 'true');
+        if (originalRequestFullscreen) return originalRequestFullscreen.call(this);
+        throw new Error('Fullscreen API unavailable');
+      }
+    });
+  });
+}
+
+async function openDevPresentationHarness(page, { playerCount = 5, multiplier = 2 } = {}) {
+  await instrumentFullscreenTarget(page);
   await page.goto('/?mode=host&fresh=1');
-  await page.getByRole('button', { name: 'Open presentation visual lab' }).click();
-  await expect(page.locator('.dev-presentation-lab')).toBeVisible();
-  await page.getByLabel('Preview game mode').selectOption(gameMode);
-  await page.locator('.dev-presentation-control-row select').first().selectOption('5');
+  await page.getByRole('button', { name: 'Open developer mode' }).click();
+
+  const panel = page.locator('.dev-mode-panel');
+  await expect(panel).toBeVisible();
+  await panel.getByRole('button', { name: `${playerCount}P`, exact: true }).click();
+  await panel.locator('label').filter({ hasText: 'Board modifier' }).locator('select').selectOption(String(multiplier));
+
+  const lab = page.locator('.dev-visual-lab-section');
+  await lab.getByRole('button', { name: 'Fullscreen Visual & animation lab' }).click();
+  await expect(lab).toHaveAttribute('data-playwright-fullscreen-target', 'true');
+  await expect(lab).toHaveAttribute('data-dev-visual-lab-fullscreen', 'true');
+
+  const fullscreenState = await lab.evaluate((element) => ({
+    native: document.fullscreenElement === element,
+    fallback: element.classList.contains('is-fallback-fullscreen')
+  }));
+  expect(fullscreenState.native || fullscreenState.fallback).toBe(true);
+
+  await lab.getByRole('button', { name: 'Presentation Mode', exact: true }).click();
+  await expect(lab.locator('[data-dev-production-presentation="true"] .board-presentation-mode')).toBeVisible();
+  return lab;
 }
 
 for (const viewport of menuViewports) {
@@ -123,136 +155,147 @@ for (const viewport of menuViewports) {
   });
 }
 
-for (const gameMode of ['classic', 'free-response']) {
-  for (const viewport of viewports) {
-    test(`${gameMode} deterministic host and presentation boards fit at ${viewport.width}x${viewport.height}`, async ({ page }) => {
-      await page.setViewportSize(viewport);
-      await openBoardHarness(page, gameMode);
+for (const viewport of viewports) {
+  test(`production presentation board fits at ${viewport.width}x${viewport.height}`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    const lab = await openDevPresentationHarness(page, { playerCount: 5, multiplier: viewport.width === 1366 ? 3 : 2 });
 
-      await page.getByLabel('Preview board multiplier').selectOption(viewport.width === 1366 ? '3' : '2');
-      await page.getByLabel('Preview surface').selectOption('host-board');
-      await expect(page.locator('.dev-host-board-surface .showcase-board-stage .board')).toBeVisible();
-      await expect(page.locator('.dev-host-board-surface .used-result-chip')).toHaveCount(4);
-      await assertViewportFit(page, '.dev-host-board-surface');
-      await assertUsedResultTilesContained(page, '.dev-host-board-surface');
+    await expect(lab.locator('.presentation-name-card')).toHaveCount(5);
+    await assertViewportFit(page, '.dev-board-presentation');
+    await assertUsedResultTilesContained(page, '.dev-board-presentation');
 
-      await page.getByLabel('Preview surface').selectOption('presentation-board');
-      await expect(page.locator('.dev-board-presentation .board-presentation-mode')).toBeVisible();
-      await expect(page.locator('.dev-board-presentation .presentation-name-card')).toHaveCount(5);
-      await assertViewportFit(page, '.dev-board-presentation');
-      await assertUsedResultTilesContained(page, '.dev-board-presentation');
+    const geometry = await lab.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height, vw: innerWidth, vh: innerHeight };
     });
-  }
+    expect(Math.abs(geometry.left)).toBeLessThanOrEqual(1);
+    expect(Math.abs(geometry.top)).toBeLessThanOrEqual(1);
+    expect(Math.abs(geometry.width - geometry.vw)).toBeLessThanOrEqual(2);
+    expect(Math.abs(geometry.height - geometry.vh)).toBeLessThanOrEqual(2);
+  });
 }
 
-test('deterministic board harness supports multiple player counts and long names', async ({ page }) => {
+test('production presentation lab supports 2-5 players through the DEV path', async ({ page }) => {
   await page.setViewportSize({ width: 1366, height: 768 });
-  await openBoardHarness(page, 'free-response');
+  await instrumentFullscreenTarget(page);
+  await page.goto('/?mode=host&fresh=1');
+  await page.getByRole('button', { name: 'Open developer mode' }).click();
 
-  const playerSelect = page.locator('.dev-presentation-control-row select').first();
-  for (const count of ['2', '3', '4', '5']) {
-    await playerSelect.selectOption(count);
-    await page.getByLabel('Preview surface').selectOption('presentation-board');
-    await expect(page.locator('.dev-board-presentation .presentation-name-card')).toHaveCount(Number(count));
+  const panel = page.locator('.dev-mode-panel');
+  const lab = page.locator('.dev-visual-lab-section');
+  for (const count of [2, 3, 4, 5]) {
+    await panel.getByRole('button', { name: `${count}P`, exact: true }).click();
+    await lab.getByRole('button', { name: 'Fullscreen Visual & animation lab' }).click();
+    await expect(lab).toHaveAttribute('data-dev-visual-lab-fullscreen', 'true');
+    await lab.getByRole('button', { name: 'Presentation Mode', exact: true }).click();
+    await expect(lab.locator('.presentation-name-card')).toHaveCount(count);
     await assertViewportFit(page, '.dev-board-presentation');
+    await lab.getByRole('button', { name: 'Exit Fullscreen', exact: true }).click();
+    await expect(lab).toHaveAttribute('data-dev-visual-lab-fullscreen', 'false');
+    await expect(panel).toBeVisible();
   }
 });
 
-test('presentation lab dynamic overlays remain on-screen', async ({ page }) => {
+test('fullscreen DEV visual lab keeps dynamic overlays inside the viewport', async ({ page }) => {
   await page.setViewportSize({ width: 1366, height: 768 });
+  await instrumentFullscreenTarget(page);
   await page.goto('/?mode=host&fresh=1');
-  await page.getByRole('button', { name: 'Open presentation visual lab' }).click();
-  await expect(page.locator('.dev-presentation-lab')).toBeVisible();
+  await page.getByRole('button', { name: 'Open developer mode' }).click();
 
-  await page.locator('.dev-presentation-control-row select').first().selectOption('5');
-  await page.getByText('Stress-test long question text').click();
-  await assertViewportFit(page, '.dev-presentation-surface');
+  const lab = page.locator('.dev-visual-lab-section');
+  await lab.getByRole('button', { name: 'Fullscreen Visual & animation lab' }).click();
+  await expect(lab.locator('[data-dev-expanded-lab="true"]')).toBeVisible();
 
   for (const label of ['Score +', 'Score −', '2× reveal', '3× reveal', 'Final reveal', 'Round start', 'Daily Double', 'Final Round', 'Results']) {
-    await page.getByRole('button', { name: label, exact: true }).click();
+    await lab.getByRole('button', { name: label, exact: true }).click();
     await page.waitForTimeout(100);
-    const overlay = page.locator('.score-flight,.modifier-reveal-overlay,.final-reveal-spectacle,.game-transition-overlay').last();
-    if (await overlay.count()) await assertViewportFit(page, '.dev-presentation-lab');
-    await page.getByRole('button', { name: 'Clear', exact: true }).click();
+    await assertViewportFit(page, '.dev-visual-lab-section');
+    await lab.getByRole('button', { name: 'Clear previews', exact: true }).click();
   }
+
+  await lab.getByRole('button', { name: 'Exit Fullscreen', exact: true }).click();
 });
 
-test('visual lab supports fullscreen presentation testing and outside dismissal', async ({ page }) => {
-  await page.addInitScript(() => {
-    let fakeFullscreenElement: Element | null = null;
-    Object.defineProperty(document, 'fullscreenElement', {
-      configurable: true,
-      get: () => fakeFullscreenElement
-    });
-    Object.defineProperty(Element.prototype, 'requestFullscreen', {
-      configurable: true,
-      value: async () => {
-        fakeFullscreenElement = document.querySelector('.dev-presentation-lab');
-        document.dispatchEvent(new Event('fullscreenchange'));
-      }
-    });
-    Object.defineProperty(document, 'exitFullscreen', {
-      configurable: true,
-      value: async () => {
-        fakeFullscreenElement = null;
-        document.dispatchEvent(new Event('fullscreenchange'));
-      }
-    });
-  });
-
+test('DEV visual lab fullscreen uses the exact lab element and real presentation UI', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto('/?mode=host&fresh=1');
-  await page.getByRole('button', { name: 'Open presentation visual lab' }).click();
+  const lab = await openDevPresentationHarness(page, { playerCount: 5, multiplier: 2 });
 
-  const lab = page.locator('.dev-presentation-lab');
-  await expect(lab).toBeVisible();
+  await expect(lab.locator('[data-dev-production-presentation="true"]')).toBeVisible();
+  await expect(lab.locator('.board-presentation-mode')).toBeVisible();
 
-  await page.getByRole('button', { name: 'Fullscreen visual lab' }).click();
-  await expect(lab).toHaveClass(/is-native-fullscreen/);
+  await lab.getByRole('button', { name: 'Score +', exact: true }).click();
+  await expect(lab.locator('.score-flight-token')).toBeVisible();
+  await lab.getByRole('button', { name: 'Clear previews', exact: true }).click();
 
-  await page.getByRole('button', { name: 'PRESENTATION MODE', exact: true }).click();
-  await expect(lab).toHaveClass(/presentation-test-mode/);
-  await expect(page.locator('.dev-board-presentation .board-presentation-mode')).toBeVisible();
-  await expect(page.locator('.dev-presentation-controls')).toHaveCount(0);
-  await expect(page.getByRole('toolbar', { name: 'Presentation test controls' })).toBeVisible();
+  await lab.getByRole('button', { name: '2× reveal', exact: true }).click();
+  await expect(lab.locator('.modifier-reveal-overlay')).toBeVisible();
+  await lab.getByRole('button', { name: 'Clear previews', exact: true }).click();
 
-  await page.getByRole('button', { name: 'CONTROLS', exact: true }).click();
-  await expect(page.locator('.dev-presentation-controls')).toBeVisible();
+  await lab.getByRole('button', { name: 'Round start', exact: true }).click();
+  await expect(lab.locator('.game-transition-overlay')).toBeVisible();
+  await lab.getByRole('button', { name: 'Clear previews', exact: true }).click();
 
-  await page.mouse.click(30, 300);
-  await expect(page.locator('.dev-presentation-controls')).toHaveCount(0);
-  await expect(lab).toBeVisible();
+  const toolbar = lab.getByRole('toolbar', { name: 'Visual lab fullscreen controls' });
+  await expect(toolbar).toBeVisible();
+  await page.mouse.click(24, 430);
+  await expect(toolbar).toHaveCount(0);
+  await expect(lab.locator('.board-presentation-mode')).toBeVisible();
 
-  await page.getByRole('button', { name: 'EXIT FULLSCREEN', exact: true }).click();
-  await expect(lab).not.toHaveClass(/is-native-fullscreen/);
+  await lab.getByRole('button', { name: 'LAB CONTROLS', exact: true }).click();
+  await expect(toolbar).toBeVisible();
+  await lab.getByRole('button', { name: 'Exit Fullscreen', exact: true }).click();
 
-  await page.getByRole('button', { name: 'EXIT TEST', exact: true }).click();
-  await expect(page.locator('.dev-presentation-controls')).toBeVisible();
-
-  await page.mouse.click(30, 300);
-  await expect(lab).toHaveCount(0);
+  await expect(lab).toHaveAttribute('data-dev-visual-lab-fullscreen', 'false');
+  await expect(page.locator('.dev-mode-panel')).toBeVisible();
+  await expect(lab.getByRole('button', { name: 'Fullscreen Visual & animation lab' })).toBeVisible();
 });
 
-test('dismissible host panels close when clicking outside', async ({ page }) => {
+test('dismissible host panels preserve inside clicks and close outside', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/?mode=host&fresh=1');
 
   await page.getByRole('button', { name: /Audio/ }).click();
-  await expect(page.locator('.audio-drawer')).toBeVisible();
-  await page.mouse.click(600, 400);
-  await expect(page.locator('.audio-drawer')).toHaveCount(0);
+  const audioDrawer = page.locator('.audio-drawer');
+  await expect(audioDrawer).toBeVisible();
+  await audioDrawer.click({ position: { x: 20, y: 20 } });
+  await expect(audioDrawer).toBeVisible();
+  await page.mouse.click(800, 400);
+  await expect(audioDrawer).toHaveCount(0);
 
   await page.getByRole('button', { name: 'Open developer mode' }).click();
-  await expect(page.locator('.dev-mode-panel')).toBeVisible();
-  await page.mouse.click(700, 400);
-  await expect(page.locator('.dev-mode-panel')).toHaveCount(0);
+  const devPanel = page.locator('.dev-mode-panel');
+  await expect(devPanel).toBeVisible();
+  await devPanel.click({ position: { x: 40, y: 40 } });
+  await expect(devPanel).toBeVisible();
+  await page.mouse.click(900, 400);
+  await expect(devPanel).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Join QR', exact: true }).click();
+  const joinModal = page.locator('.expanded-qr-modal');
+  await expect(joinModal).toBeVisible();
+  await joinModal.click({ position: { x: 40, y: 40 } });
+  await expect(joinModal).toBeVisible();
+  await page.locator('.modal-backdrop').click({ position: { x: 10, y: 10 } });
+  await expect(joinModal).toHaveCount(0);
 
   const hostControls = page.getByRole('button', { name: 'Open host controls' });
-  await expect(hostControls).toBeVisible();
   await hostControls.click();
-  await expect(page.locator('.host-command-drawer')).toBeVisible();
-  await page.mouse.click(700, 400);
-  await expect(page.locator('.host-command-drawer')).toHaveCount(0);
+  const drawer = page.locator('.host-command-drawer');
+  await expect(drawer).toBeVisible();
+  await drawer.click({ position: { x: 30, y: 30 } });
+  await expect(drawer).toBeVisible();
+
+  await page.getByRole('button', { name: 'Connection check', exact: true }).click();
+  const preflight = page.locator('.preflight-modal');
+  await expect(preflight).toBeVisible();
+  await preflight.click({ position: { x: 30, y: 30 } });
+  await expect(preflight).toBeVisible();
+  await page.locator('.enhancement-modal-backdrop').click({ position: { x: 10, y: 10 } });
+  await expect(preflight).toHaveCount(0);
+  await expect(drawer).toBeVisible();
+
+  await page.mouse.click(900, 400);
+  await expect(drawer).toHaveCount(0);
 });
 
 
