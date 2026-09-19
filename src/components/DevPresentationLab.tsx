@@ -47,13 +47,20 @@ function buildBoardPreviewRoom(base: RoomSnapshot, gameMode: GameMode, multiplie
         { playerId: players[1].id, playerName: players[1].name, playerAvatar: players[1].avatar, correct: false, delta: -value, modifiers: ['COLD STREAK'] }
       ]
     };
-    if (rowIndex === 1) return {
-      ...baseQuestion,
-      results: [
-        { playerId: players[2].id, playerName: players[2].name, playerAvatar: players[2].avatar, correct: true, delta: value * multiplier, modifiers: ['COMEBACK'] },
-        { playerId: players[3].id, playerName: players[3].name, playerAvatar: players[3].avatar, correct: false, delta: -value, modifiers: ['3× MODIFIER'] }
-      ]
-    };
+    if (rowIndex === 1) {
+      const responders = players.slice(-2);
+      return {
+        ...baseQuestion,
+        results: responders.map((player, index) => ({
+          playerId: player.id,
+          playerName: player.name,
+          playerAvatar: player.avatar,
+          correct: index === 0,
+          delta: index === 0 ? value * multiplier : -value,
+          modifiers: [index === 0 ? 'COMEBACK' : '3× MODIFIER']
+        }))
+      };
+    }
     return {
       ...baseQuestion,
       results: players.slice(0, 4).map((player, index) => ({
