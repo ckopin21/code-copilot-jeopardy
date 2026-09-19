@@ -391,3 +391,126 @@ body:has(.comeback-host) .board-presentation-mode .board-presentation-header {
     font-size: clamp(1.8rem, min(5vw, 7vh), 4.6rem);
   }
 }
+
+
+/* 1366×768 and similarly dense desktop layouts need player status below the identity,
+   not in a third column that starves long names of horizontal room. */
+@media (min-width: 760px) {
+  .showcase-host:not(.host-presentation-mode) .showcase-player-strip.player-strip[data-player-count] .showcase-player-card.player-card {
+    grid-template-columns: 34px minmax(0, 1fr) !important;
+    grid-template-rows: auto auto !important;
+    min-height: 62px !important;
+    height: auto !important;
+    align-items: center;
+  }
+  .showcase-host:not(.host-presentation-mode) .showcase-player-card > .player-avatar-large {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+  }
+  .showcase-host:not(.host-presentation-mode) .showcase-player-card > .player-card-main {
+    grid-column: 2;
+    grid-row: 1;
+    min-width: 0;
+  }
+  .showcase-host:not(.host-presentation-mode) .showcase-player-card > .streak-ribbon,
+  .showcase-host:not(.host-presentation-mode) .showcase-player-card > .player-status-stack,
+  .showcase-host:not(.host-presentation-mode) .showcase-player-card > .turn-beacon {
+    grid-column: 2 !important;
+    grid-row: 2 !important;
+    justify-self: start !important;
+    width: auto;
+    max-width: 100% !important;
+  }
+  .showcase-host:not(.host-presentation-mode) .showcase-player-card > .player-status-stack {
+    flex-direction: row !important;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .showcase-host:not(.host-presentation-mode) .showcase-player-card > .player-status-stack .streak-ribbon,
+  .showcase-host:not(.host-presentation-mode) .showcase-player-card > .player-status-stack .turn-beacon {
+    width: auto;
+    max-width: 100% !important;
+  }
+}
+
+/* A playing host screen should spend the remaining viewport on the board.
+   Rich result rows can claim their minimum content height while untouched rows share the rest. */
+@media (min-width: 900px) {
+  .showcase-host:has(> .showcase-board-stage) {
+    min-height: 100dvh;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .showcase-host:has(> .showcase-board-stage) > .showcase-board-stage {
+    flex: 1 1 0 !important;
+    min-height: 0;
+    height: auto !important;
+  }
+  .showcase-host:has(> .showcase-board-stage) > .showcase-board-stage > .board,
+  .board-presentation-mode .presentation-board-fill > .board,
+  .presentation-shell .presentation-board > .board {
+    height: 100% !important;
+    min-height: 0;
+    grid-auto-rows: minmax(min-content, 1fr) !important;
+  }
+  .showcase-host:has(> .showcase-board-stage) .question-tile.used.has-result {
+    min-height: max-content;
+  }
+}
+
+/* Dense played tiles keep every result in flow without squeezing badges over names. */
+.question-tile.used.has-result .used-tile-result {
+  overflow: visible !important;
+}
+.question-tile.used.has-result .used-result-list {
+  min-width: 0;
+  display: grid !important;
+  grid-auto-rows: max-content;
+  align-content: start;
+  gap: 2px !important;
+  overflow: visible !important;
+}
+.question-tile.used.has-result .used-result-chip {
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+.question-tile.used.has-result .used-result-chip b,
+.question-tile.used.has-result .used-result-chip em {
+  min-width: 0;
+}
+
+@media (max-height: 800px) and (min-width: 900px) {
+  .showcase-host:not(.host-presentation-mode) .question-tile.used.has-result .used-tile-result {
+    padding: 2px 3px !important;
+    gap: 2px !important;
+  }
+  .showcase-host:not(.host-presentation-mode) .question-tile.used.has-result .used-tile-topline {
+    gap: 2px !important;
+  }
+  .showcase-host:not(.host-presentation-mode) .question-tile.used.has-result .used-question-modifiers > span {
+    font-size: clamp(.38rem, .52vw, .52rem) !important;
+    padding: 1px 3px !important;
+    line-height: 1.05 !important;
+  }
+  .showcase-host:not(.host-presentation-mode) .question-tile.used.has-result .used-result-chip {
+    padding: 2px 3px !important;
+    gap: 2px 4px !important;
+  }
+  .showcase-host:not(.host-presentation-mode) .question-tile.used.has-result .used-result-chip b {
+    font-size: clamp(.5rem, .62vw, .68rem) !important;
+    line-height: 1.04 !important;
+  }
+  .showcase-host:not(.host-presentation-mode) .question-tile.used.has-result .used-result-chip em {
+    font-size: clamp(.48rem, .58vw, .64rem) !important;
+    line-height: 1 !important;
+  }
+  .showcase-host:not(.host-presentation-mode) .question-tile.used.has-result .used-result-modifiers i {
+    font-size: clamp(.34rem, .44vw, .46rem) !important;
+    padding: 1px 2px !important;
+    line-height: 1 !important;
+  }
+}
