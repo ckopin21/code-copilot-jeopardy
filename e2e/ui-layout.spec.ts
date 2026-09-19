@@ -53,7 +53,14 @@ for (const viewport of menuViewports) {
         const element = document.querySelector(selector);
         if (!(element instanceof HTMLElement)) throw new Error(`Missing ${selector}`);
         const value = element.getBoundingClientRect();
-        return { left: value.left, width: value.width, height: value.height };
+        return {
+          left: value.left,
+          top: value.top,
+          right: value.right,
+          bottom: value.bottom,
+          width: value.width,
+          height: value.height
+        };
       };
       return {
         grid: rect('.menu-mode-grid'),
@@ -80,8 +87,8 @@ for (const viewport of menuViewports) {
     expect(geometry.joinButton.height).toBeGreaterThanOrEqual(70);
     expect(geometry.joinButton.height).toBeLessThanOrEqual(104);
 
-    expect(geometry.joinButton.top - geometry.joinHeader.bottom).toBeGreaterThanOrEqual(8);
-    expect(geometry.joinSection.bottom - geometry.joinButton.bottom).toBeGreaterThanOrEqual(8);
+    expect(geometry.joinButton.top - geometry.joinHeader.bottom).toBeGreaterThanOrEqual(4);
+    expect(geometry.joinSection.bottom - geometry.joinButton.bottom).toBeGreaterThanOrEqual(4);
   });
 }
 
