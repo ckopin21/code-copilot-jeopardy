@@ -163,6 +163,7 @@ test('menu music controls recover from a global mute set in game-room setup', as
   const mutedInSetup = await page.evaluate(() => JSON.parse(localStorage.getItem('blue-stage-audio') ?? '{}').muted);
   expect(mutedInSetup).toBe(true);
 
+  await page.getByRole('button', { name: 'Close audio controls' }).click();
   await page.getByRole('button', { name: '← Menu' }).click();
   await page.waitForURL((url) => !url.searchParams.has('mode'));
   const mutedOnMenu = await page.evaluate(() => JSON.parse(localStorage.getItem('blue-stage-audio') ?? '{}').muted);
