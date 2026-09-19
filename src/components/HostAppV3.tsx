@@ -135,7 +135,10 @@ export function HostAppV3() {
                 // Preserve the saved room on signaling/network failures. A transient outage must
                 // never destroy the only reconnect credentials for an otherwise valid game.
                 setCredentials(parsed);
-                setError(`${message}. Saved room ${parsed.roomCode} was preserved; retry when the connection is available.`);
+                const retryHint = /another host screen/i.test(message)
+                  ? ''
+                  : ' Retry when the connection is available.';
+                setError(`${message}. Saved room ${parsed.roomCode} was preserved.${retryHint}`);
                 return;
               }
               clearHostCredentials(parsed);
