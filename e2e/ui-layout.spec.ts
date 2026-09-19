@@ -143,3 +143,52 @@ test('presentation lab dynamic overlays remain on-screen', async ({ page }) => {
     await page.getByRole('button', { name: 'Clear', exact: true }).click();
   }
 });
+
+
+const phoneViewports = [
+  { width: 360, height: 640 },
+  { width: 390, height: 844 },
+  { width: 430, height: 932 }
+];
+
+for (const viewport of phoneViewports) {
+  test(`player customization stays usable at ${viewport.width}x${viewport.height}`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await page.goto('/?mode=player&room=ABCDE');
+    const card = page.locator('.join-form-v2');
+    await expect(card).toBeVisible();
+    await expect(page.locator('[data-testid="player-customization-preview"]')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Join Game' })).toBeVisible();
+
+    const bounds = await card.boundingBox();
+    expect(bounds).not.toBeNull();
+    expect(bounds!.y).toBeGreaterThanOrEqual(0);
+    expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(viewport.height + 1);
+
+    await page.getByRole('tab', { name: 'Style' }).click();
+    await page.getByRole('button', { name: 'Mint' }).click();
+    await page.getByRole('button', { name: 'Halo' }).click();
+    await page.locator('.customization-select select').selectOption('professor');
+    await expect(page.locator('[data-testid="player-customization-preview"] [data-frame="halo"]')).toBeVisible();
+    await expect(page.locator('[data-testid="player-customization-preview"]')).toHaveCSS('--accent', '#5eead4');
+
+    await page.getByRole('tab', { name: 'Effects' }).click();
+    await page.getByRole('button', { name: 'Wave' }).click();
+    await page.getByRole('button', { name: 'Stars' }).click();
+    await expect(page.locator('[data-testid="player-customization-preview"]')).toHaveAttribute('data-score-effect', 'wave');
+    await expect(page.locator('[data-testid="player-customization-preview"]')).toHaveAttribute('data-victory-effect', 'stars');
+
+    await page.getByRole('tab', { name: 'Avatar' }).click();
+    await page.getByRole('button', { name: 'Robots' }).click();
+    await page.getByRole('button', { name: 'Atlas Bot' }).click();
+    await expect(page.locator('[data-testid="player-customization-preview"] [data-avatar-id="bot-atlas"]')).toBeVisible();
+
+    const touchTargets = await page.locator('.customization-tabs button, .avatar-grid-v3 > button').evaluateAll((buttons) =>
+      buttons.map((button) => {
+        const rect = button.getBoundingClientRect();
+        return Math.min(rect.width, rect.height);
+      })
+    );
+    expect(Math.min(...touchTargets)).toBeGreaterThanOrEqual(40);
+  });
+}

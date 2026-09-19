@@ -7,6 +7,7 @@ import { calculateComebackAward } from './comebackScoring';
 import { finalWagerRules } from './finalWagerRules';
 import { gameModeAllowsDailyDoubles, gameModePenalizesTypedTimeout, isGameMode, responseModeForGameMode } from '../shared/gameModes';
 import { randomId } from './ids';
+import { normalizePlayerCustomization, type PlayerCustomizationFields } from '../shared/playerCustomization';
 
 export interface RoomRecord {
   state: RoomState;
@@ -331,7 +332,7 @@ export class BrowserGameEngine {
   reconnectHost(roomCode: string, hostToken: string): RoomSnapshot { const room = this.hostRoom(roomCode, hostToken); room.state.hostConnected = true; this.persist(); return this.snapshot(roomCode); }
   setHostConnected(roomCode: string, connected: boolean): void { const room = this.room(roomCode); room.state.hostConnected = connected; this.touch(room); this.persist(); }
 
-  joinPlayer(roomCode: string, input: { name: string; avatar: string; accent: string }): PlayerJoinCredentials {
+  joinPlayer(roomCode: string, input: { name: string; avatar: string; accent: string } & PlayerCustomizationFields): PlayerJoinCredentials {
     const room = this.room(roomCode);
     if (room.state.players.length >= 5) throw new Error('Room already has 5 players');
     const occupiedSeats = new Set(room.state.players.map((player) => player.seat));
@@ -342,8 +343,11 @@ export class BrowserGameEngine {
     const duplicateCount = room.state.players.filter((player) => player.name.toLowerCase() === input.name.toLowerCase()).length;
     const name = duplicateCount ? `${input.name} ${duplicateCount + 1}` : input.name;
     const finalRosterFrozen = Boolean(room.state.finalRound);
+    const customization = normalizePlayerCustomization(input);
     room.state.players.push({
-      id: playerId, seat, name, avatar: input.avatar, accent: input.accent, score: 0, connected: true,
+      id: playerId, seat, name, avatar: input.avatar, avatarId: customization.avatarId, accent: input.accent,
+      frameStyle: customization.frameStyle, title: customization.title, buzzerSound: customization.buzzerSound,
+      scoreEffect: customization.scoreEffect, victoryEffect: customization.victoryEffect, score: 0, connected: true,
       positiveStreak: 0, coldStreak: 0, onFire: false, isCold: false, buzzEligible: false, hasBuzzedThisQuestion: false,
       finalWager: finalRosterFrozen ? 0 : null,
       finalWagerSubmitted: finalRosterFrozen,
@@ -873,7 +877,13 @@ export class BrowserGameEngine {
     const tile = room.state.board.questions.find((entry) => entry.questionId === current.questionId);
     if (!tile) return;
     tile.playedValue ??= current.effectiveValue;
-    const result = { playerId: player.id, playerName: player.name, playerAvatar: player.avatar, correct, delta };
+    const customization = normalizePlayerCustomization(player);
+    const result = {
+      playerId: player.id, playerName: player.name, playerAvatar: player.avatar,
+      playerAvatarId: customization.avatarId, playerAccent: player.accent,
+      playerFrameStyle: customization.frameStyle, playerTitle: customization.title,
+      correct, delta
+    };
     tile.results = [...(tile.results ?? []).filter((entry) => entry.playerId !== player.id), result];
   }
 

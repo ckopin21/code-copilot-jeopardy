@@ -1,11 +1,18 @@
 import { z } from 'zod';
 import { QUESTION_VALUES, type AutoGradeConfidence, type QuestionValue } from './types';
+import { AVATAR_CATALOG } from './playerCustomization';
 
 export const playerJoinSchema = z.object({
   roomCode: z.string().trim().min(4).max(8),
   name: z.string().trim().min(1).max(24),
   avatar: z.string().trim().min(1).max(8),
-  accent: z.string().regex(/^#[0-9a-fA-F]{6}$/)
+  accent: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+  avatarId: z.string().refine((value) => AVATAR_CATALOG.some((item) => item.id === value), 'Unknown avatar').optional(),
+  frameStyle: z.enum(['clean', 'halo', 'bracket', 'neon']).optional(),
+  title: z.enum(['none', 'wildcard', 'speed-demon', 'professor', 'clutch', 'night-owl', 'chaos-agent', 'ace']).optional(),
+  buzzerSound: z.enum(['classic', 'laser', 'chime', 'arcade']).optional(),
+  scoreEffect: z.enum(['pulse', 'spark', 'wave']).optional(),
+  victoryEffect: z.enum(['confetti', 'spotlight', 'stars']).optional()
 });
 
 export const questionSchema = z.object({

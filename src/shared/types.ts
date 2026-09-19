@@ -1,3 +1,5 @@
+import type { PlayerBuzzerSound, PlayerFrameStyle, PlayerScoreEffect, PlayerTitle, PlayerVictoryEffect } from './playerCustomization';
+
 export const QUESTION_VALUES = [100, 200, 300, 400, 500, 1000] as const;
 export type QuestionValue = (typeof QUESTION_VALUES)[number];
 
@@ -108,7 +110,14 @@ export interface Player {
   seat: number;
   name: string;
   avatar: string;
+  /** Stable catalog id for the rendered avatar. Legacy rooms may omit it and keep the emoji fallback. */
+  avatarId?: string;
   accent: string;
+  frameStyle?: PlayerFrameStyle;
+  title?: PlayerTitle;
+  buzzerSound?: PlayerBuzzerSound;
+  scoreEffect?: PlayerScoreEffect;
+  victoryEffect?: PlayerVictoryEffect;
   score: number;
   connected: boolean;
   positiveStreak: number;
@@ -129,6 +138,10 @@ export interface BoardQuestionResult {
   playerId: string;
   playerName: string;
   playerAvatar: string;
+  playerAvatarId?: string;
+  playerAccent?: string;
+  playerFrameStyle?: PlayerFrameStyle;
+  playerTitle?: PlayerTitle;
   correct: boolean;
   delta: number;
   /** Optional persisted labels for scoring rules that affected this player's result. */
