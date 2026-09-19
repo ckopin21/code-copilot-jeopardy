@@ -403,6 +403,12 @@ for (const viewport of phoneViewports) {
     await expect(page.locator('.player-title-badge')).toHaveCount(0);
     await expect(page.locator('[data-testid="player-customization-preview"] [data-frame="halo"]')).toBeVisible();
     await assertAvatarFrameCentered(page);
+    const mobileEmojiTranslateY = await page.locator('[data-testid="player-customization-preview"] .player-avatar-emoji').evaluate((emoji) => {
+      if (!(emoji instanceof HTMLElement)) throw new Error('Missing preview avatar');
+      return new DOMMatrix(getComputedStyle(emoji).transform).m42;
+    });
+    expect(mobileEmojiTranslateY).toBeLessThan(0);
+    expect(mobileEmojiTranslateY).toBeGreaterThanOrEqual(-2.5);
     await expect(page.locator('[data-testid="player-customization-preview"]')).toHaveCSS('--accent', '#5eead4');
 
     await page.getByRole('tab', { name: 'Effects' }).click();
