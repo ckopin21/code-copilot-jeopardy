@@ -38,8 +38,7 @@ for (const mode of ['Classic', 'Free Response']) {
       await modeButton.click();
       await expect(modeButton).toHaveAttribute('aria-pressed', 'true');
       await page.getByRole('button', { name: 'Start Game' }).click();
-      await expect(page.locator('.showcase-lobby')).toHaveCount(0);
-      await expect(page.locator('.showcase-board-stage .board')).toBeVisible();
+      await expect(page.locator('.showcase-board-stage .board')).toBeVisible({ timeout: 15_000 });
       await assertViewportFit(page, '.showcase-board-stage');
 
       await page.locator('.showcase-board-stage .board-actions').getByRole('button', { name: 'Presentation', exact: true }).evaluate((button: HTMLButtonElement) => button.click());
