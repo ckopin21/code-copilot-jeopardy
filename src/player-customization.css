@@ -569,7 +569,7 @@
   .phone-join .customization-preview { min-height: 52px; grid-template-columns: 43px minmax(0,1fr) 4px; padding-block: 5px; }
   .phone-join .customization-preview.effect-mode { grid-template-columns: 43px minmax(0,1fr) 78px 4px; gap: 7px; }
   .phone-join .effect-preview-slot { width: 78px; height: 42px; }
-  .phone-join .customization-preview-avatar { width: 43px; }
+  .phone-join .customization-preview-avatar { width: 43px; height: 43px; }
   .phone-join .customization-tabs button { min-height: 40px; }
   .phone-join .avatar-grid-v3 > button { min-height: 44px; }
   .phone-join .choice-row-v3 button { min-height: 40px; font-size: .62rem; }
@@ -578,7 +578,7 @@
   .phone-join .customization-preview { min-height: 46px; grid-template-columns: 38px minmax(0,1fr) 4px; }
   .phone-join .customization-preview.effect-mode { grid-template-columns: 38px minmax(0,1fr) 70px 4px; gap: 6px; }
   .phone-join .effect-preview-slot { width: 70px; height: 38px; }
-  .phone-join .customization-preview-avatar { width: 38px; }
+  .phone-join .customization-preview-avatar { width: 38px; height: 38px; }
   .phone-join .customization-preview-copy small { display: none; }
   .phone-join .avatar-category-strip button { min-height: 38px; padding: 4px 8px; }
   .phone-join .avatar-grid-v3 { gap: 4px; }
