@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Player } from '../shared/types';
 import { PlayerAvatar } from './PlayerAvatar';
-import { getPlayerTitleLabel, normalizePlayerCustomization } from '../shared/playerCustomization';
+import { normalizePlayerCustomization } from '../shared/playerCustomization';
 
 type Award = { title: string; playerId: string; detail: string };
 
@@ -89,10 +89,8 @@ export function EndgameRecap({ players, onReset, onMenu }: { players: Player[]; 
       const place = competitionPlace(standings, player);
       const playerAwards = awards.filter((award) => award.playerId === player.id);
       const customization = normalizePlayerCustomization(player);
-      const title = getPlayerTitleLabel(customization.title);
       return <article className="recap-card-v2" key={player.id} style={{ '--accent': player.accent } as React.CSSProperties}>
         <div className="recap-player-heading"><div className="stats-place">#{place}</div><PlayerAvatar avatarId={player.avatarId} fallback={player.avatar} frameStyle={customization.frameStyle} accent={player.accent} /><h2>{player.name}</h2><strong>{player.score.toLocaleString()}</strong></div>
-        {title && <div className="player-title-badge">{title}</div>}
         {playerAwards.length > 0 && <div className="player-award-pills">{playerAwards.map((award) => <span className="player-wager-pill" key={award.title}>{award.title}</span>)}</div>}
         <dl className="recap-stats-list"><dt>Correct</dt><dd>{player.stats.correct}</dd><dt>Incorrect</dt><dd>{player.stats.incorrect}</dd><dt>Accuracy</dt><dd>{Math.round(player.stats.correct / Math.max(1, player.stats.correct + player.stats.incorrect) * 100)}%</dd><dt>Longest streak</dt><dd>{player.stats.longestStreak}</dd><dt>Fastest buzz</dt><dd>{player.stats.fastestBuzzMs == null ? '—' : `${player.stats.fastestBuzzMs}ms`}</dd><dt>Points gained</dt><dd>{player.stats.pointsGained.toLocaleString()}</dd><dt>Points lost</dt><dd>{player.stats.pointsLost.toLocaleString()}</dd><dt>Biggest wager</dt><dd>{player.stats.biggestWager.toLocaleString()}</dd></dl>
       </article>;
@@ -117,13 +115,11 @@ export function EndgameRecap({ players, onReset, onMenu }: { players: Player[]; 
       const revealStep = index + 1;
       const isWinner = place === 1;
       const customization = normalizePlayerCustomization(player);
-      const title = getPlayerTitleLabel(customization.title);
       return <article className={`podium-card ${isWinner ? 'winner' : ''} ${revealed >= revealStep ? 'reveal' : ''}`} key={player.id} data-victory-effect={customization.victoryEffect} style={{ '--accent': player.accent } as React.CSSProperties}>
         <div className="podium-crown">{isWinner ? '👑' : ''}</div>
         <div className="podium-place">#{place}</div>
         <div className="podium-avatar"><PlayerAvatar avatarId={player.avatarId} fallback={player.avatar} frameStyle={customization.frameStyle} accent={player.accent} /></div>
         <div className="podium-name">{player.name}</div>
-        {title && <div className="player-title-badge">{title}</div>}
         <div className="podium-score">{player.score.toLocaleString()}</div>
         <div className={`podium-pedestal place-${Math.min(place, 4)}`}>{isWinner ? tiedWinner ? 'CO-WINNER' : 'WINNER' : `${place}${place === 2 ? 'ND' : place === 3 ? 'RD' : 'TH'}`}</div>
       </article>;
