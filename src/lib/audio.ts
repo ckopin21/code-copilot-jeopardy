@@ -1,3 +1,4 @@
+import type { PlayerBuzzerSound } from '../shared/playerCustomization';
 import { playMediaSafely } from './safeMediaPlayback';
 
 type MusicState = 'lobby' | 'board' | 'thinking' | 'daily-double' | 'double' | 'triple' | 'final' | 'winner';
@@ -221,6 +222,20 @@ class AudioEngine {
       this.clickTimer = null;
     }
     this.playCue(name);
+  }
+
+  playerBuzz(style: PlayerBuzzerSound = 'classic'): void {
+    if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('blue-stage:audio-cue', { detail: 'buzz' }));
+    if (!this.context || !this.effects || this.settings.muted) return;
+    const patterns: Record<PlayerBuzzerSound, { notes: [number, number, number][]; wave: OscillatorType }> = {
+      classic: { notes: [[784, 0, .07], [1047, .055, .13]], wave: 'sine' },
+      laser: { notes: [[1047, 0, .05], [1319, .035, .06], [880, .09, .12]], wave: 'sawtooth' },
+      chime: { notes: [[659, 0, .08], [988, .065, .12], [1319, .13, .15]], wave: 'sine' },
+      arcade: { notes: [[523, 0, .045], [659, .045, .045], [784, .09, .05], [1047, .14, .1]], wave: 'square' }
+    };
+    const pattern = patterns[style] ?? patterns.classic;
+    const start = this.context.currentTime;
+    for (const [frequency, offset, duration] of pattern.notes) this.tone(frequency, start + offset, duration, .22, pattern.wave, this.effects);
   }
 
   private playCue(name: Cue): void {
