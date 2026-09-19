@@ -199,23 +199,6 @@
   line-height: 1;
 }
 
-/* Score impact stays centered in the card and pulses like a heartbeat. */
-.player-card.score-impact-correct {
-  transform-origin: center;
-  animation: scoreCardHeartbeatGood .62s cubic-bezier(.2,.82,.22,1) both !important;
-}
-
-.player-card.score-impact-wrong {
-  transform-origin: center;
-  animation: scoreCardHeartbeatBad .62s cubic-bezier(.2,.82,.22,1) both !important;
-}
-
-.player-card.score-impact-correct .score,
-.player-card.score-impact-wrong .score {
-  transform-origin: center;
-  animation: scoreNumberHeartbeat .62s cubic-bezier(.2,.82,.22,1) both !important;
-}
-
 /* Final/last-clue reveal spectacle. */
 .final-reveal-spectacle {
   position: fixed;
@@ -576,32 +559,6 @@
   text-align: right;
 }
 
-@keyframes scoreCardHeartbeatGood {
-  0%, 100% { transform: scale(1); filter: brightness(1); }
-  16% { transform: scale(.965); filter: brightness(1.25); }
-  34% { transform: scale(1.075); filter: brightness(1.5); box-shadow: 0 0 42px rgba(52,208,111,.78); }
-  51% { transform: scale(.992); }
-  68% { transform: scale(1.045); box-shadow: 0 0 30px rgba(52,208,111,.52); }
-  84% { transform: scale(1); }
-}
-
-@keyframes scoreCardHeartbeatBad {
-  0%, 100% { transform: scale(1); filter: brightness(1); }
-  16% { transform: scale(.965); filter: brightness(1.2); }
-  34% { transform: scale(1.075); filter: brightness(1.42); box-shadow: 0 0 42px rgba(240,82,82,.76); }
-  51% { transform: scale(.992); }
-  68% { transform: scale(1.045); box-shadow: 0 0 30px rgba(240,82,82,.5); }
-  84% { transform: scale(1); }
-}
-
-@keyframes scoreNumberHeartbeat {
-  0% { transform: scale(.9); opacity: .7; }
-  34% { transform: scale(1.34); opacity: 1; }
-  51% { transform: scale(.98); }
-  68% { transform: scale(1.14); }
-  100% { transform: scale(1); opacity: 1; }
-}
-
 @keyframes revealCurtainIn {
   from { opacity: 0; }
   to { opacity: 1; }
@@ -668,10 +625,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .player-card.score-impact-correct,
-  .player-card.score-impact-wrong,
-  .player-card.score-impact-correct .score,
-  .player-card.score-impact-wrong .score,
   .final-reveal-spectacle,
   .final-reveal-card,
   .reveal-pulse-dots i {
