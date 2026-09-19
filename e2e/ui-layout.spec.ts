@@ -57,7 +57,8 @@ async function assertPresentationResultAvatarsArePlain(page, rootSelector) {
       const content = node.querySelector('.player-avatar-content');
       const emoji = node.querySelector('.player-avatar-emoji');
       const chip = node.closest('.used-result-chip');
-      if (!(content instanceof HTMLElement) || !(emoji instanceof HTMLElement) || !(chip instanceof HTMLElement)) {
+      const tile = node.closest('.question-tile.used.has-result');
+      if (!(content instanceof HTMLElement) || !(emoji instanceof HTMLElement) || !(chip instanceof HTMLElement) || !(tile instanceof HTMLElement)) {
         throw new Error('Incomplete presentation result avatar');
       }
 
@@ -92,7 +93,8 @@ async function assertPresentationResultAvatarsArePlain(page, rootSelector) {
           clipPath: emojiStyle.clipPath,
           maskImage: emojiStyle.maskImage
         },
-        chip: box(chip)
+        chip: box(chip),
+        tile: box(tile)
       };
     });
   });
@@ -124,10 +126,10 @@ async function assertPresentationResultAvatarsArePlain(page, rootSelector) {
 
     expect(Math.abs((item.avatar.left + item.avatar.right) / 2 - (item.content.left + item.content.right) / 2)).toBeLessThanOrEqual(1);
     expect(Math.abs((item.avatar.top + item.avatar.bottom) / 2 - (item.content.top + item.content.bottom) / 2)).toBeLessThanOrEqual(1);
-    expect(item.avatar.left).toBeGreaterThanOrEqual(item.chip.left - 1);
-    expect(item.avatar.right).toBeLessThanOrEqual(item.chip.right + 1);
-    expect(item.avatar.top).toBeGreaterThanOrEqual(item.chip.top - 1);
-    expect(item.avatar.bottom).toBeLessThanOrEqual(item.chip.bottom + 1);
+    expect(item.avatar.left).toBeGreaterThanOrEqual(item.tile.left - 1);
+    expect(item.avatar.right).toBeLessThanOrEqual(item.tile.right + 1);
+    expect(item.avatar.top).toBeGreaterThanOrEqual(item.tile.top - 1);
+    expect(item.avatar.bottom).toBeLessThanOrEqual(item.tile.bottom + 1);
   }
 }
 
