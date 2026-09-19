@@ -186,8 +186,8 @@ test('visual lab supports fullscreen presentation testing and outside dismissal'
     });
     Object.defineProperty(Element.prototype, 'requestFullscreen', {
       configurable: true,
-      value: async function requestFullscreen(this: Element) {
-        fakeFullscreenElement = this;
+      value: async () => {
+        fakeFullscreenElement = document.querySelector('.dev-presentation-lab');
         document.dispatchEvent(new Event('fullscreenchange'));
       }
     });
