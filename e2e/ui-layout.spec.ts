@@ -421,7 +421,7 @@ for (const viewport of phoneViewports) {
       await expect(page.locator('[data-testid="player-customization-preview"]')).toHaveAttribute('data-score-effect', score[1]);
       await expect(page.locator('[data-testid="player-customization-preview"]')).toHaveAttribute('data-preview-kind', 'score');
       await expect(page.locator('.effect-preview-score')).toBeVisible();
-      const layer = page.locator(`.effect-preview-score .score-impact-layer[data-score-effect="${score[1]}"][data-polarity="positive"]`);
+      const layer = page.locator(`[data-testid="effect-preview-slot"] .score-impact-layer[data-score-effect="${score[1]}"][data-polarity="positive"]`);
       await expect(layer).toHaveCount(1);
       expect(await layer.locator('i').count()).toBe(score[2]);
       await assertEffectPreviewContained(page);
@@ -508,7 +508,7 @@ for (const [label, effect, particles] of [
     await setEffect();
     await panel.getByRole('button', { name: 'Score +', exact: true }).click();
     await expect(scoreTarget).toHaveClass(new RegExp(`score-impact-${effect}.*score-impact-positive`), { timeout: 3500 });
-    let layer = scoreTarget.locator(`.score-impact-layer[data-score-effect="${effect}"][data-polarity="positive"]`);
+    let layer = page.locator(`.score-impact-layer[data-score-target="dev-player-2"][data-score-effect="${effect}"][data-polarity="positive"]`);
     await expect(layer).toHaveCount(1);
     expect(await layer.locator('i').count()).toBe(particles);
     await expect(scoreTarget).toHaveText('100');
@@ -517,7 +517,7 @@ for (const [label, effect, particles] of [
     await setEffect();
     await panel.getByRole('button', { name: 'Score −', exact: true }).click();
     await expect(scoreTarget).toHaveClass(new RegExp(`score-impact-${effect}.*score-impact-negative`), { timeout: 3500 });
-    layer = scoreTarget.locator(`.score-impact-layer[data-score-effect="${effect}"][data-polarity="negative"]`);
+    layer = page.locator(`.score-impact-layer[data-score-target="dev-player-2"][data-score-effect="${effect}"][data-polarity="negative"]`);
     await expect(layer).toHaveCount(1);
     expect(await layer.locator('i').count()).toBe(particles);
     await expect(scoreTarget).toHaveText('0');
