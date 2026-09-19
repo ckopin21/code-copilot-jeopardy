@@ -42,7 +42,7 @@ for (const mode of ['Classic', 'Free Response']) {
       await expect(page.locator('.showcase-board-stage .board')).toBeVisible();
       await assertViewportFit(page, '.showcase-board-stage');
 
-      await page.locator('.showcase-board-stage .board-actions').getByRole('button', { name: 'Presentation', exact: true }).click();
+      await page.locator('.showcase-board-stage .board-actions').getByRole('button', { name: 'Presentation', exact: true }).evaluate((button: HTMLButtonElement) => button.click());
       await expect(page.locator('.board-presentation-mode')).toBeVisible();
       await assertViewportFit(page, '.board-presentation-mode');
     });
