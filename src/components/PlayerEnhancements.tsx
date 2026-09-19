@@ -4,6 +4,7 @@ import { emitAck, socket } from '../lib/socket';
 import { audio } from '../lib/audio';
 import { readAccessibility, saveAccessibility, type AccessibilityPreferences } from '../lib/accessibility';
 import { ComebackBoostNotice } from './ComebackBoostNotice';
+import { useOutsideDismiss } from '../lib/useOutsideDismiss';
 
 const PLAYER_KEY = 'blue-stage-player';
 
@@ -22,7 +23,11 @@ export function PlayerEnhancements() {
   const [accessOpen, setAccessOpen] = useState(false);
   const [accessibility, setAccessibility] = useState<AccessibilityPreferences>(() => readAccessibility());
   const intentionalOfflineRef = useRef(false);
+  const accessTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const accessPanelRef = useRef<HTMLElement | null>(null);
   const credentials = readCredentials();
+
+  useOutsideDismiss(accessOpen, () => setAccessOpen(false), accessPanelRef, accessTriggerRef);
   const me = room?.players.find((player) => player.id === credentials?.playerId) ?? null;
 
   useEffect(() => {
@@ -91,8 +96,8 @@ export function PlayerEnhancements() {
   return <>
     {room && me && <ComebackBoostNotice room={room} playerId={me.id} surface="player" />}
     {me && <div className="phone-seat-chip" aria-label={`Player ${me.seat}`}>P{me.seat}</div>}
-    <button className="phone-accessibility-trigger" onClick={() => setAccessOpen((open) => !open)} aria-expanded={accessOpen}>Aa</button>
-    {accessOpen && <section className="phone-accessibility-panel" aria-label="Accessibility settings">
+    <button ref={accessTriggerRef} className="phone-accessibility-trigger" onClick={() => setAccessOpen((open) => !open)} aria-expanded={accessOpen}>Aa</button>
+    {accessOpen && <section ref={accessPanelRef} className="phone-accessibility-panel" aria-label="Accessibility settings">
       <strong>Accessibility</strong>
       <label><input type="checkbox" checked={accessibility.largeText} onChange={(event) => updateAccessibility({ largeText: event.target.checked })}/>Large text</label>
       <label><input type="checkbox" checked={accessibility.highContrast} onChange={(event) => updateAccessibility({ highContrast: event.target.checked })}/>High contrast</label>
