@@ -82,7 +82,7 @@ export function QrScanner({ onResult, onClose }: { onResult: (value: string) => 
     return () => { cancelled = true; stop(); };
   }, [onResult]);
 
-  return <div className="qr-scanner-backdrop" role="dialog" aria-modal="true" aria-label="Scan game QR code">
+  return <div className="qr-scanner-backdrop" role="dialog" aria-modal="true" aria-label="Scan game QR code" onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}>
     <section className="qr-scanner-card">
       <button type="button" className="modal-close" onClick={onClose} aria-label="Close camera">×</button>
       <div className="section-kicker">SCAN JOIN QR</div>
