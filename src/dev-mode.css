@@ -123,3 +123,141 @@
 @media (prefers-reduced-motion: reduce) {
   .dev-mode-panel { animation: none; }
 }
+
+
+.dev-visual-lab-title {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+}
+.dev-visual-lab-title span { text-align: left; }
+.dev-visual-fullscreen-button {
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid rgba(255,209,102,.45);
+  border-radius: 9px;
+  background: #4a390d;
+  color: #ffe7a0;
+  font-size: .58rem;
+  font-weight: 1000;
+  letter-spacing: .04em;
+  cursor: pointer;
+}
+.dev-visual-lab-section:fullscreen,
+.dev-visual-lab-section.is-native-fullscreen,
+.dev-visual-lab-section.is-fallback-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 1400;
+  width: 100vw;
+  height: 100vh;
+  max-width: none;
+  max-height: none;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  background: #06080c;
+}
+.dev-visual-lab-section::backdrop { background: #06080c; }
+.dev-visual-fullscreen-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #06080c;
+}
+.dev-visual-fullscreen-canvas > .dev-presentation-surface,
+.dev-visual-fullscreen-canvas > .dev-board-presentation,
+.dev-visual-fullscreen-canvas .board-presentation-mode {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+}
+.dev-visual-fullscreen-toolbar {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 1470;
+  width: min(720px, calc(100vw - 24px));
+  max-height: min(360px, calc(100vh - 24px));
+  overflow: auto;
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid rgba(255,255,255,.18);
+  border-radius: 14px;
+  background: rgba(4,20,31,.94);
+  box-shadow: 0 18px 48px rgba(0,0,0,.52);
+  backdrop-filter: blur(12px);
+}
+.dev-visual-toolbar-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.dev-visual-toolbar-heading > div { display: grid; gap: 2px; }
+.dev-visual-toolbar-heading small { color: #7ee7ff; font-size: .54rem; font-weight: 1000; letter-spacing: .12em; }
+.dev-visual-toolbar-heading strong { color: #ffd166; font-size: .86rem; }
+.dev-visual-toolbar-heading > button {
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(255,255,255,.18);
+  border-radius: 50%;
+  background: #0d3551;
+  color: white;
+  font-size: 1rem;
+  cursor: pointer;
+}
+.dev-visual-toolbar-modes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  gap: 6px;
+}
+.dev-visual-toolbar-modes button,
+.dev-visual-toolbar-actions button,
+.dev-visual-toolbar-reopen {
+  min-height: 32px;
+  padding: 5px 8px;
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 8px;
+  background: #0b3652;
+  color: #def4ff;
+  font-size: .57rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+.dev-visual-toolbar-modes button.active {
+  border-color: #ffd166;
+  background: #55400d;
+  color: #ffe6a0;
+}
+.dev-visual-toolbar-actions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0,1fr));
+  gap: 5px;
+}
+.dev-visual-toolbar-actions button:hover,
+.dev-visual-toolbar-modes button:hover,
+.dev-visual-toolbar-reopen:hover { border-color: #ffd166; }
+.dev-visual-toolbar-actions button:disabled { opacity: .35; cursor: default; }
+.dev-visual-toolbar-actions button.clear { background: #35202a; color: #ffbdc3; }
+.dev-visual-toolbar-reopen {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 1470;
+  border-radius: 999px;
+  padding-inline: 12px;
+  letter-spacing: .06em;
+}
+
+@media (max-width: 760px), (max-height: 620px) {
+  .dev-visual-lab-title { grid-template-columns: 1fr auto; }
+  .dev-visual-lab-title span { grid-column: 1 / -1; }
+  .dev-visual-fullscreen-toolbar { right: 8px; bottom: 8px; width: min(620px, calc(100vw - 16px)); max-height: calc(100vh - 16px); }
+  .dev-visual-toolbar-actions { grid-template-columns: repeat(3, minmax(0,1fr)); }
+}

@@ -1,11 +1,18 @@
 import { useEffect, type RefObject } from 'react';
 
+type OutsideDismissOptions = {
+  dismissOnEscape?: boolean;
+};
+
 export function useOutsideDismiss(
   open: boolean,
   onDismiss: () => void,
   panelRef: RefObject<HTMLElement | null>,
-  triggerRef?: RefObject<HTMLElement | null>
+  triggerRef?: RefObject<HTMLElement | null>,
+  options: OutsideDismissOptions = {}
 ) {
+  const { dismissOnEscape = true } = options;
+
   useEffect(() => {
     if (!open) return;
 
@@ -17,14 +24,14 @@ export function useOutsideDismiss(
     };
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onDismiss();
+      if (dismissOnEscape && event.key === 'Escape') onDismiss();
     };
 
     document.addEventListener('pointerdown', onPointerDown, true);
-    document.addEventListener('keydown', onKeyDown);
+    if (dismissOnEscape) document.addEventListener('keydown', onKeyDown);
     return () => {
       document.removeEventListener('pointerdown', onPointerDown, true);
-      document.removeEventListener('keydown', onKeyDown);
+      if (dismissOnEscape) document.removeEventListener('keydown', onKeyDown);
     };
-  }, [open, onDismiss, panelRef, triggerRef]);
+  }, [open, onDismiss, panelRef, triggerRef, dismissOnEscape]);
 }

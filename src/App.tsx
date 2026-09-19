@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { HostAppV3 } from './components/HostAppV3';
 import { HostEnhancements } from './components/HostEnhancements';
 import { PlayerApp } from './components/PlayerApp';
@@ -9,6 +9,7 @@ import { audio } from './lib/audio';
 import { applySavedAccessibility } from './lib/accessibility';
 import { hostPhaseLabel, readHostPreview } from './lib/hostPreview';
 import { resetInstance } from './lib/resetInstance';
+import { useOutsideDismiss } from './lib/useOutsideDismiss';
 import './lib/clientLifecycle';
 import './styles.css';
 import './showcase.css';
@@ -80,11 +81,6 @@ export default function App() {
   useEffect(() => {
     const onPopState = () => setRouteHref(location.href);
     const onPointerDown = (event: PointerEvent) => {
-      if (event.target instanceof Element && event.target.classList.contains('modal-backdrop') && event.target.querySelector('.expanded-qr-modal')) {
-        event.target.querySelector<HTMLButtonElement>('.modal-close')?.click();
-        return;
-      }
-
       const target = event.target instanceof Element ? event.target.closest('button,a') : null;
       if (!target || target.matches('button:disabled,[aria-disabled="true"]')) return;
       void audio.unlock().then(() => audio.cue('click')).catch(() => {});
@@ -126,12 +122,15 @@ export default function App() {
 function Menu({ onNavigate }: { onNavigate: (mode: AppMode, fresh?: boolean) => Promise<void> }) {
   const [resetting, setResetting] = useState(false);
   const [modal, setModal] = useState<MenuModal>(null);
+  const modalRef = useRef<HTMLElement | null>(null);
   const [fullscreen, setFullscreen] = useState(() => fullscreenActive());
   const [now, setNow] = useState(() => Date.now());
   const savedHost = useMemo(() => readSavedHost(), []);
   const preview = useMemo(() => savedHost ? readHostPreview(savedHost.roomCode) : null, [savedHost]);
   const hasSavedHost = Boolean(savedHost && preview);
   const fullscreenSupported = Boolean(document.fullscreenEnabled || (document.documentElement as WebkitElement).webkitRequestFullscreen);
+
+  useOutsideDismiss(Boolean(modal), () => setModal(null), modalRef);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 30_000);
@@ -232,8 +231,8 @@ function Menu({ onNavigate }: { onNavigate: (mode: AppMode, fresh?: boolean) => 
 
     <footer className="menu-footer"><span>PHONE BUZZERS</span><b>•</b><span>DAILY DOUBLES</span><b>•</b><span>FINAL ROUND</span></footer>
 
-    {modal === 'how' && <div className="menu-modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setModal(null); }}>
-      <section className="menu-modal how-to-modal" role="dialog" aria-modal="true" aria-labelledby="how-to-title">
+    {modal === 'how' && <div className="menu-modal-backdrop">
+      <section ref={modalRef} className="menu-modal how-to-modal" role="dialog" aria-modal="true" aria-labelledby="how-to-title">
         <button className="menu-modal-close" aria-label="Close How to Play" onClick={() => setModal(null)}>×</button>
         <div className="section-kicker gold">HOW TO PLAY</div>
         <h2 id="how-to-title">Three steps. Then play.</h2>
@@ -246,8 +245,8 @@ function Menu({ onNavigate }: { onNavigate: (mode: AppMode, fresh?: boolean) => 
       </section>
     </div>}
 
-    {modal === 'advanced' && <div className="menu-modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setModal(null); }}>
-      <section className="menu-modal advanced-modal" role="dialog" aria-modal="true" aria-labelledby="advanced-title">
+    {modal === 'advanced' && <div className="menu-modal-backdrop">
+      <section ref={modalRef} className="menu-modal advanced-modal" role="dialog" aria-modal="true" aria-labelledby="advanced-title">
         <button className="menu-modal-close" aria-label="Close Advanced" onClick={() => setModal(null)}>×</button>
         <div className="section-kicker">ADVANCED</div>
         <h2 id="advanced-title">Maintenance</h2>
