@@ -11,6 +11,37 @@ const menuViewports = [
   { width: 2048, height: 665 }
 ];
 
+async function assertUsedResultTilesContained(page, rootSelector) {
+  const issues = await page.locator(rootSelector).evaluate((root) => {
+    const tolerance = 1.5;
+    const contains = (outer, inner) =>
+      inner.left >= outer.left - tolerance &&
+      inner.right <= outer.right + tolerance &&
+      inner.top >= outer.top - tolerance &&
+      inner.bottom <= outer.bottom + tolerance;
+
+    return Array.from(root.querySelectorAll('.question-tile.used.has-result')).flatMap((tile) => {
+      if (!(tile instanceof HTMLElement)) return [];
+      const tileRect = tile.getBoundingClientRect();
+      const offenders = Array.from(tile.querySelectorAll('.used-tile-result, .used-result-list, .used-result-chip, .used-result-chip .player-avatar-art'))
+        .filter((element) => element instanceof HTMLElement)
+        .map((element) => {
+          const rect = element.getBoundingClientRect();
+          return contains(tileRect, rect)
+            ? null
+            : {
+                className: element.className,
+                tile: [tileRect.left, tileRect.top, tileRect.right, tileRect.bottom],
+                child: [rect.left, rect.top, rect.right, rect.bottom]
+              };
+        })
+        .filter(Boolean);
+      return offenders;
+    });
+  });
+  expect(issues).toEqual([]);
+}
+
 async function assertViewportFit(page, rootSelector = 'body') {
   const issues = await page.locator(rootSelector).evaluate((root) => {
     const vw = document.documentElement.clientWidth;
@@ -103,11 +134,13 @@ for (const gameMode of ['classic', 'free-response']) {
       await expect(page.locator('.dev-host-board-surface .showcase-board-stage .board')).toBeVisible();
       await expect(page.locator('.dev-host-board-surface .used-result-chip')).toHaveCount(4);
       await assertViewportFit(page, '.dev-host-board-surface');
+      await assertUsedResultTilesContained(page, '.dev-host-board-surface');
 
       await page.getByLabel('Preview surface').selectOption('presentation-board');
       await expect(page.locator('.dev-board-presentation .board-presentation-mode')).toBeVisible();
       await expect(page.locator('.dev-board-presentation .presentation-name-card')).toHaveCount(5);
       await assertViewportFit(page, '.dev-board-presentation');
+      await assertUsedResultTilesContained(page, '.dev-board-presentation');
     });
   }
 }
