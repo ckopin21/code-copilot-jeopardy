@@ -53,7 +53,7 @@ const categories = [
 
 export const freeResponseGenreHistoryGeographyPack = buildPack({
   id: 'free-response-history-geography',
-  title: 'Free Response: History & Geography',
+  title: 'History & Geography',
   theme: 'U.S. and world history, ancient civilizations, maps, cities, and landmarks',
   description: 'A history-and-geography all-play pack with new facts separate from the Classic versions.',
   difficulty: 'mixed',
