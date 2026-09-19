@@ -1,3 +1,4 @@
+import { AVATAR_CATALOG, ACCENT_COLORS as PLAYER_ACCENT_COLORS } from './playerCustomization';
 export { QUESTION_VALUES } from './types';
 import type { GameSettings } from './types';
 
