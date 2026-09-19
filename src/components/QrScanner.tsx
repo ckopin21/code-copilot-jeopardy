@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useOutsideDismiss } from '../lib/useOutsideDismiss';
 
 type BarcodeResult = { rawValue?: string };
 type BarcodeDetectorLike = { detect(source: CanvasImageSource): Promise<BarcodeResult[]> };
@@ -10,8 +11,11 @@ function detectorConstructor(): BarcodeDetectorConstructor | null {
 
 export function QrScanner({ onResult, onClose }: { onResult: (value: string) => void; onClose: () => void }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const cardRef = useRef<HTMLElement | null>(null);
   const [error, setError] = useState('');
   const [starting, setStarting] = useState(true);
+
+  useOutsideDismiss(true, onClose, cardRef);
 
   useEffect(() => {
     let cancelled = false;
@@ -82,8 +86,8 @@ export function QrScanner({ onResult, onClose }: { onResult: (value: string) => 
     return () => { cancelled = true; stop(); };
   }, [onResult]);
 
-  return <div className="qr-scanner-backdrop" role="dialog" aria-modal="true" aria-label="Scan game QR code" onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-    <section className="qr-scanner-card">
+  return <div className="qr-scanner-backdrop" role="dialog" aria-modal="true" aria-label="Scan game QR code">
+    <section ref={cardRef} className="qr-scanner-card">
       <button type="button" className="modal-close" onClick={onClose} aria-label="Close camera">×</button>
       <div className="section-kicker">SCAN JOIN QR</div>
       <h2>Point your camera at the host QR code</h2>
