@@ -220,7 +220,7 @@ export function DevPresentationLab() {
         </section>
       </main>}
 
-      {previewSurface === 'host-board' && <main className="dev-host-board-surface showcase-host">
+      {previewSurface === 'host-board' && <main className="dev-host-board-surface host-shell showcase-host">
         <PlayerStrip players={boardRoom.players} activeId={boardRoom.players[0]?.id ?? null} turnId={boardRoom.turnPlayerId} turnLabel="ON TURN" />
         <section className="game-stage board-stage-v2 showcase-board-stage">
           <div className="board-header-v2">
