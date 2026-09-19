@@ -1,7 +1,6 @@
 import type { BoardQuestionResult, BoardState } from '../shared/types';
 import { questionModifierLabels, resultModifierLabels } from '../lib/boardResultPresentation';
 import { PlayerAvatar } from './PlayerAvatar';
-import { getPlayerTitleLabel } from '../shared/playerCustomization';
 
 export type BoardResult = BoardQuestionResult;
 export type BoardResultMap = Record<string, BoardResult[]>;
@@ -47,7 +46,7 @@ export function Board({ board, multiplier = 1, disabled = false, onSelect, onRev
               : questionResults.map((result) => {
                 const modifiers = resultModifierLabels(question, result);
                 return <span className={`used-result-chip ${result.correct ? 'correct' : 'wrong'}`} key={result.playerId} style={{ '--accent': result.playerAccent ?? '#ffd166' } as React.CSSProperties}>
-                  <b><PlayerAvatar avatarId={result.playerAvatarId} fallback={result.playerAvatar} frameStyle={result.playerFrameStyle} accent={result.playerAccent} /> <span>{result.playerName}{getPlayerTitleLabel(result.playerTitle) ? ` · ${getPlayerTitleLabel(result.playerTitle)}` : ''}</span></b>
+                  <b><PlayerAvatar avatarId={result.playerAvatarId} fallback={result.playerAvatar} frameStyle={result.playerFrameStyle} accent={result.playerAccent} /> <span>{result.playerName}</span></b>
                   <em>{result.correct ? `+${Math.max(0, result.delta).toLocaleString()}` : result.delta.toLocaleString()}</em>
                   {modifiers.length > 0 && <span className="used-result-modifiers">{modifiers.map((label) => <i key={label}>{label}</i>)}</span>}
                 </span>;
