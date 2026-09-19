@@ -136,8 +136,8 @@ describe('sanitizeRoomSnapshot', () => {
       acceptedAnswers: ['Correct'],
       responseMode: 'text',
       textResponses: {
-        one: { answer: 'Mine', submittedAt: 1, autoCorrect: true, autoConfidence: 'high', resolvedCorrect: null },
-        two: { answer: 'Theirs', submittedAt: 2, autoCorrect: true, autoConfidence: 'high', resolvedCorrect: null }
+        one: { answer: 'Mine', submittedAt: 1, autoCorrect: true, autoConfidence: 'high', reviewCorrect: true, resolvedCorrect: null },
+        two: { answer: 'Theirs', submittedAt: 2, autoCorrect: true, autoConfidence: 'high', reviewCorrect: false, resolvedCorrect: null }
       },
       responsesClosed: false,
       dailyDouble: false,
@@ -154,7 +154,9 @@ describe('sanitizeRoomSnapshot', () => {
     expect(forPlayer.currentQuestion?.explanation).toBeUndefined();
     expect(forPlayer.currentQuestion?.textResponses?.one.answer).toBe('Mine');
     expect(forPlayer.currentQuestion?.textResponses?.one.autoCorrect).toBe(false);
+    expect(forPlayer.currentQuestion?.textResponses?.one.reviewCorrect).toBeUndefined();
     expect(forPlayer.currentQuestion?.textResponses?.two.answer).toBe('');
+    expect(forPlayer.currentQuestion?.textResponses?.two.reviewCorrect).toBeUndefined();
 
     const forHost = sanitizeRoomSnapshot(state, 'host');
     expect(forHost.currentQuestion?.textResponses?.one.answer).toBe('');
