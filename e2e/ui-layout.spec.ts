@@ -20,7 +20,7 @@ async function assertViewportFit(page, rootSelector = 'body') {
       const rect = el.getBoundingClientRect();
       if (rect.width < 1 || rect.height < 1) continue;
       if (rect.left < -2 || rect.right > vw + 2 || rect.top < -2 || rect.bottom > vh + 2) {
-        bad.push({ selector: el.className || el.tagName, rect: [rect.left, rect.top, rect.right, rect.bottom] });
+        bad.push({ selector: String(el.className || el.tagName), rect: [rect.left, rect.top, rect.right, rect.bottom] });
         if (bad.length >= 8) break;
       }
     }
@@ -29,24 +29,46 @@ async function assertViewportFit(page, rootSelector = 'body') {
   expect(issues).toEqual([]);
 }
 
-for (const mode of ['Classic', 'Free Response']) {
-  for (const viewport of viewports) {
-    test(`${mode} host and presentation fit at ${viewport.width}x${viewport.height}`, async ({ page }) => {
-      await page.setViewportSize(viewport);
-      await page.goto('/?mode=host&fresh=1');
-      const modeButton = page.getByRole('button', { name: new RegExp(`^${mode}`) });
-      await modeButton.click();
-      await expect(modeButton).toHaveAttribute('aria-pressed', 'true');
-      await page.getByRole('button', { name: 'Start Game' }).click();
-      await expect(page.locator('.showcase-board-stage .board')).toBeVisible({ timeout: 15_000 });
-      await assertViewportFit(page, '.showcase-board-stage');
+async function openBoardHarness(page, gameMode) {
+  await page.goto('/?mode=host&fresh=1');
+  await page.getByRole('button', { name: 'Open presentation visual lab' }).click();
+  await expect(page.locator('.dev-presentation-lab')).toBeVisible();
+  await page.getByLabel('Preview game mode').selectOption(gameMode);
+  await page.locator('.dev-presentation-control-row select').first().selectOption('5');
+}
 
-      await page.locator('.showcase-board-stage .board-actions').getByRole('button', { name: 'Presentation', exact: true }).evaluate((button: HTMLButtonElement) => button.click());
-      await expect(page.locator('.board-presentation-mode')).toBeVisible();
-      await assertViewportFit(page, '.board-presentation-mode');
+for (const gameMode of ['classic', 'free-response']) {
+  for (const viewport of viewports) {
+    test(`${gameMode} deterministic host and presentation boards fit at ${viewport.width}x${viewport.height}`, async ({ page }) => {
+      await page.setViewportSize(viewport);
+      await openBoardHarness(page, gameMode);
+
+      await page.getByLabel('Preview board multiplier').selectOption(viewport.width === 1366 ? '3' : '2');
+      await page.getByLabel('Preview surface').selectOption('host-board');
+      await expect(page.locator('.dev-host-board-surface .showcase-board-stage .board')).toBeVisible();
+      await expect(page.locator('.dev-host-board-surface .used-result-chip')).toHaveCount(4);
+      await assertViewportFit(page, '.dev-host-board-surface');
+
+      await page.getByLabel('Preview surface').selectOption('presentation-board');
+      await expect(page.locator('.dev-board-presentation .board-presentation-mode')).toBeVisible();
+      await expect(page.locator('.dev-board-presentation .presentation-name-card')).toHaveCount(5);
+      await assertViewportFit(page, '.dev-board-presentation');
     });
   }
 }
+
+test('deterministic board harness supports multiple player counts and long names', async ({ page }) => {
+  await page.setViewportSize({ width: 1366, height: 768 });
+  await openBoardHarness(page, 'free-response');
+
+  const playerSelect = page.locator('.dev-presentation-control-row select').first();
+  for (const count of ['2', '3', '4', '5']) {
+    await playerSelect.selectOption(count);
+    await page.getByLabel('Preview surface').selectOption('presentation-board');
+    await expect(page.locator('.dev-board-presentation .presentation-name-card')).toHaveCount(Number(count));
+    await assertViewportFit(page, '.dev-board-presentation');
+  }
+});
 
 test('presentation lab dynamic overlays remain on-screen', async ({ page }) => {
   await page.setViewportSize({ width: 1366, height: 768 });
@@ -58,11 +80,11 @@ test('presentation lab dynamic overlays remain on-screen', async ({ page }) => {
   await page.getByText('Stress-test long question text').click();
   await assertViewportFit(page, '.dev-presentation-surface');
 
-  for (const label of ['2× reveal', '3× reveal', 'Final reveal', 'Round start', 'Daily Double', 'Final Round', 'Results']) {
-    await page.getByRole('button', { name: label }).click();
+  for (const label of ['Score +', 'Score −', '2× reveal', '3× reveal', 'Final reveal', 'Round start', 'Daily Double', 'Final Round', 'Results']) {
+    await page.getByRole('button', { name: label, exact: true }).click();
     await page.waitForTimeout(100);
-    const overlay = page.locator('.modifier-reveal-overlay,.final-reveal-spectacle,.game-transition-overlay').last();
+    const overlay = page.locator('.score-flight,.modifier-reveal-overlay,.final-reveal-spectacle,.game-transition-overlay').last();
     if (await overlay.count()) await assertViewportFit(page, '.dev-presentation-lab');
-    await page.getByRole('button', { name: 'Clear' }).click();
+    await page.getByRole('button', { name: 'Clear', exact: true }).click();
   }
 });
