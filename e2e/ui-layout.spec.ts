@@ -162,8 +162,8 @@ for (const viewport of phoneViewports) {
 
     const bounds = await card.boundingBox();
     expect(bounds).not.toBeNull();
-    expect(bounds!.top).toBeGreaterThanOrEqual(0);
-    expect(bounds!.bottom).toBeLessThanOrEqual(viewport.height + 1);
+    expect(bounds!.y).toBeGreaterThanOrEqual(0);
+    expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(viewport.height + 1);
 
     await page.getByRole('tab', { name: 'Style' }).click();
     await page.getByRole('button', { name: 'Mint' }).click();
