@@ -25,4 +25,15 @@ describe('normal host layout regression', () => {
     expect(css).toContain('.host-command-trigger');
     expect(css).not.toContain('.showcase-host.host-presentation-mode >');
   });
+
+  it('keeps normal Classic board rows and used results inside their tiles', () => {
+    const css = read('../src/normal-host-layout.css');
+    expect(css).toContain('height: auto !important;');
+    expect(css).toContain('grid-auto-rows: minmax(0, 1fr) !important;');
+    expect(css).toContain('grid-template-rows: 18px minmax(0, 1fr) !important;');
+    expect(css).toContain('text-overflow: clip !important;');
+    expect(css).toContain('white-space: normal !important;');
+    expect(css).toContain('.used-question-modifiers');
+    expect(css).toContain('.used-result-modifiers');
+  });
 });
