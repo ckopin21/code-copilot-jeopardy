@@ -12,7 +12,7 @@ export const playerJoinSchema = z.object({
   title: z.enum(['none', 'wildcard', 'speed-demon', 'professor', 'clutch', 'night-owl', 'chaos-agent', 'ace']).optional(),
   buzzerSound: z.enum(['classic', 'laser', 'chime', 'arcade']).optional(),
   scoreEffect: z.enum(['pulse', 'spark', 'wave']).optional(),
-  victoryEffect: z.string().refine((value) => VICTORY_EFFECTS.some((item) => item.id === value), 'Unknown victory effect').optional()
+  victoryEffect: z.enum(['confetti', 'spotlight', 'stars']).optional()
 });
 
 export const questionSchema = z.object({
