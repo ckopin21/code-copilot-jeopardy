@@ -185,9 +185,9 @@
 }
 
 
-.presentation-board .question-tile.used.has-result .used-result-avatar-art,
-.presentation-board-fill .question-tile.used.has-result .used-result-avatar-art,
-.board-presentation-mode .question-tile.used.has-result .used-result-avatar-art {
+.presentation-board .question-tile.used.has-result .used-result-chip > b > .used-result-avatar-art,
+.presentation-board-fill .question-tile.used.has-result .used-result-chip > b > .used-result-avatar-art,
+.board-presentation-mode .question-tile.used.has-result .used-result-chip > b > .used-result-avatar-art {
   width: 42px !important;
   height: 30px !important;
   max-width: 42px !important;
