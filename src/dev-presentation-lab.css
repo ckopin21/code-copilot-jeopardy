@@ -95,3 +95,41 @@
   .dev-presentation-surface .presentation-question { padding:18px; }
   .dev-presentation-surface .presentation-question h1 { font-size:clamp(2rem,8vw,4.5rem); }
 }
+
+
+.dev-host-board-surface,
+.dev-board-presentation {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  min-width: 0;
+  height: 100dvh;
+  min-height: 100dvh;
+  overflow: hidden;
+  background: #06080c;
+}
+
+.dev-host-board-surface.showcase-host {
+  padding-bottom: 0;
+}
+
+.dev-host-board-surface .showcase-player-strip {
+  position: relative;
+  z-index: 1;
+}
+
+.dev-host-board-surface .showcase-board-stage {
+  min-height: 0;
+  height: calc(100dvh - 94px);
+}
+
+.dev-board-presentation > .board-presentation-mode {
+  position: absolute;
+  inset: 0;
+}
+
+@media (max-height: 760px) and (min-width: 760px) {
+  .dev-host-board-surface .showcase-board-stage {
+    height: calc(100dvh - 82px);
+  }
+}
