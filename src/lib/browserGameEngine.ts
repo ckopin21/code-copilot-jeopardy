@@ -965,8 +965,14 @@ export class BrowserGameEngine {
     if (!current || current.responseMode !== 'text' || !current.answerRevealed || !current.responsesClosed) {
       throw new Error('Free responses are not ready to confirm');
     }
-    const pending = Object.entries(current.textResponses ?? {}).filter(([, response]) => response.resolvedCorrect === null);
-    if (!pending.length) throw new Error('There are no response grades awaiting confirmation');
+    const responses = current.textResponses ?? {};
+    const pending = Object.entries(responses).filter(([, response]) => response.resolvedCorrect === null);
+    const participantIds = current.participantIds ?? room.state.players.filter((player) => player.connected).map((player) => player.id);
+    const noResponsePlayers = participantIds
+      .map((playerId) => room.state.players.find((player) => player.id === playerId))
+      .filter((player): player is Player => Boolean(player && !responses[player.id]));
+
+    if (!pending.length && !noResponsePlayers.length) throw new Error('There are no response grades awaiting confirmation');
 
     this.checkpointScore(room);
     for (const [playerId, response] of pending) {
@@ -981,6 +987,14 @@ export class BrowserGameEngine {
       if (correct) player.stats.correct += 1; else player.stats.incorrect += 1;
       this.applyStreak(player, correct, room.state.settings);
     }
+
+    for (const player of noResponsePlayers) {
+      const scoreDelta = this.addScore(player, -current.effectiveValue, room.state.settings);
+      this.recordBoardResult(room, player, false, scoreDelta);
+      player.stats.incorrect += 1;
+      this.applyStreak(player, false, room.state.settings);
+    }
+
     return this.advanceToBoard(roomCode, hostToken);
   }
 
