@@ -15,8 +15,6 @@
 
 .player-avatar-art {
   --avatar-accent: #ffd166;
-  --avatar-frame-inset: 1px;
-  --avatar-content-gap: 4px;
   position: relative;
   display: inline-grid;
   place-items: center;
@@ -29,25 +27,15 @@
   isolation: isolate;
   vertical-align: middle;
 }
-.player-avatar-frame,
 .player-avatar-content {
   position: absolute;
-  box-sizing: border-box;
-}
-.player-avatar-frame {
-  inset: var(--avatar-frame-inset);
-  z-index: 0;
-  border: 2px solid transparent;
-  border-radius: 30%;
-  pointer-events: none;
-}
-.player-avatar-content {
-  inset: calc(var(--avatar-frame-inset) + var(--avatar-content-gap));
+  inset: 5px;
   z-index: 1;
   display: grid;
   place-items: center;
   min-width: 0;
   min-height: 0;
+  box-sizing: border-box;
 }
 .player-avatar-emoji {
   display: grid;
@@ -59,32 +47,6 @@
   line-height: 1;
   text-align: center;
   filter: drop-shadow(0 2px 3px rgba(0,0,0,.28));
-}
-.player-avatar-art[data-frame="halo"] .player-avatar-frame {
-  border-color: var(--avatar-accent);
-  background: rgba(2,20,33,.72);
-  box-shadow: 0 0 0 3px color-mix(in srgb,var(--avatar-accent) 24%,transparent), 0 0 18px color-mix(in srgb,var(--avatar-accent) 34%,transparent);
-  border-radius: 50%;
-}
-.player-avatar-art[data-frame="bracket"] .player-avatar-frame {
-  border-color: transparent;
-  border-radius: 22%;
-  background:
-    linear-gradient(var(--avatar-accent),var(--avatar-accent)) left top/11px 3px no-repeat,
-    linear-gradient(var(--avatar-accent),var(--avatar-accent)) left top/3px 11px no-repeat,
-    linear-gradient(var(--avatar-accent),var(--avatar-accent)) right top/11px 3px no-repeat,
-    linear-gradient(var(--avatar-accent),var(--avatar-accent)) right top/3px 11px no-repeat,
-    linear-gradient(var(--avatar-accent),var(--avatar-accent)) left bottom/11px 3px no-repeat,
-    linear-gradient(var(--avatar-accent),var(--avatar-accent)) left bottom/3px 11px no-repeat,
-    linear-gradient(var(--avatar-accent),var(--avatar-accent)) right bottom/11px 3px no-repeat,
-    linear-gradient(var(--avatar-accent),var(--avatar-accent)) right bottom/3px 11px no-repeat,
-    radial-gradient(circle at 50% 30%,rgba(255,255,255,.09),rgba(2,20,33,.72) 70%);
-}
-.player-avatar-art[data-frame="neon"] .player-avatar-frame {
-  border-color: var(--avatar-accent);
-  background: rgba(2,20,33,.72);
-  border-radius: 28%;
-  box-shadow: inset 0 0 10px color-mix(in srgb,var(--avatar-accent) 18%,transparent), 0 0 7px var(--avatar-accent), 0 0 19px color-mix(in srgb,var(--avatar-accent) 58%,transparent);
 }
 
 /* Accent is intentionally visible on all recurring identity cards. */
@@ -665,7 +627,7 @@
     width: var(--join-preview-avatar);
     height: var(--join-preview-avatar);
     place-self: center;
-    left: -1px;
+    left: -3px;
     top: -1px;
   }
 
