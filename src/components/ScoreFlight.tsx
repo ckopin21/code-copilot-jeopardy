@@ -27,7 +27,6 @@ export function ScoreFlight({ flight, onImpact, onComplete }: { flight: ScoreFli
     let cancelled = false;
     let frame = 0;
     let finishTimer = 0;
-    let impactCleanup: (() => void) | null = null;
     let token: HTMLDivElement | null = null;
     let animation: Animation | null = null;
 
@@ -75,8 +74,7 @@ export function ScoreFlight({ flight, onImpact, onComplete }: { flight: ScoreFli
         onImpact(flight);
         audio.cue('score');
 
-        impactCleanup?.();
-        impactCleanup = triggerScoreImpactEffect({
+        triggerScoreImpactEffect({
           scoreTarget,
           effect: scoreEffectFromTarget(scoreTarget, playerCard),
           delta: flight.delta,
@@ -110,7 +108,6 @@ export function ScoreFlight({ flight, onImpact, onComplete }: { flight: ScoreFli
       cancelled = true;
       window.cancelAnimationFrame(frame);
       window.clearTimeout(finishTimer);
-      impactCleanup?.();
       animation?.cancel();
       token?.remove();
     };
