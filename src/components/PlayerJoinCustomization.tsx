@@ -9,7 +9,6 @@ import {
   SCORE_EFFECTS,
   VICTORY_EFFECTS,
   type PlayerBuzzerSound,
-  type PlayerFrameStyle,
   type PlayerScoreEffect,
   type PlayerVictoryEffect
 } from '../shared/playerCustomization';
@@ -19,13 +18,11 @@ type Props = {
   name: string;
   avatarId: string;
   accent: string;
-  frameStyle: PlayerFrameStyle;
   buzzerSound: PlayerBuzzerSound;
   scoreEffect: PlayerScoreEffect;
   victoryEffect: PlayerVictoryEffect;
   onAvatarId: (value: string) => void;
   onAccent: (value: string) => void;
-  onFrameStyle: (value: PlayerFrameStyle) => void;
   onBuzzerSound: (value: PlayerBuzzerSound) => void;
   onScoreEffect: (value: PlayerScoreEffect) => void;
   onVictoryEffect: (value: PlayerVictoryEffect) => void;
