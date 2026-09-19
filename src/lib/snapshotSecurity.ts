@@ -8,6 +8,7 @@ function hiddenResponse(response: TextResponseState, keepAnswer = false): TextRe
     answer: keepAnswer ? response.answer : '',
     autoCorrect: false,
     autoConfidence: 'low',
+    reviewCorrect: undefined,
     resolvedCorrect: null
   };
 }
@@ -45,6 +46,11 @@ export function sanitizeRoomSnapshot(snapshot: RoomSnapshot, role: SnapshotRole,
         const own = role === 'player' && id === playerId;
         return [id, hiddenResponse(response, own)];
       }));
+    } else if (responses && role !== 'host') {
+      copy.currentQuestion.textResponses = Object.fromEntries(Object.entries(responses).map(([id, response]) => [
+        id,
+        { ...response, reviewCorrect: response.resolvedCorrect ?? undefined }
+      ]));
     }
   }
 

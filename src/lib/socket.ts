@@ -212,6 +212,7 @@ async function dispatchHost(event: string, payload: Record<string, unknown>, con
     case 'host:local-buzz': return engine.localBuzz(roomCode, hostToken, String(payload.playerId ?? ''));
     case 'host:resolve-answer': return engine.resolveAnswer(roomCode, hostToken, String(payload.playerId ?? ''), Boolean(payload.correct));
     case 'host:resolve-text': return engine.resolveTextResponse(roomCode, hostToken, String(payload.playerId ?? ''), Boolean(payload.correct));
+    case 'host:confirm-text-grades': return engine.confirmTextResponses(roomCode, hostToken);
     case 'host:reveal-answer': return engine.revealAnswer(roomCode, hostToken);
     case 'host:advance-board': return engine.advanceToBoard(roomCode, hostToken);
     case 'host:adjust-score': return engine.adjustScore(roomCode, hostToken, String(payload.playerId ?? ''), Number(payload.delta));

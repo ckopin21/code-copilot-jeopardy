@@ -72,6 +72,11 @@ function preferredDifficulty(value: number): Question['difficulty'] {
   if (value === 300) return 'medium';
   return 'hard';
 }
+function normalizeFreeResponseReadSeconds(value: unknown, fallback = 5): number {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.min(30, Math.max(0, Math.round(numeric)));
+}
 
 export class BrowserGameEngine {
   private rooms = new Map<string, RoomRecord>();
@@ -90,13 +95,21 @@ export class BrowserGameEngine {
       record.state.settings.lockRoomOnStart = false;
       record.state.settings.turnOrderMode ??= 'join-order';
       record.state.settings.gameMode ??= 'classic';
+      record.state.settings.freeResponseReadSeconds = normalizeFreeResponseReadSeconds(record.state.settings.freeResponseReadSeconds, 5);
       // Steals are not part of the current reveal-first product flow. Keep restored legacy rooms aligned with the live UI.
       record.state.settings.stealsEnabled = false;
       record.state.turnPlayerId ??= null;
       if (record.state.currentQuestion && !record.state.currentQuestion.participantIds) {
         record.state.currentQuestion.participantIds = record.state.players.map((player) => player.id);
       }
-      if (record.state.currentQuestion) record.state.currentQuestion.resolvedPlayerId ??= null;
+      if (record.state.currentQuestion) {
+        record.state.currentQuestion.resolvedPlayerId ??= null;
+        record.state.currentQuestion.responseOpensAt ??= null;
+        record.state.currentQuestion.responseReadRemainingMs ??= null;
+        for (const response of Object.values(record.state.currentQuestion.textResponses ?? {})) {
+          response.reviewCorrect ??= response.autoCorrect;
+        }
+      }
       const claimedSeats = new Set<number>();
       for (const player of record.state.players) {
         const currentSeat = Number(player.seat);
@@ -281,6 +294,7 @@ export class BrowserGameEngine {
     const fallbackPack = packsForGameMode(gameMode)[0];
     if (!fallbackPack && !requestedPacksCompatible) throw new Error(`No question packs are available for ${gameMode}`);
     const selectedPackIds = requestedPacksCompatible ? requestedPackIds : [fallbackPack!.id];
+    const freeResponseReadSeconds = normalizeFreeResponseReadSeconds(settings?.freeResponseReadSeconds ?? DEFAULT_SETTINGS.freeResponseReadSeconds);
     const state: RoomState = {
       code,
       phase: 'lobby',
@@ -291,7 +305,7 @@ export class BrowserGameEngine {
       hostConnected: true,
       locked: false,
       players: [],
-      settings: { ...DEFAULT_SETTINGS, ...settings, gameMode, selectedPackIds, lockRoomOnStart: false, stealsEnabled: false },
+      settings: { ...DEFAULT_SETTINGS, ...settings, gameMode, selectedPackIds, freeResponseReadSeconds, lockRoomOnStart: false, stealsEnabled: false },
       board: null,
       currentQuestion: null,
       timer: emptyTimer(),
@@ -499,7 +513,11 @@ export class BrowserGameEngine {
       selectedPackIds = [fallbackPack.id];
     }
 
-    room.state.settings = { ...room.state.settings, ...updates, gameMode, selectedPackIds, lockRoomOnStart: false, stealsEnabled: false };
+    const freeResponseReadSeconds = normalizeFreeResponseReadSeconds(
+      updates.freeResponseReadSeconds ?? room.state.settings.freeResponseReadSeconds,
+      room.state.settings.freeResponseReadSeconds
+    );
+    room.state.settings = { ...room.state.settings, ...updates, gameMode, selectedPackIds, freeResponseReadSeconds, lockRoomOnStart: false, stealsEnabled: false };
     room.state.selectedPackIds = selectedPackIds;
     this.persist();
     return this.snapshot(roomCode);
@@ -665,6 +683,8 @@ export class BrowserGameEngine {
       responseMode,
       textResponses: {},
       responsesClosed: false,
+      responseOpensAt: null,
+      responseReadRemainingMs: null,
       dailyDouble: isPlayableDailyDouble,
       dailyDoublePlayerId: null,
       turnPlayerId: turnPlayer?.id ?? null,
@@ -685,7 +705,19 @@ export class BrowserGameEngine {
       room.state.phase = 'daily-double-wager';
     } else {
       room.state.phase = 'question';
-      if (responseMode === 'text' && connected.length > 0) this.startTimerInternal(room);
+      if (responseMode === 'text' && connected.length > 0) {
+        const readSeconds = room.state.settings.gameMode === 'free-response'
+          ? normalizeFreeResponseReadSeconds(room.state.settings.freeResponseReadSeconds)
+          : 0;
+        if (readSeconds > 0) {
+          const durationMs = readSeconds * 1000;
+          room.state.currentQuestion.responseOpensAt = Date.now() + durationMs;
+          room.state.currentQuestion.responseReadRemainingMs = null;
+          this.stopTimerInternal(room);
+        } else {
+          this.startTimerInternal(room);
+        }
+      }
     }
     this.persist();
     return this.snapshot(roomCode);
@@ -883,11 +915,16 @@ export class BrowserGameEngine {
   submitTextResponse(roomCode: string, playerId: string, reconnectToken: string, answer: string, expectedQuestionId?: string, expectedGameStartedAt?: number): RoomSnapshot {
     const [room, player] = this.playerRoom(roomCode, playerId, reconnectToken);
     this.assertQuestionContext(room, expectedQuestionId, expectedGameStartedAt);
+    const responseWindowOpened = this.openTextResponseWindowIfReady(room);
     const timerExpired = this.expireTimerIfNeeded(room);
     const current = room.state.currentQuestion;
     if (room.state.phase !== 'question' || !current || current.responseMode !== 'text' || current.answerRevealed || current.responsesClosed) {
-      if (timerExpired) this.persist();
+      if (timerExpired || responseWindowOpened) this.persist();
       throw new Error('Responses are closed');
+    }
+    if (current.responseOpensAt) {
+      if (responseWindowOpened) this.persist();
+      throw new Error('Answer input is not open yet');
     }
     if (current.participantIds && !current.participantIds.includes(player.id)) throw new Error('You joined after this question started. Wait for the next question.');
     const trimmed = answer.trim().slice(0, 200);
@@ -895,7 +932,14 @@ export class BrowserGameEngine {
     if (current.textResponses?.[player.id]) throw new Error('Your response is already locked');
     const grade = autoGradeAnswer(trimmed, current.acceptedAnswers ?? []);
     current.textResponses ??= {};
-    current.textResponses[player.id] = { answer: trimmed, submittedAt: Date.now(), autoCorrect: grade.correct, autoConfidence: grade.confidence, resolvedCorrect: null };
+    current.textResponses[player.id] = {
+      answer: trimmed,
+      submittedAt: Date.now(),
+      autoCorrect: grade.correct,
+      autoConfidence: grade.confidence,
+      reviewCorrect: grade.correct,
+      resolvedCorrect: null
+    };
     const active = this.currentQuestionParticipants(room);
     const allSubmitted = active.length > 0 && active.every((candidate) => Boolean(current.textResponses?.[candidate.id]));
     if (allSubmitted) this.closeTextResponsesInternal(room);
@@ -908,16 +952,35 @@ export class BrowserGameEngine {
     const current = room.state.currentQuestion;
     if (!current || current.responseMode !== 'text' || !current.answerRevealed) throw new Error('Free responses are not ready for grading');
     const response = current.textResponses?.[playerId];
-    const player = room.state.players.find((item) => item.id === playerId);
-    if (!response || !player) throw new Error('Response not found');
+    if (!response) throw new Error('Response not found');
     if (response.resolvedCorrect !== null) throw new Error('Response is already graded');
+    response.reviewCorrect = correct;
+    this.persist();
+    return this.snapshot(roomCode);
+  }
+
+  confirmTextResponses(roomCode: string, hostToken: string): RoomSnapshot {
+    const room = this.hostRoom(roomCode, hostToken);
+    const current = room.state.currentQuestion;
+    if (!current || current.responseMode !== 'text' || !current.answerRevealed || !current.responsesClosed) {
+      throw new Error('Free responses are not ready to confirm');
+    }
+    const pending = Object.entries(current.textResponses ?? {}).filter(([, response]) => response.resolvedCorrect === null);
+    if (!pending.length) throw new Error('There are no response grades awaiting confirmation');
+
     this.checkpointScore(room);
-    response.resolvedCorrect = correct;
-    const points = correct ? calculateComebackAward(room.state, player, current.effectiveValue).points : current.effectiveValue;
-    const scoreDelta = this.addScore(player, correct ? points : -points, room.state.settings);
-    this.recordBoardResult(room, player, correct, scoreDelta);
-    if (correct) player.stats.correct += 1; else player.stats.incorrect += 1;
-    this.applyStreak(player, correct, room.state.settings);
+    for (const [playerId, response] of pending) {
+      const player = room.state.players.find((item) => item.id === playerId);
+      if (!player) continue;
+      const correct = response.reviewCorrect ?? response.autoCorrect;
+      response.reviewCorrect = correct;
+      response.resolvedCorrect = correct;
+      const points = correct ? calculateComebackAward(room.state, player, current.effectiveValue).points : current.effectiveValue;
+      const scoreDelta = this.addScore(player, correct ? points : -points, room.state.settings);
+      this.recordBoardResult(room, player, correct, scoreDelta);
+      if (correct) player.stats.correct += 1; else player.stats.incorrect += 1;
+      this.applyStreak(player, correct, room.state.settings);
+    }
     this.persist();
     return this.snapshot(roomCode);
   }
@@ -992,9 +1055,15 @@ export class BrowserGameEngine {
     if (room.state.phase === 'paused') return this.snapshot(roomCode);
     room.state.previousPhase = room.state.phase;
     room.state.phase = 'paused';
-    if (room.state.timer.running && room.state.timer.endsAt) room.state.timer.remainingMs = Math.max(0, room.state.timer.endsAt - Date.now());
+    const now = Date.now();
+    if (room.state.timer.running && room.state.timer.endsAt) room.state.timer.remainingMs = Math.max(0, room.state.timer.endsAt - now);
     room.state.timer.running = false;
     room.state.timer.endsAt = null;
+    const current = room.state.currentQuestion;
+    if (current?.responseOpensAt) {
+      current.responseReadRemainingMs = Math.max(0, current.responseOpensAt - now);
+      current.responseOpensAt = null;
+    }
     this.persist();
     return this.snapshot(roomCode);
   }
@@ -1003,19 +1072,34 @@ export class BrowserGameEngine {
     if (room.state.phase !== 'paused') throw new Error('Game is not paused');
     room.state.phase = room.state.previousPhase ?? 'board';
     room.state.previousPhase = null;
+    const now = Date.now();
     if (room.state.timer.remainingMs && room.state.timer.remainingMs > 0) {
       room.state.timer.running = true;
-      room.state.timer.endsAt = Date.now() + room.state.timer.remainingMs;
+      room.state.timer.endsAt = now + room.state.timer.remainingMs;
+    }
+    const current = room.state.currentQuestion;
+    if (current?.responseReadRemainingMs && current.responseReadRemainingMs > 0) {
+      current.responseOpensAt = now + current.responseReadRemainingMs;
+      current.responseReadRemainingMs = null;
     }
     this.persist();
     return this.snapshot(roomCode);
   }
 
-  private startTimerInternal(room: RoomRecord): void {
+  private startTimerInternal(room: RoomRecord, now = Date.now()): void {
     const seconds = room.state.settings.timerSeconds;
     if (!seconds) { room.state.timer = emptyTimer(); return; }
     const durationMs = seconds * 1000;
-    room.state.timer = { running: true, durationMs, endsAt: Date.now() + durationMs, remainingMs: durationMs };
+    room.state.timer = { running: true, durationMs, endsAt: now + durationMs, remainingMs: durationMs };
+  }
+  private openTextResponseWindowIfReady(room: RoomRecord, now = Date.now()): boolean {
+    const current = room.state.currentQuestion;
+    if (!current || current.responseMode !== 'text' || current.answerRevealed || current.responsesClosed || !current.responseOpensAt) return false;
+    if (current.responseOpensAt > now) return false;
+    current.responseOpensAt = null;
+    current.responseReadRemainingMs = null;
+    this.startTimerInternal(room, now);
+    return true;
   }
   private expireTimerIfNeeded(room: RoomRecord, now = Date.now()): boolean {
     if (!room.state.timer.running || !room.state.timer.endsAt || room.state.timer.endsAt > now) return false;
@@ -1064,7 +1148,9 @@ export class BrowserGameEngine {
     const changed: string[] = [];
     for (const [code, room] of this.rooms) {
       if (room.state.expiresAt <= now) { this.rooms.delete(code); changed.push(code); continue; }
-      if (!this.expireTimerIfNeeded(room, now)) continue;
+      const responseWindowOpened = this.openTextResponseWindowIfReady(room, now);
+      const timerExpired = this.expireTimerIfNeeded(room, now);
+      if (!responseWindowOpened && !timerExpired) continue;
       changed.push(code);
     }
     if (changed.length) this.persist();
