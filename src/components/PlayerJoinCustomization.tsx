@@ -5,7 +5,6 @@ import {
   AVATAR_CATALOG,
   AVATAR_CATEGORIES,
   BUZZER_SOUNDS,
-  FRAME_STYLES,
   PLAYER_ACCENTS,
   SCORE_EFFECTS,
   VICTORY_EFFECTS,
@@ -37,8 +36,6 @@ type EffectPreview =
   | { kind: 'score'; id: PlayerScoreEffect; nonce: number }
   | { kind: 'victory'; id: PlayerVictoryEffect; nonce: number }
   | null;
-
-const SELECTABLE_FRAME_STYLES = FRAME_STYLES.filter((item) => item.id !== 'clean');
 
 export function PlayerJoinCustomization(props: Props) {
   const [tab, setTab] = useState<'avatar' | 'style' | 'effects'>('avatar');
@@ -83,11 +80,10 @@ export function PlayerJoinCustomization(props: Props) {
       data-preview-kind={effectPreview?.kind}
       data-preview-id={effectPreview?.id}
     >
-      <PlayerAvatar avatarId={props.avatarId} frameStyle={props.frameStyle} accent={props.accent} className="customization-preview-avatar" />
+      <PlayerAvatar avatarId={props.avatarId} accent={props.accent} className="customization-preview-avatar" />
       <div className="customization-preview-copy">
         <small>PLAYER PREVIEW</small>
         <strong>{props.name.trim() || 'Your name'}</strong>
-        <span>{FRAME_STYLES.find((item) => item.id === props.frameStyle)?.label} frame</span>
       </div>
       {effectMode && <div className="effect-preview-slot" data-testid="effect-preview-slot" data-score-impact-root="preview" aria-hidden="true">
         {effectPreview
@@ -120,7 +116,7 @@ export function PlayerJoinCustomization(props: Props) {
       </div>
       <div className="avatar-grid-v3">
         {AVATAR_CATALOG.filter((avatar) => avatar.category === category).map((avatar) => <button type="button" key={avatar.id} aria-label={avatar.label} aria-pressed={props.avatarId === avatar.id} className={props.avatarId === avatar.id ? 'selected' : ''} onClick={() => props.onAvatarId(avatar.id)}>
-          <PlayerAvatar avatarId={avatar.id} frameStyle="clean" accent={props.accent} />
+          <PlayerAvatar avatarId={avatar.id} accent={props.accent} />
         </button>)}
       </div>
     </div>}
@@ -129,10 +125,6 @@ export function PlayerJoinCustomization(props: Props) {
       <div className="customization-field">
         <span className="customization-label">Accent <small>Cards, buzz states and highlights</small></span>
         <div className="accent-grid-v3">{PLAYER_ACCENTS.map((item) => <button type="button" aria-label={item.label} title={item.label} aria-pressed={props.accent === item.color} className={props.accent === item.color ? 'selected' : ''} style={{ '--swatch': item.color } as React.CSSProperties} key={item.color} onClick={() => props.onAccent(item.color)} />)}</div>
-      </div>
-      <div className="customization-field">
-        <span className="customization-label">Frame <small>Around your avatar</small></span>
-        <div className="choice-row-v3 three">{SELECTABLE_FRAME_STYLES.map((item) => <button type="button" key={item.id} aria-pressed={props.frameStyle === item.id} className={props.frameStyle === item.id ? 'selected' : ''} onClick={() => props.onFrameStyle(item.id)}>{item.label}</button>)}</div>
       </div>
     </div>}
 
