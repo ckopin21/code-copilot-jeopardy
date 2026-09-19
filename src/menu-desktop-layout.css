@@ -73,6 +73,8 @@
   }
 
   .showcase-menu .host-menu-actions {
+    width: 100% !important;
+    max-width: none !important;
     gap: clamp(9px, 1.2vh, 15px) !important;
   }
 
