@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
+import { useOutsideDismiss } from '../lib/useOutsideDismiss';
 import { audio } from '../lib/audio';
 import { musicGainToSlider, musicSliderToGain } from '../lib/musicVolumePolicy';
 import { MusicTrackSelect } from './BackgroundMusicPicker';
@@ -15,17 +16,7 @@ export function AudioMixer() {
     return () => window.removeEventListener('blue-stage:audio-settings', sync);
   }, []);
 
-  useEffect(() => {
-    if (!open) return;
-    const closeOnOutsidePointer = (event: PointerEvent) => {
-      const target = event.target;
-      if (!(target instanceof Node)) return;
-      if (toggleRef.current?.contains(target) || drawerRef.current?.contains(target)) return;
-      setOpen(false);
-    };
-    document.addEventListener('pointerdown', closeOnOutsidePointer, true);
-    return () => document.removeEventListener('pointerdown', closeOnOutsidePointer, true);
-  }, [open]);
+  useOutsideDismiss(open, () => setOpen(false), drawerRef, toggleRef);
 
   const update = (key: 'master' | 'music' | 'effects', value: number) => {
     const storedValue = key === 'music' ? musicSliderToGain(value) : value;
