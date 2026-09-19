@@ -28,7 +28,8 @@ describe('normal host layout regression', () => {
 
   it('keeps normal Classic board rows and used results inside their tiles', () => {
     const css = read('../src/normal-host-layout.css');
-    expect(css).toContain('height: auto !important;');
+    expect(css).toContain('height: 0 !important;');
+    expect(css).toContain('flex: 1 1 0 !important;');
     expect(css).toContain('grid-auto-rows: minmax(0, 1fr) !important;');
     expect(css).toContain('grid-template-rows: 18px minmax(0, 1fr) !important;');
     expect(css).toContain('text-overflow: clip !important;');
