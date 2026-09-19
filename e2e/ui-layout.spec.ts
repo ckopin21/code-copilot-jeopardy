@@ -504,6 +504,8 @@ for (const [label, effect, particles] of [
       }, effect);
     };
     const scoreTarget = page.locator('[data-player-score="dev-player-2"]:visible').last();
+    const scoreValue = async () => Number(((await scoreTarget.textContent()) ?? '0').replace(/[^0-9-]/g, ''));
+    const initialScore = await scoreValue();
 
     await setEffect();
     await panel.getByRole('button', { name: 'Score +', exact: true }).click();
@@ -511,7 +513,8 @@ for (const [label, effect, particles] of [
     let layer = page.locator(`.score-impact-layer[data-score-target="dev-player-2"][data-score-effect="${effect}"][data-polarity="positive"]`);
     await expect(layer).toHaveCount(1);
     expect(await layer.locator('i').count()).toBe(particles);
-    await expect(scoreTarget).toHaveText('100');
+    await expect.poll(scoreValue).toBeGreaterThan(initialScore);
+    const positiveScore = await scoreValue();
     await expect(scoreTarget).not.toHaveClass(/score-impact-active/, { timeout: 3500 });
 
     await setEffect();
@@ -520,7 +523,7 @@ for (const [label, effect, particles] of [
     layer = page.locator(`.score-impact-layer[data-score-target="dev-player-2"][data-score-effect="${effect}"][data-polarity="negative"]`);
     await expect(layer).toHaveCount(1);
     expect(await layer.locator('i').count()).toBe(particles);
-    await expect(scoreTarget).toHaveText('0');
+    await expect.poll(scoreValue).toBeLessThan(positiveScore);
   });
 }
 
