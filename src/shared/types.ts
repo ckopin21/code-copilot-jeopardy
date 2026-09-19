@@ -72,6 +72,8 @@ export interface GameSettings {
   stealsEnabled: boolean;
   allowNegativeScores: boolean;
   timerSeconds: 5 | 10 | 15 | 20 | 30 | null;
+  /** Reading period before Free Response answer entry opens. */
+  freeResponseReadSeconds: number;
   autoCloseBuzzersAtZero: boolean;
   lateGameModifiers: boolean;
   dailyDoubleStacksWithMultiplier: boolean;
@@ -166,6 +168,9 @@ export interface TextResponseState {
   submittedAt: number;
   autoCorrect: boolean;
   autoConfidence: AutoGradeConfidence;
+  /** Host-review draft. Auto grading initializes this before the host confirms results. */
+  reviewCorrect?: boolean;
+  /** Final locked ruling. Null until the host presses Confirm Results. */
   resolvedCorrect: boolean | null;
 }
 
@@ -181,6 +186,10 @@ export interface CurrentQuestionState {
   responseMode?: ResponseMode;
   textResponses?: Record<string, TextResponseState>;
   responsesClosed?: boolean;
+  /** Absolute server timestamp when Free Response answer entry becomes available. Null once open. */
+  responseOpensAt?: number | null;
+  /** Preserved reading time while the game is paused. */
+  responseReadRemainingMs?: number | null;
   dailyDouble: boolean;
   dailyDoublePlayerId: string | null;
   /** Player whose turn selected this question. */
