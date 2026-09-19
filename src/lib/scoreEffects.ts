@@ -38,8 +38,7 @@ export function triggerScoreImpactEffect({ scoreTarget, effect, delta, reducedMo
 
   const normalizedEffect = normalizeScoreEffect(effect);
   const polarity = delta < 0 ? 'negative' : 'positive';
-  const shouldReduceMotion = reducedMotion
-    ?? readAccessibility().reduceMotion
+  const shouldReduceMotion = (reducedMotion ?? readAccessibility().reduceMotion)
     || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   const layer = document.createElement('span');
