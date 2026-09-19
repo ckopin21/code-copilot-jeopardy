@@ -144,9 +144,9 @@
   border-radius: 12px;
   background: linear-gradient(110deg,color-mix(in srgb,var(--accent) 11%,rgba(4,28,45,.9)),rgba(3,24,40,.78));
 }
-.customization-preview-avatar { width: 48px; height: 48px; font-size: 2rem; }
+.customization-preview-avatar { width: 48px; height: 48px; font-size: 2rem; z-index: 0; }
 .avatar-grid-v3 .player-avatar-art { width: 100%; height: 100%; font-size: 1.55rem; }
-.customization-preview-copy { min-width: 0; display: grid; gap: 1px; }
+.customization-preview-copy { position: relative; z-index: 1; min-width: 0; display: grid; gap: 1px; }
 .customization-preview-copy small {
   color: color-mix(in srgb,var(--accent) 82%,white);
   font-size: .54rem;
@@ -437,7 +437,6 @@
 
 /* Shared score effects. The preview and live game both use the same runtime classes. */
 .score-impact-host {
-  position: relative;
   overflow: visible;
   isolation: isolate;
 }
@@ -659,17 +658,19 @@
 
   .phone-join .customization-preview.effect-mode {
     grid-template-columns: var(--join-preview-avatar) minmax(0, 1fr) minmax(0, var(--join-effect-slot)) 4px;
-    gap: 7px;
+    gap: 9px;
   }
 
   .phone-join .customization-preview-avatar {
     width: var(--join-preview-avatar);
     height: var(--join-preview-avatar);
     place-self: center;
+    left: -1px;
+    top: -1px;
   }
 
   .phone-join .customization-preview-avatar .player-avatar-emoji {
-    transform: translateY(-0.05em);
+    transform: translateY(-0.025em);
   }
 
   .phone-join .effect-preview-slot {
@@ -811,7 +812,7 @@
   }
 
   .phone-join .customization-preview.effect-mode {
-    gap: 6px;
+    gap: 8px;
   }
 
   .phone-join .customization-preview-copy small {
