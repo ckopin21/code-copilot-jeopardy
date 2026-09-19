@@ -550,8 +550,8 @@ for (const viewport of phoneViewports) {
 
     await nameInput.fill('A');
     await assertJoinScreenGeometry(page);
-    await nameInput.fill('Alexandria the Quiz Master');
-    await expect(preview.locator('.customization-preview-copy strong')).toHaveText('Alexandria the Quiz Mast');
+    await nameInput.fill('AlexandriaTheQuizMaster');
+    await expect(preview.locator('.customization-preview-copy strong')).toHaveText('AlexandriaTheQuizMaster');
     const longNameLayout = await assertJoinScreenGeometry(page);
     expect(Math.abs(longNameLayout.card.width - baseCardWidth)).toBeLessThanOrEqual(1);
     expect(Math.abs(longNameLayout.preview.width - basePreview.width)).toBeLessThanOrEqual(1);
