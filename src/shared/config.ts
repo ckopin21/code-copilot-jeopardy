@@ -29,6 +29,7 @@ export const DEFAULT_SETTINGS: GameSettings = {
   stealsEnabled: false,
   allowNegativeScores: true,
   timerSeconds: 15,
+  freeResponseReadSeconds: 5,
   autoCloseBuzzersAtZero: true,
   lateGameModifiers: true,
   dailyDoubleStacksWithMultiplier: true,
