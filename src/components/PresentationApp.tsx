@@ -9,6 +9,7 @@ import { scoreboardWagersVisible, turnIndicatorLabel, turnIndicatorVisible } fro
 import { ScoreFlight, type ScoreFlightState } from './ScoreFlight';
 import { randomId } from '../lib/ids';
 import { gameModeDefinition } from '../shared/gameModes';
+import { freeResponseReadingTimer } from '../lib/freeResponseFlow';
 
 function musicFor(room: RoomSnapshot) {
   if (room.phase.startsWith('final')) return 'final' as const;
@@ -106,6 +107,7 @@ export function PresentationApp() {
     ? connectedPlayers.filter((player) => current.participantIds!.includes(player.id))
     : connectedPlayers;
   const responseCount = activeQuestionPlayers.filter((player) => Boolean(current?.textResponses?.[player.id])).length;
+  const readingTimer = freeResponseReadingTimer(current, room.settings, room.serverNow);
   const finalPlayers = room.finalRound ? connectedPlayers.filter((player) => room.finalRound!.participantIds.includes(player.id)) : connectedPlayers;
   const reviewPlayerId = room.phase === 'final-review' && room.finalRound
     ? room.finalRound.reviewPlayerId ?? room.finalRound.participantIds[room.finalRound.reviewPlayerIndex]
@@ -133,8 +135,8 @@ export function PresentationApp() {
     {(room.phase === 'question' || room.phase === 'daily-double-question') && current && <section className={`presentation-question ${current.dailyDouble ? 'daily-double-v2' : ''}`}><article>
       <div className="question-meta-v2"><span>{current.category}</span><strong>{current.dailyDouble ? `${pointsAtStake.toLocaleString()} POINTS IN PLAY` : `${current.effectiveValue} POINTS`}</strong>{current.responseMode === 'text' && <em>{gameMode.questionBadge}</em>}</div>
       <h1>{current.text}</h1>
-      <Timer timer={room.timer} serverNow={room.serverNow}/>
-      {current.responseMode === 'text' && !current.answerRevealed && <div className="presentation-response-count"><strong>{responseCount}/{activeQuestionPlayers.length}</strong><span>RESPONSES IN</span></div>}
+      {readingTimer ? <div className="presentation-reading-countdown"><small>ANSWERS OPEN IN</small><Timer timer={readingTimer} serverNow={room.serverNow}/></div> : <Timer timer={room.timer} serverNow={room.serverNow}/>}
+      {current.responseMode === 'text' && !current.answerRevealed && !readingTimer && <div className="presentation-response-count"><strong>{responseCount}/{activeQuestionPlayers.length}</strong><span>RESPONSES IN</span></div>}
       {current.buzzWinnerId && <div className="winner-chip presentation-winner">{room.players.find((player) => player.id === current.buzzWinnerId)?.avatar}<span>{room.players.find((player) => player.id === current.buzzWinnerId)?.name}</span></div>}
       {current.answerRevealed && <div className="answer-reveal-v2 presentation-answer"><small>CORRECT ANSWER</small><strong>{current.acceptedAnswers?.join(' / ')}</strong></div>}
     </article></section>}
