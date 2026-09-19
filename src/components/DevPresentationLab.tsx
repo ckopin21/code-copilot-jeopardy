@@ -16,6 +16,7 @@ export function buildDevPresentationRoom(base: RoomSnapshot, multiplier: 1 | 2 |
     isCold: index === 1 ? true : player.isCold
   }));
 
+  const turnPlayerId = base.currentQuestion?.turnPlayerId ?? base.turnPlayerId ?? players[0]?.id ?? null;
   const questions = BOARD_CATEGORIES.flatMap((category, categoryIndex) => BOARD_VALUES.map((value, rowIndex) => {
     const questionId = `dev-presentation-${categoryIndex}-${rowIndex}`;
     const used = categoryIndex === 0 && rowIndex < 2;
@@ -25,7 +26,7 @@ export function buildDevPresentationRoom(base: RoomSnapshot, multiplier: 1 | 2 |
       value,
       used,
       dailyDouble: categoryIndex === 0 && rowIndex === 0,
-      turnPlayerId: players[0]?.id ?? null,
+      turnPlayerId,
       playedValue: used ? value * multiplier : undefined,
       modifiers: used && rowIndex === 1 ? ['2× POINTS', 'COMEBACK'] : undefined
     };
@@ -53,7 +54,7 @@ export function buildDevPresentationRoom(base: RoomSnapshot, multiplier: 1 | 2 |
     board: { categories: BOARD_CATEGORIES, questions },
     currentQuestion: null,
     multiplier,
-    turnPlayerId: players[0]?.id ?? null,
+    turnPlayerId,
     remainingQuestions: questions.filter((question) => !question.used).length,
     resultPlayerIds: players.map((player) => player.id)
   };
