@@ -443,9 +443,10 @@ export function HostAppV3() {
 
   const current = room.currentQuestion;
   const connectedPlayers = room.players.filter((player) => player.connected);
-  const activeQuestionPlayers = current?.participantIds
-    ? connectedPlayers.filter((player) => current.participantIds!.includes(player.id))
+  const questionParticipants = current?.participantIds
+    ? room.players.filter((player) => current.participantIds!.includes(player.id))
     : connectedPlayers;
+  const activeQuestionPlayers = questionParticipants.filter((player) => player.connected);
   const reservedSeatCount = room.players.length - connectedPlayers.length;
   const buzzWinner = current?.buzzWinnerId ? room.players.find((player) => player.id === current.buzzWinnerId) : null;
   const dailyPlayer = current?.dailyDoublePlayerId ? room.players.find((player) => player.id === current.dailyDoublePlayerId) : null;
@@ -472,6 +473,8 @@ export function HostAppV3() {
   const textResponses = current?.textResponses ?? {};
   const textResponseCount = activeQuestionPlayers.filter((player) => Boolean(textResponses[player.id])).length;
   const unresolvedTextCount = Object.values(textResponses).filter((response) => response.resolvedCorrect === null).length;
+  const missingTextResponseCount = questionParticipants.filter((player) => !textResponses[player.id]).length;
+  const pendingTextResultCount = unresolvedTextCount + missingTextResponseCount;
   const readingTimer = freeResponseReadingTimer(current, settings, room.serverNow);
   const questionMultiplier = current ? Math.max(1, Math.round(current.effectiveValue / Math.max(1, current.baseValue))) : 1;
   const finalParticipants = room.finalRound
@@ -532,12 +535,17 @@ export function HostAppV3() {
   };
 
   const confirmTextGrades = async () => {
-    const pending = Object.entries(textResponses)
-      .filter(([, response]) => response.resolvedCorrect === null)
-      .map(([playerId, response]) => ({
-        playerId,
-        correct: response.reviewCorrect ?? response.autoCorrect
-      }));
+    const pending = questionParticipants
+      .map((player) => {
+        const response = textResponses[player.id];
+        if (!response) return { playerId: player.id, correct: false };
+        if (response.resolvedCorrect !== null) return null;
+        return {
+          playerId: player.id,
+          correct: response.reviewCorrect ?? response.autoCorrect
+        };
+      })
+      .filter((entry): entry is { playerId: string; correct: boolean } => Boolean(entry));
     if (!pending.length) return;
 
     const prepared = pending.map(({ playerId, correct }) => ({
@@ -709,9 +717,9 @@ export function HostAppV3() {
 
 
           {current.responseMode === 'text' && current.answerRevealed && <div className="grading-grid">
-            {room.players.map((player) => {
+            {questionParticipants.map((player) => {
               const response = textResponses[player.id];
-              if (!response) return <div className="grading-row muted-row" key={player.id}><span>{player.avatar}</span><div><strong>{player.name}</strong><p>No response</p></div><b>NO SCORE</b></div>;
+              if (!response) return <div className="grading-row muted-row" key={player.id}><span>{player.avatar}</span><div><strong>{player.name}</strong><p>No response</p><small>Counts as an incorrect answer</small></div><b className="grade-wrong">-{pointsAtStake.toLocaleString()}</b></div>;
               const autoLabel = response.autoCorrect ? 'Auto: likely correct' : 'Auto: likely incorrect';
               const draftCorrect = response.reviewCorrect ?? response.autoCorrect;
               return <div className="grading-row" key={player.id}><span>{player.avatar}</span><div><strong>{player.name}</strong><p>{response.answer || 'Response locked'}</p><small>{autoLabel} · {response.autoConfidence} confidence</small></div>{response.resolvedCorrect === null ? <div className="grade-actions" role="group" aria-label={`Grade ${player.name}`}><button aria-pressed={draftCorrect} className={`correct-button grade-choice ${draftCorrect ? 'selected' : ''}`} onClick={() => void setTextGrade(player.id, true)}>Correct</button><button aria-pressed={!draftCorrect} className={`wrong-button grade-choice ${!draftCorrect ? 'selected' : ''}`} onClick={() => void setTextGrade(player.id, false)}>Incorrect</button></div> : <b className={response.resolvedCorrect ? 'grade-correct' : 'grade-wrong'}>{response.resolvedCorrect ? 'AWARDED' : 'REJECTED'}</b>}</div>;
@@ -724,8 +732,7 @@ export function HostAppV3() {
             {current.responseMode !== 'text' && !current.dailyDouble && !current.buzzWinnerId && !current.answerRevealed && <button className="primary-button" onClick={() => { audio.cue('open'); void perform(current.buzzOpen ? 'host:close-buzzers' : 'host:open-buzzers'); }}>{current.buzzOpen ? 'Lock Buzzers' : 'Open Buzzers Now'}</button>}
             {current.responseMode !== 'text' && !current.answerRevealed && <button className="secondary-button reveal-button" disabled={revealBeat > 0} onClick={() => void revealAnswer()}>Reveal Answer</button>}
             {current.answerRevealed && current.responseMode !== 'text' && (!spokenPlayer || current.timedOut) && <button className="primary-button" onClick={() => void perform('host:advance-board')}>Continue to Board</button>}
-            {current.answerRevealed && current.responseMode === 'text' && unresolvedTextCount > 0 && <button className="primary-button confirm-grades-button" disabled={busy} onClick={() => void confirmTextGrades()}>Confirm Results</button>}
-            {current.answerRevealed && current.responseMode === 'text' && Object.keys(current.textResponses ?? {}).length === 0 && <button className="primary-button" onClick={() => void perform('host:advance-board')}>Continue to Board</button>}
+            {current.answerRevealed && current.responseMode === 'text' && pendingTextResultCount > 0 && <button className="primary-button confirm-grades-button" disabled={busy} onClick={() => void confirmTextGrades()}>Confirm Results</button>}
             {!current.answerRevealed && current.attemptedPlayerIds.length === 0 && Object.keys(current.textResponses ?? {}).length === 0 && current.wager === null && <button className="secondary-button" onClick={() => { autoBuzzQuestionRef.current = ''; void perform('host:cancel-question'); }}>Exit Without Answering</button>}
           </div>
         </article>
