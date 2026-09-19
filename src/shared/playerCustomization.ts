@@ -137,7 +137,7 @@ export interface PlayerCustomizationFields {
 
 export const DEFAULT_PLAYER_CUSTOMIZATION = {
   avatarId: 'fox',
-  frameStyle: 'clean',
+  frameStyle: 'halo',
   buzzerSound: 'classic',
   scoreEffect: 'pulse',
   victoryEffect: 'confetti'
