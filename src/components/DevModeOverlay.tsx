@@ -374,6 +374,7 @@ export function DevModeOverlay() {
         className={`dev-section dev-visual-lab-section${nativeVisualFullscreen ? ' is-native-fullscreen' : ''}${fallbackVisualFullscreen ? ' is-fallback-fullscreen' : ''}`}
         aria-label="Visual & animation lab"
         data-dev-visual-lab-fullscreen={visualLabFullscreen ? 'true' : 'false'}
+        data-fullscreen-overlay-root={visualLabFullscreen ? 'true' : undefined}
       >
         {!visualLabFullscreen ? <>
           <div className="dev-section-title dev-visual-lab-title">
