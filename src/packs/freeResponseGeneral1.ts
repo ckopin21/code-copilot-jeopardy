@@ -69,7 +69,7 @@ const categories = [
 
 export const freeResponseGeneral1Pack = buildPack({
   id: 'free-response-general-1',
-  title: 'Free Response General 1',
+  title: 'General 1',
   theme: 'Science, food, language, tech, sports, nature, numbers, and mixed trivia',
   description: 'A dedicated all-play question set written specifically for simultaneous typed answers in Free Response mode.',
   difficulty: 'mixed',
