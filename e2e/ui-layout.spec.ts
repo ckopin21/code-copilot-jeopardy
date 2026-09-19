@@ -34,12 +34,15 @@ for (const mode of ['Classic', 'Free Response']) {
     test(`${mode} host and presentation fit at ${viewport.width}x${viewport.height}`, async ({ page }) => {
       await page.setViewportSize(viewport);
       await page.goto('/?mode=host&fresh=1');
-      await page.getByRole('button', { name: new RegExp(mode) }).click();
+      const modeButton = page.getByRole('button', { name: new RegExp(`^${mode}`) });
+      await modeButton.click();
+      await expect(modeButton).toHaveAttribute('aria-pressed', 'true');
       await page.getByRole('button', { name: 'Start Game' }).click();
+      await expect(page.locator('.showcase-lobby')).toHaveCount(0);
       await expect(page.locator('.showcase-board-stage .board')).toBeVisible();
-      await assertViewportFit(page, '.showcase-host');
+      await assertViewportFit(page, '.showcase-board-stage');
 
-      await page.getByRole('button', { name: 'Presentation', exact: true }).click();
+      await page.locator('.showcase-board-stage .board-actions').getByRole('button', { name: 'Presentation', exact: true }).click();
       await expect(page.locator('.board-presentation-mode')).toBeVisible();
       await assertViewportFit(page, '.board-presentation-mode');
     });
