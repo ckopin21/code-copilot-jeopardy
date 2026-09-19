@@ -15,13 +15,15 @@ function savedMusicRestoreGain(): number {
 export function MusicTrackSelect({ className = '' }: { className?: string }) {
   const [track, setTrack] = useState<BackgroundTrackId>(audio.settings.backgroundTrack);
   const [musicGain, setMusicGain] = useState(audio.settings.music);
-  const musicMuted = audio.settings.muted || musicGain <= 0;
+  const [globalMuted, setGlobalMuted] = useState(audio.settings.muted);
+  const musicMuted = globalMuted || musicGain <= 0;
   const showMenuControls = className.split(/\s+/).includes('menu-music-select');
 
   useEffect(() => {
     const sync = () => {
       setTrack(audio.settings.backgroundTrack);
       setMusicGain(audio.settings.music);
+      setGlobalMuted(audio.settings.muted);
     };
     window.addEventListener('blue-stage:audio-settings', sync);
     return () => window.removeEventListener('blue-stage:audio-settings', sync);
