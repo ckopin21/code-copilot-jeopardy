@@ -113,7 +113,11 @@ export function DevPresentationLab() {
   const [transition, setTransition] = useState<TransitionPreview>(null);
   const [revealBeat, setRevealBeat] = useState<RevealBeat>(0);
   const [showComebackBanner, setShowComebackBanner] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [presentationTestMode, setPresentationTestMode] = useState(false);
+  const [controlsOpen, setControlsOpen] = useState(true);
   const timersRef = useRef<number[]>([]);
+  const labRef = useRef<HTMLDivElement | null>(null);
 
   const analysis = useMemo(() => analyzeDevScenario({
     playerCount,
@@ -146,7 +150,17 @@ export function DevPresentationLab() {
 
   useEffect(() => () => clearTimers(), []);
   useEffect(() => {
-    if (!open) clearPreviews();
+    const syncFullscreen = () => setIsFullscreen(document.fullscreenElement === labRef.current);
+    document.addEventListener('fullscreenchange', syncFullscreen);
+    return () => document.removeEventListener('fullscreenchange', syncFullscreen);
+  }, []);
+  useEffect(() => {
+    if (!open) {
+      clearPreviews();
+      setPresentationTestMode(false);
+      setControlsOpen(true);
+      if (document.fullscreenElement === labRef.current) void document.exitFullscreen();
+    }
   }, [open]);
 
   const previewScore = (correct: boolean, forceComeback = false) => {
@@ -193,6 +207,31 @@ export function DevPresentationLab() {
     later(kind === 'round' ? 4200 : 1900, () => setTransition(null));
   };
 
+
+  const toggleFullscreen = async () => {
+    const lab = labRef.current;
+    if (!lab) return;
+    try {
+      if (document.fullscreenElement === lab) await document.exitFullscreen();
+      else await lab.requestFullscreen();
+    } catch {
+      // Fullscreen can be blocked by browser/user policy. The lab remains usable in viewport mode.
+    }
+  };
+
+  const enterPresentationTestMode = () => {
+    setPreviewSurface('presentation-board');
+    setPresentationTestMode(true);
+    setControlsOpen(false);
+    clearPreviews();
+  };
+
+  const exitPresentationTestMode = () => {
+    setPresentationTestMode(false);
+    setControlsOpen(true);
+    clearPreviews();
+  };
+
   if (!hostMode) return null;
 
   const comebackActive = analysis.comeback.multiplier > 1;
@@ -204,7 +243,7 @@ export function DevPresentationLab() {
   return <>
     <button className={`dev-presentation-trigger ${open ? 'active' : ''}`} onClick={() => setOpen(true)} aria-label="Open presentation visual lab">PRES LAB</button>
 
-    {open && <div className="dev-presentation-lab" role="dialog" aria-modal="true" aria-label="Presentation visual and animation lab">
+    {open && <div ref={labRef} className={`dev-presentation-lab${isFullscreen ? ' is-native-fullscreen' : ''}${presentationTestMode ? ' presentation-test-mode' : ''}`} role="dialog" aria-modal="true" aria-label="Presentation visual and animation lab">
       {previewSurface === 'question' && <main className="presentation-shell dev-presentation-surface">
         <PlayerStrip players={analysis.room.players} activeId={analysis.player.id} turnId={analysis.player.id} turnLabel="ON TURN" />
         <section className="presentation-question">
@@ -236,9 +275,16 @@ export function DevPresentationLab() {
         <BoardPresentation room={boardRoom} onBack={() => {}} onSelect={() => {}} onReview={() => {}} />
       </main>}
 
-      <aside className="dev-presentation-controls">
-        <header><div><small>DEV · PRESENTATION VIEW</small><strong>Visual & Animation Lab</strong></div><button onClick={() => setOpen(false)} aria-label="Close presentation preview">×</button></header>
-        <p>This is the real presentation layout filling the current browser viewport. Controls float above it and do not affect fit.</p>
+      {controlsOpen && <aside className="dev-presentation-controls">
+        <header>
+          <div><small>DEV · PRESENTATION VIEW</small><strong>Visual & Animation Lab</strong></div>
+          <div className="dev-presentation-header-actions">
+            <button type="button" className="lab-header-button" onClick={() => void toggleFullscreen()} aria-label={isFullscreen ? 'Exit fullscreen visual lab' : 'Fullscreen visual lab'}>{isFullscreen ? 'EXIT FULL' : 'FULLSCREEN'}</button>
+            <button type="button" className="lab-header-button" onClick={enterPresentationTestMode}>PRESENTATION MODE</button>
+            <button type="button" className="lab-close-button" onClick={() => setOpen(false)} aria-label="Close presentation preview">×</button>
+          </div>
+        </header>
+        <p>Use Fullscreen for a true browser presentation canvas. Presentation Mode switches to the real presentation board and hides the control panel for clean testing.</p>
 
         <div className="dev-presentation-control-row">
           <label>Players<select value={playerCount} onChange={(event) => { const count = asPlayerCount(Number(event.target.value)); setPlayerCount(count); setSelectedSeat((seat) => Math.min(seat, count)); }}><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option></select></label>
@@ -270,7 +316,14 @@ export function DevPresentationLab() {
           <button disabled={!comebackActive} onClick={() => setShowComebackBanner((value) => !value)}>Comeback banner</button>
           <button className="clear" onClick={clearPreviews}>Clear</button>
         </div>
-      </aside>
+      </aside>}
+
+      {presentationTestMode && <div className="dev-presentation-test-dock" role="toolbar" aria-label="Presentation test controls">
+        <span>PRESENTATION TEST</span>
+        <button type="button" onClick={() => setControlsOpen((value) => !value)}>{controlsOpen ? 'HIDE CONTROLS' : 'CONTROLS'}</button>
+        <button type="button" onClick={() => void toggleFullscreen()}>{isFullscreen ? 'EXIT FULLSCREEN' : 'FULLSCREEN'}</button>
+        <button type="button" onClick={exitPresentationTestMode}>EXIT TEST</button>
+      </div>}
 
       {flight && <ScoreFlight flight={flight} onImpact={() => {}} onComplete={() => setFlight(null)} />}
       {showComebackBanner && comebackActive && <ComebackBoostNotice room={analysis.room} surface="host" />}
