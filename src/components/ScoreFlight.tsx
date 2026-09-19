@@ -64,7 +64,8 @@ export function ScoreFlight({ flight, onImpact, onComplete }: { flight: ScoreFli
         : `${flight.delta > 0 ? '+' : ''}${flight.delta.toLocaleString()}`;
       token.style.left = `${startX}px`;
       token.style.top = `${startY}px`;
-      document.body.appendChild(token);
+      const overlayRoot = document.fullscreenElement instanceof HTMLElement ? document.fullscreenElement : document.body;
+      overlayRoot.appendChild(token);
 
       const impact = () => {
         if (cancelled) return;
