@@ -42,8 +42,10 @@ export function HostEnhancements() {
   const transitionTimerRef = useRef<number | null>(null);
   const commandTriggerRef = useRef<HTMLButtonElement | null>(null);
   const commandDrawerRef = useRef<HTMLElement | null>(null);
+  const preflightRef = useRef<HTMLElement | null>(null);
 
   useOutsideDismiss(drawerOpen && !preflightOpen, () => setDrawerOpen(false), commandDrawerRef, commandTriggerRef);
+  useOutsideDismiss(preflightOpen, () => setPreflightOpen(false), preflightRef);
 
   useEffect(() => {
     const syncCredentials = () => {
@@ -242,8 +244,8 @@ export function HostEnhancements() {
       {actionMessage && <p className="drawer-message">{actionMessage}</p>}
     </aside>}
 
-    {preflightOpen && <div className="enhancement-modal-backdrop" onClick={(event) => { if (event.target === event.currentTarget) setPreflightOpen(false); }}>
-      <section className="preflight-modal" role="dialog" aria-modal="true" aria-label="Controller connection check">
+    {preflightOpen && <div className="enhancement-modal-backdrop">
+      <section ref={preflightRef} className="preflight-modal" role="dialog" aria-modal="true" aria-label="Controller connection check">
         <button className="enhancement-modal-close" onClick={() => setPreflightOpen(false)} aria-label="Close">×</button>
         <div className="section-kicker gold">PRE-GAME CHECK</div><h2>Controllers ready?</h2><p>Phones should be connected and checking in recently. Test sends a sound/haptic confirmation to every reachable controller.</p>
         <div className="preflight-list">{room.players.length ? room.players.map((player) => {
