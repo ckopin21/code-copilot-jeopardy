@@ -577,12 +577,12 @@
   .phone-join .accent-grid-v3 button { width: 40px; height: 40px; min-width: 40px; min-height: 40px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  [data-score-effect].score-impact-correct,
-  [data-score-effect].score-impact-wrong,
+  [data-score-effect].score-impact-correct [data-player-score],
+  [data-score-effect].score-impact-wrong [data-player-score],
   .effect-preview-layer *,
   .effect-preview-layer::before,
   .effect-preview-layer::after,
   .podium-card.winner,
-  .podium-card.winner::after,
-  .podium-card.winner .podium-avatar { animation: none !important; }
+  .podium-card.winner .podium-avatar,
+  .presentation-winner-identity > .player-avatar-art { animation: none !important; }
 }
