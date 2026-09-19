@@ -43,28 +43,94 @@ async function assertUsedResultTilesContained(page, rootSelector) {
 }
 
 async function assertPresentationResultAvatarsArePlain(page, rootSelector) {
-  const styles = await page.locator(rootSelector).evaluate((root) => {
-    const resultAvatar = root.querySelector('.used-result-avatar-art');
-    if (!(resultAvatar instanceof HTMLElement)) throw new Error('Missing presentation result avatar');
-    const content = resultAvatar.querySelector('.player-avatar-content');
-    if (!(content instanceof HTMLElement)) throw new Error('Missing result avatar content');
-    const avatarStyle = getComputedStyle(resultAvatar);
-    const avatarRect = resultAvatar.getBoundingClientRect();
-    const contentRect = content.getBoundingClientRect();
-    return {
-      borderWidth: avatarStyle.borderTopWidth,
-      borderRadius: avatarStyle.borderRadius,
-      backgroundColor: avatarStyle.backgroundColor,
-      avatarRect: { width: avatarRect.width, height: avatarRect.height },
-      contentRect: { width: contentRect.width, height: contentRect.height }
+  const avatars = await page.locator(rootSelector).evaluate((root) => {
+    const nodes = Array.from(root.querySelectorAll('.used-result-avatar-art'));
+    if (!nodes.length) throw new Error('Missing presentation result avatars');
+
+    const box = (element) => {
+      const rect = element.getBoundingClientRect();
+      return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height };
     };
+
+    return nodes.map((node) => {
+      if (!(node instanceof HTMLElement)) throw new Error('Invalid presentation result avatar');
+      const content = node.querySelector('.player-avatar-content');
+      const emoji = node.querySelector('.player-avatar-emoji');
+      const chip = node.closest('.used-result-chip');
+      const tile = node.closest('.question-tile.used.has-result');
+      if (!(content instanceof HTMLElement) || !(emoji instanceof HTMLElement) || !(chip instanceof HTMLElement) || !(tile instanceof HTMLElement)) {
+        throw new Error('Incomplete presentation result avatar');
+      }
+
+      const avatarStyle = getComputedStyle(node);
+      const contentStyle = getComputedStyle(content);
+      const emojiStyle = getComputedStyle(emoji);
+      return {
+        glyph: emoji.textContent?.trim() ?? '',
+        avatar: {
+          ...box(node),
+          borderWidths: [avatarStyle.borderTopWidth, avatarStyle.borderRightWidth, avatarStyle.borderBottomWidth, avatarStyle.borderLeftWidth],
+          borderRadius: avatarStyle.borderRadius,
+          backgroundColor: avatarStyle.backgroundColor,
+          overflow: avatarStyle.overflow,
+          clipPath: avatarStyle.clipPath,
+          maskImage: avatarStyle.maskImage
+        },
+        content: {
+          ...box(content),
+          position: contentStyle.position,
+          borderRadius: contentStyle.borderRadius,
+          backgroundColor: contentStyle.backgroundColor,
+          overflow: contentStyle.overflow,
+          clipPath: contentStyle.clipPath,
+          maskImage: contentStyle.maskImage
+        },
+        emoji: {
+          ...box(emoji),
+          borderRadius: emojiStyle.borderRadius,
+          backgroundColor: emojiStyle.backgroundColor,
+          overflow: emojiStyle.overflow,
+          clipPath: emojiStyle.clipPath,
+          maskImage: emojiStyle.maskImage
+        },
+        chip: box(chip),
+        tile: box(tile)
+      };
+    });
   });
 
-  expect(styles.borderWidth).toBe('0px');
-  expect(styles.borderRadius).toBe('0px');
-  expect(styles.backgroundColor).toBe('rgba(0, 0, 0, 0)');
-  expect(styles.contentRect.width).toBeGreaterThan(styles.avatarRect.width * 0.85);
-  expect(styles.contentRect.height).toBeGreaterThan(styles.avatarRect.height * 0.85);
+  const glyphs = new Set(avatars.map((item) => item.glyph));
+  expect(glyphs.has('🧪')).toBe(true);
+  expect(glyphs.has('🚀')).toBe(true);
+
+  for (const item of avatars) {
+    expect(item.avatar.borderWidths).toEqual(['0px', '0px', '0px', '0px']);
+    expect(item.avatar.borderRadius).toBe('0px');
+    expect(item.avatar.backgroundColor).toBe('rgba(0, 0, 0, 0)');
+    expect(item.avatar.overflow).toBe('visible');
+    expect(item.avatar.clipPath).toBe('none');
+    expect(item.avatar.maskImage).toBe('none');
+
+    expect(item.content.position).toBe('static');
+    expect(item.content.borderRadius).toBe('0px');
+    expect(item.content.backgroundColor).toBe('rgba(0, 0, 0, 0)');
+    expect(item.content.overflow).toBe('visible');
+    expect(item.content.clipPath).toBe('none');
+    expect(item.content.maskImage).toBe('none');
+
+    expect(item.emoji.borderRadius).toBe('0px');
+    expect(item.emoji.backgroundColor).toBe('rgba(0, 0, 0, 0)');
+    expect(item.emoji.overflow).toBe('visible');
+    expect(item.emoji.clipPath).toBe('none');
+    expect(item.emoji.maskImage).toBe('none');
+
+    expect(Math.abs((item.avatar.left + item.avatar.right) / 2 - (item.content.left + item.content.right) / 2)).toBeLessThanOrEqual(1);
+    expect(Math.abs((item.avatar.top + item.avatar.bottom) / 2 - (item.content.top + item.content.bottom) / 2)).toBeLessThanOrEqual(1);
+    expect(item.avatar.left).toBeGreaterThanOrEqual(item.tile.left - 1);
+    expect(item.avatar.right).toBeLessThanOrEqual(item.tile.right + 1);
+    expect(item.avatar.top).toBeGreaterThanOrEqual(item.tile.top - 1);
+    expect(item.avatar.bottom).toBeLessThanOrEqual(item.tile.bottom + 1);
+  }
 }
 
 async function assertViewportFit(page, rootSelector = 'body') {
