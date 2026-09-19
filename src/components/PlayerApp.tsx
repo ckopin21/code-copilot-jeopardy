@@ -36,7 +36,7 @@ export function PlayerApp() {
   const params = new URLSearchParams(location.search);
   const [roomCode, setRoomCode] = useState((params.get('room') ?? '').toUpperCase());
   const [name, setName] = useState('');
-  const [avatarId, setAvatarId] = useState(DEFAULT_PLAYER_CUSTOMIZATION.avatarId);
+  const [avatarId, setAvatarId] = useState<string>(DEFAULT_PLAYER_CUSTOMIZATION.avatarId);
   const [accent, setAccent] = useState<string>(PLAYER_ACCENTS[0].color);
   const [frameStyle, setFrameStyle] = useState<PlayerFrameStyle>(DEFAULT_PLAYER_CUSTOMIZATION.frameStyle);
   const [title, setTitle] = useState<PlayerTitle>(DEFAULT_PLAYER_CUSTOMIZATION.title);
