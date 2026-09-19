@@ -42,32 +42,29 @@ async function assertUsedResultTilesContained(page, rootSelector) {
   expect(issues).toEqual([]);
 }
 
-async function assertPresentationResultAvatarsMatchIdentityStyle(page, rootSelector) {
+async function assertPresentationResultAvatarsArePlain(page, rootSelector) {
   const styles = await page.locator(rootSelector).evaluate((root) => {
-    const identity = root.querySelector('.presentation-player-avatar');
     const resultAvatar = root.querySelector('.used-result-avatar-art');
-    if (!(identity instanceof HTMLElement) || !(resultAvatar instanceof HTMLElement)) {
-      throw new Error('Missing presentation avatar comparison targets');
-    }
-    const identityStyle = getComputedStyle(identity);
-    const resultStyle = getComputedStyle(resultAvatar);
+    if (!(resultAvatar instanceof HTMLElement)) throw new Error('Missing presentation result avatar');
+    const content = resultAvatar.querySelector('.player-avatar-content');
+    if (!(content instanceof HTMLElement)) throw new Error('Missing result avatar content');
+    const avatarStyle = getComputedStyle(resultAvatar);
+    const avatarRect = resultAvatar.getBoundingClientRect();
+    const contentRect = content.getBoundingClientRect();
     return {
-      identity: {
-        borderColor: identityStyle.borderTopColor,
-        borderRadius: identityStyle.borderRadius,
-        backgroundColor: identityStyle.backgroundColor
-      },
-      result: {
-        borderColor: resultStyle.borderTopColor,
-        borderRadius: resultStyle.borderRadius,
-        backgroundColor: resultStyle.backgroundColor
-      }
+      borderWidth: avatarStyle.borderTopWidth,
+      borderRadius: avatarStyle.borderRadius,
+      backgroundColor: avatarStyle.backgroundColor,
+      avatarRect: { width: avatarRect.width, height: avatarRect.height },
+      contentRect: { width: contentRect.width, height: contentRect.height }
     };
   });
 
-  expect(styles.result.borderColor).toBe(styles.identity.borderColor);
-  expect(styles.result.borderRadius).toBe(styles.identity.borderRadius);
-  expect(styles.result.backgroundColor).toBe(styles.identity.backgroundColor);
+  expect(styles.borderWidth).toBe('0px');
+  expect(styles.borderRadius).toBe('0px');
+  expect(styles.backgroundColor).toBe('rgba(0, 0, 0, 0)');
+  expect(styles.contentRect.width).toBeGreaterThan(styles.avatarRect.width * 0.85);
+  expect(styles.contentRect.height).toBeGreaterThan(styles.avatarRect.height * 0.85);
 }
 
 async function assertViewportFit(page, rootSelector = 'body') {
@@ -191,7 +188,7 @@ for (const viewport of viewports) {
     await expect(lab.locator('.presentation-name-card')).toHaveCount(5);
     await assertViewportFit(page, '.dev-board-presentation');
     await assertUsedResultTilesContained(page, '.dev-board-presentation');
-    await assertPresentationResultAvatarsMatchIdentityStyle(page, '.dev-board-presentation');
+    await assertPresentationResultAvatarsArePlain(page, '.dev-board-presentation');
 
     const geometry = await lab.evaluate((element) => {
       const rect = element.getBoundingClientRect();
