@@ -132,7 +132,8 @@ async function assertPresentationResultAvatarsArePlain(page, rootSelector) {
     expect(item.avatar.right).toBeLessThanOrEqual(item.tile.right + 1);
     expect(item.avatar.top).toBeGreaterThanOrEqual(item.tile.top - 1);
     expect(item.avatar.bottom).toBeLessThanOrEqual(item.tile.bottom + 1);
-    expect(item.name.left - item.avatar.right).toBeGreaterThanOrEqual(6);
+    expect(item.avatar.width).toBeGreaterThanOrEqual(40);
+    expect(item.name.left - item.avatar.right).toBeGreaterThanOrEqual(8);
   }
 }
 
