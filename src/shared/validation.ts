@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { QUESTION_VALUES, type AutoGradeConfidence, type QuestionValue } from './types';
-import { AVATAR_CATALOG, BUZZER_SOUNDS, FRAME_STYLES, PLAYER_TITLES, SCORE_EFFECTS, VICTORY_EFFECTS } from './playerCustomization';
+import { AVATAR_CATALOG } from './playerCustomization';
 
 export const playerJoinSchema = z.object({
   roomCode: z.string().trim().min(4).max(8),
@@ -8,10 +8,10 @@ export const playerJoinSchema = z.object({
   avatar: z.string().trim().min(1).max(8),
   accent: z.string().regex(/^#[0-9a-fA-F]{6}$/),
   avatarId: z.string().refine((value) => AVATAR_CATALOG.some((item) => item.id === value), 'Unknown avatar').optional(),
-  frameStyle: z.string().refine((value) => FRAME_STYLES.some((item) => item.id === value), 'Unknown frame').optional(),
-  title: z.string().refine((value) => PLAYER_TITLES.some((item) => item.id === value), 'Unknown title').optional(),
-  buzzerSound: z.string().refine((value) => BUZZER_SOUNDS.some((item) => item.id === value), 'Unknown buzzer').optional(),
-  scoreEffect: z.string().refine((value) => SCORE_EFFECTS.some((item) => item.id === value), 'Unknown score effect').optional(),
+  frameStyle: z.enum(['clean', 'halo', 'bracket', 'neon']).optional(),
+  title: z.enum(['none', 'wildcard', 'speed-demon', 'professor', 'clutch', 'night-owl', 'chaos-agent', 'ace']).optional(),
+  buzzerSound: z.enum(['classic', 'laser', 'chime', 'arcade']).optional(),
+  scoreEffect: z.enum(['pulse', 'spark', 'wave']).optional(),
   victoryEffect: z.string().refine((value) => VICTORY_EFFECTS.some((item) => item.id === value), 'Unknown victory effect').optional()
 });
 
