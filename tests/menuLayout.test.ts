@@ -23,4 +23,9 @@ describe('menu layout ownership', () => {
     expect(menuLayout).toMatch(/\.showcase-menu\.menu-fullscreen \.menu-card-v2\s*\{[\s\S]*?width:\s*100vw\s*!important/);
     expect(menuLayout).toMatch(/\.showcase-menu\.menu-fullscreen \.menu-card-v2\s*\{[\s\S]*?border:\s*0\s*!important/);
   });
+
+  it('lets the desktop host action stack fill its entire panel', () => {
+    expect(menuLayout).toMatch(/\.showcase-menu \.host-menu-actions\s*\{[\s\S]*?width:\s*100%\s*!important/);
+    expect(menuLayout).toMatch(/\.showcase-menu \.host-menu-actions\s*\{[\s\S]*?max-width:\s*none\s*!important/);
+  });
 });
