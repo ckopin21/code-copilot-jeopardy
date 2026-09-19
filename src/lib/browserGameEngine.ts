@@ -981,8 +981,7 @@ export class BrowserGameEngine {
       if (correct) player.stats.correct += 1; else player.stats.incorrect += 1;
       this.applyStreak(player, correct, room.state.settings);
     }
-    this.persist();
-    return this.snapshot(roomCode);
+    return this.advanceToBoard(roomCode, hostToken);
   }
 
   private closeTextResponsesInternal(room: RoomRecord): void {
