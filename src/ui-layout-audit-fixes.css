@@ -134,8 +134,67 @@
 
 .presentation-board-fill .question-tile.used.has-result,
 .presentation-board .question-tile.used.has-result,
+.board-presentation-mode .question-tile.used.has-result,
 .showcase-host:not(.host-presentation-mode) .question-tile.used.has-result {
-  overflow: visible !important;
+  overflow: hidden !important;
+}
+
+.question-tile.used.has-result .used-tile-result,
+.question-tile.used.has-result .used-result-list,
+.question-tile.used.has-result .used-result-chip {
+  min-width: 0 !important;
+  min-height: 0 !important;
+  max-width: 100% !important;
+  max-height: 100% !important;
+}
+
+.question-tile.used.has-result .used-result-chip {
+  box-sizing: border-box;
+  overflow: hidden !important;
+}
+
+.question-tile.used.has-result .used-result-chip > b {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(4px, .45vw, 7px);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.question-tile.used.has-result .used-result-chip > b > .player-avatar-art {
+  flex: 0 0 auto;
+  width: 1.7em !important;
+  height: 1.7em !important;
+  max-width: 28px !important;
+  max-height: 28px !important;
+  aspect-ratio: 1 / 1;
+  font-size: 1.45em !important;
+}
+
+.question-tile.used.has-result .used-result-chip > b > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.presentation-board .question-tile.used.has-result .used-result-chip > b > .player-avatar-art,
+.presentation-board-fill .question-tile.used.has-result .used-result-chip > b > .player-avatar-art,
+.board-presentation-mode .question-tile.used.has-result .used-result-chip > b > .player-avatar-art {
+  width: 1.65em !important;
+  height: 1.65em !important;
+  max-width: 32px !important;
+  max-height: 32px !important;
+}
+
+
+@media (min-width: 900px) and (max-height: 800px) {
+  .showcase-host:not(.host-presentation-mode) .question-tile.used.has-result .used-result-chip > b > .player-avatar-art {
+    width: 1.35em !important;
+    height: 1.35em !important;
+    max-width: 22px !important;
+    max-height: 22px !important;
+  }
 }
 
 /* Podium names may use a second line instead of disappearing behind ellipsis. */
