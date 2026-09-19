@@ -578,23 +578,6 @@
   background: linear-gradient(90deg,transparent,currentColor);
   filter: blur(2px);
 }
-.score-impact-burst {
-  position: fixed;
-  z-index: 2399;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  pointer-events: none;
-  transform: translate(-50%,-50%);
-  animation: scoreImpactBurst .5s cubic-bezier(.12,.72,.16,1) forwards;
-}
-.score-impact-burst.correct { box-shadow: 0 0 0 8px rgba(52,208,111,.62),0 0 42px 22px rgba(52,208,111,.45); }
-.score-impact-burst.wrong { box-shadow: 0 0 0 8px rgba(240,82,82,.62),0 0 42px 22px rgba(240,82,82,.45); }
-.player-card.score-impact-correct { animation: scoreCardImpactGood .5s cubic-bezier(.16,.9,.2,1.25) both; }
-.player-card.score-impact-wrong { animation: scoreCardImpactBad .5s cubic-bezier(.16,.9,.2,1.25) both; }
-.player-card.score-impact-correct .score,
-.player-card.score-impact-wrong .score { animation: scoreNumberImpact .5s cubic-bezier(.16,.9,.2,1.2) both; }
-
 @keyframes stageFlameDance {
   from { transform: rotate(-6deg) scale(.94) translateY(1px); }
   to { transform: rotate(6deg) scale(1.06) translateY(-2px); }
@@ -645,30 +628,6 @@
 @keyframes podiumRankReveal { to { opacity: 1; transform: translateY(0) scale(1); } }
 @keyframes podiumConfettiFall { to { transform: translate(24px,110vh) rotate(720deg); opacity: .12; } }
 @keyframes statsSceneIn { from { opacity: 0; transform: scale(.97); } to { opacity: 1; transform: scale(1); } }
-@keyframes scoreImpactBurst {
-  0% { opacity: 1; transform: translate(-50%,-50%) scale(.25); }
-  65% { opacity: .8; transform: translate(-50%,-50%) scale(2.8); }
-  100% { opacity: 0; transform: translate(-50%,-50%) scale(4.2); }
-}
-@keyframes scoreCardImpactGood {
-  0% { transform: translateY(0) scale(1); filter: brightness(1); }
-  26% { transform: translateY(4px) scale(.96); filter: brightness(1.55); box-shadow: 0 0 38px rgba(52,208,111,.75); }
-  58% { transform: translateY(-5px) scale(1.055); }
-  100% { transform: translateY(0) scale(1); filter: brightness(1); }
-}
-@keyframes scoreCardImpactBad {
-  0% { transform: translateX(0) scale(1); filter: brightness(1); }
-  24% { transform: translateX(-6px) scale(.965); filter: brightness(1.4); box-shadow: 0 0 38px rgba(240,82,82,.72); }
-  42% { transform: translateX(7px) scale(1.035); }
-  62% { transform: translateX(-3px) scale(1.02); }
-  100% { transform: translateX(0) scale(1); filter: brightness(1); }
-}
-@keyframes scoreNumberImpact {
-  0% { transform: scale(.84); opacity: .5; }
-  44% { transform: scale(1.34); opacity: 1; }
-  100% { transform: scale(1); opacity: 1; }
-}
-
 @media (max-width: 760px) {
   .board-presentation-header { grid-template-columns: 1fr; }
   .presentation-back { justify-self: start; }
@@ -735,12 +694,7 @@
   .podium-scene,
   .podium-card,
   .podium-confetti i,
-  .stats-after-podium,
-  .score-impact-burst,
-  .player-card.score-impact-correct,
-  .player-card.score-impact-wrong,
-  .player-card.score-impact-correct .score,
-  .player-card.score-impact-wrong .score {
+  .stats-after-podium {
     animation: none !important;
   }
   .podium-card { opacity: 1; transform: none; }
