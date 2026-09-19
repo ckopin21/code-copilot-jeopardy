@@ -4,7 +4,6 @@ import { AVATAR_CATALOG, getAvatarOption, type PlayerFrameStyle } from '../share
 export function PlayerAvatar({
   avatarId,
   fallback,
-  frameStyle = 'clean',
   accent = '#ffd166',
   className = '',
   label
@@ -23,12 +22,10 @@ export function PlayerAvatar({
   return <span
     className={`player-avatar-art emoji-avatar ${className}`}
     data-avatar-id={known?.id}
-    data-frame={frameStyle}
     style={{ '--avatar-accent': accent } as CSSProperties}
     role="img"
     aria-label={accessibleLabel}
   >
-    <span className="player-avatar-frame" aria-hidden="true" />
     <span className="player-avatar-content" aria-hidden="true">
       <span className="player-avatar-emoji">{emoji}</span>
     </span>
