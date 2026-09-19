@@ -1,4 +1,4 @@
-import type { PlayerBuzzerSound, PlayerFrameStyle, PlayerScoreEffect, PlayerTitle, PlayerVictoryEffect } from './playerCustomization';
+import type { PlayerBuzzerSound, PlayerFrameStyle, PlayerScoreEffect, PlayerVictoryEffect } from './playerCustomization';
 
 export const QUESTION_VALUES = [100, 200, 300, 400, 500, 1000] as const;
 export type QuestionValue = (typeof QUESTION_VALUES)[number];
@@ -114,7 +114,6 @@ export interface Player {
   avatarId?: string;
   accent: string;
   frameStyle?: PlayerFrameStyle;
-  title?: PlayerTitle;
   buzzerSound?: PlayerBuzzerSound;
   scoreEffect?: PlayerScoreEffect;
   victoryEffect?: PlayerVictoryEffect;
@@ -141,7 +140,6 @@ export interface BoardQuestionResult {
   playerAvatarId?: string;
   playerAccent?: string;
   playerFrameStyle?: PlayerFrameStyle;
-  playerTitle?: PlayerTitle;
   correct: boolean;
   delta: number;
   /** Optional persisted labels for scoring rules that affected this player's result. */
