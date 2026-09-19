@@ -162,7 +162,13 @@ export function DevPresentationLab() {
   }, []);
   useEffect(() => {
     if (!open) {
-      clearPreviews();
+      timersRef.current.forEach((timer) => window.clearTimeout(timer));
+      timersRef.current = [];
+      setFlight(null);
+      setModifierPreview(null);
+      setTransition(null);
+      setRevealBeat(0);
+      setShowComebackBanner(false);
       setPresentationTestMode(false);
       setControlsOpen(true);
       if (document.fullscreenElement === labRef.current) void document.exitFullscreen();
