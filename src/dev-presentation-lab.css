@@ -21,9 +21,21 @@
   position: fixed;
   inset: 0;
   z-index: 1200;
+  width: 100vw;
+  height: 100dvh;
   overflow: hidden;
   background: #06080c;
 }
+.dev-presentation-lab:fullscreen,
+.dev-presentation-lab.is-native-fullscreen {
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  max-width: none;
+  max-height: none;
+  background: #06080c;
+}
+.dev-presentation-lab::backdrop { background: #06080c; }
 .dev-presentation-surface {
   min-height: 100dvh;
   height: 100dvh;
@@ -63,11 +75,36 @@
   box-shadow: 0 18px 48px rgba(0,0,0,.52);
   backdrop-filter: blur(12px);
 }
-.dev-presentation-controls header { display:flex;align-items:flex-start;justify-content:space-between;gap:10px; }
-.dev-presentation-controls header>div { display:grid;gap:2px; }
+.dev-presentation-controls header { display:grid;gap:8px; }
+.dev-presentation-controls header>div:first-child { display:grid;gap:2px; }
 .dev-presentation-controls header small { color:#7ee7ff;font-size:.58rem;font-weight:1000;letter-spacing:.12em; }
 .dev-presentation-controls header strong { color:#ffd166;font-size:.95rem; }
-.dev-presentation-controls header>button { width:32px;height:32px;border:1px solid rgba(255,255,255,.2);border-radius:50%;background:#0d3551;color:white;font-size:1.15rem;cursor:pointer; }
+.dev-presentation-header-actions {
+  display:grid !important;
+  grid-template-columns:minmax(0,1fr) minmax(0,1.25fr) 32px;
+  gap:6px !important;
+  align-items:center;
+}
+.dev-presentation-header-actions button {
+  min-width:0;
+  height:32px;
+  border:1px solid rgba(255,255,255,.2);
+  border-radius:8px;
+  background:#0d3551;
+  color:#def4ff;
+  font-size:.54rem;
+  font-weight:1000;
+  letter-spacing:.04em;
+  cursor:pointer;
+}
+.dev-presentation-header-actions .lab-header-button:hover { border-color:#ffd166; color:#fff1b6; }
+.dev-presentation-header-actions .lab-close-button {
+  width:32px;
+  padding:0;
+  border-radius:50%;
+  color:white;
+  font-size:1.15rem;
+}
 .dev-presentation-controls>p { margin:0;color:#9eb8c6;font-size:.62rem;line-height:1.35; }
 
 .dev-presentation-control-row { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px; }
@@ -87,9 +124,58 @@
 .dev-presentation-actions button:disabled { opacity:.35;cursor:default; }
 .dev-presentation-actions button.clear { background:#35202a;color:#ffbdc3; }
 
+
+.dev-presentation-test-dock {
+  position: fixed;
+  left: 50%;
+  bottom: 12px;
+  z-index: 1270;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: calc(100vw - 24px);
+  padding: 7px 8px;
+  border: 1px solid rgba(255,255,255,.18);
+  border-radius: 999px;
+  background: rgba(4,20,31,.92);
+  box-shadow: 0 12px 36px rgba(0,0,0,.48);
+  backdrop-filter: blur(12px);
+}
+.dev-presentation-test-dock span {
+  padding: 0 6px;
+  color: #7ee7ff;
+  font-size: .54rem;
+  font-weight: 1000;
+  letter-spacing: .12em;
+  white-space: nowrap;
+}
+.dev-presentation-test-dock button {
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid rgba(255,255,255,.16);
+  border-radius: 999px;
+  background: #0b3652;
+  color: #def4ff;
+  font-size: .52rem;
+  font-weight: 1000;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.dev-presentation-test-dock button:hover { border-color:#ffd166; color:#fff1b6; }
+.dev-presentation-lab.presentation-test-mode .dev-board-presentation,
+.dev-presentation-lab.presentation-test-mode .dev-board-presentation > .board-presentation-mode {
+  width: 100%;
+  height: 100%;
+}
+
+
 @media (max-width: 760px) {
   .dev-presentation-trigger { left: 80px; bottom: 8px; }
   .dev-presentation-controls { top:8px;right:8px;width:min(350px,calc(100vw - 16px));max-height:46dvh; }
+  .dev-presentation-test-dock { bottom:8px; gap:4px; padding:5px 6px; }
+  .dev-presentation-test-dock span { display:none; }
+  .dev-presentation-test-dock button { min-height:28px; padding:0 8px; font-size:.48rem; }
   .dev-presentation-control-row { grid-template-columns:repeat(3,minmax(0,1fr)); }
   .dev-presentation-actions { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .dev-presentation-surface .presentation-question { padding:18px; }
