@@ -81,7 +81,7 @@ export function triggerScoreImpactEffect({ scoreTarget, effect, delta, reducedMo
   );
   if (shouldReduceMotion) scoreTarget.classList.add('score-impact-reduced');
 
-  let timer = window.setTimeout(cleanup, shouldReduceMotion ? 220 : 900);
+  const timer = window.setTimeout(cleanup, shouldReduceMotion ? 220 : 900);
   function cleanup() {
     window.clearTimeout(timer);
     layer.remove();
