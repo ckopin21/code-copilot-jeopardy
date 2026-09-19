@@ -105,18 +105,6 @@ export const FRAME_STYLES = [
 ] as const;
 export type PlayerFrameStyle = typeof FRAME_STYLES[number]['id'];
 
-export const PLAYER_TITLES = [
-  { id: 'none', label: 'No title' },
-  { id: 'wildcard', label: 'Wildcard' },
-  { id: 'speed-demon', label: 'Speed Demon' },
-  { id: 'professor', label: 'Professor' },
-  { id: 'clutch', label: 'Clutch' },
-  { id: 'night-owl', label: 'Night Owl' },
-  { id: 'chaos-agent', label: 'Chaos Agent' },
-  { id: 'ace', label: 'Ace' }
-] as const;
-export type PlayerTitle = typeof PLAYER_TITLES[number]['id'];
-
 export const BUZZER_SOUNDS = [
   { id: 'classic', label: 'Classic' },
   { id: 'laser', label: 'Laser' },
@@ -142,7 +130,6 @@ export type PlayerVictoryEffect = typeof VICTORY_EFFECTS[number]['id'];
 export interface PlayerCustomizationFields {
   avatarId?: string;
   frameStyle?: PlayerFrameStyle;
-  title?: PlayerTitle;
   buzzerSound?: PlayerBuzzerSound;
   scoreEffect?: PlayerScoreEffect;
   victoryEffect?: PlayerVictoryEffect;
@@ -151,7 +138,6 @@ export interface PlayerCustomizationFields {
 export const DEFAULT_PLAYER_CUSTOMIZATION = {
   avatarId: 'fox',
   frameStyle: 'clean',
-  title: 'wildcard',
   buzzerSound: 'classic',
   scoreEffect: 'pulse',
   victoryEffect: 'confetti'
@@ -165,16 +151,10 @@ export function getAvatarOption(avatarId?: string | null): AvatarOption {
   return AVATAR_CATALOG.find((avatar) => avatar.id === avatarId) ?? AVATAR_CATALOG[0];
 }
 
-export function getPlayerTitleLabel(title?: string | null): string | null {
-  const item = PLAYER_TITLES.find((candidate) => candidate.id === title);
-  return !item || item.id === 'none' ? null : item.label;
-}
-
 export function normalizePlayerCustomization(value: PlayerCustomizationFields | null | undefined): Required<PlayerCustomizationFields> {
   return {
     avatarId: getAvatarOption(value?.avatarId).id,
     frameStyle: optionId(FRAME_STYLES, value?.frameStyle, DEFAULT_PLAYER_CUSTOMIZATION.frameStyle) as PlayerFrameStyle,
-    title: optionId(PLAYER_TITLES, value?.title, DEFAULT_PLAYER_CUSTOMIZATION.title) as PlayerTitle,
     buzzerSound: optionId(BUZZER_SOUNDS, value?.buzzerSound, DEFAULT_PLAYER_CUSTOMIZATION.buzzerSound) as PlayerBuzzerSound,
     scoreEffect: optionId(SCORE_EFFECTS, value?.scoreEffect, DEFAULT_PLAYER_CUSTOMIZATION.scoreEffect) as PlayerScoreEffect,
     victoryEffect: optionId(VICTORY_EFFECTS, value?.victoryEffect, DEFAULT_PLAYER_CUSTOMIZATION.victoryEffect) as PlayerVictoryEffect
