@@ -659,6 +659,42 @@ export async function emitAck<T = unknown>(event: string, payload: unknown): Pro
   const result = currentMode() === 'host' ? await hostRequest(event, body) : await clientRequest(event, body);
   return result as T;
 }
+
+function requireUiAuditMode(): void {
+  if (new URLSearchParams(location.search).get('uiAudit') !== '1') throw new Error('Local UI audit helpers are disabled');
+}
+
+/** CI/playtest-only helper. Seeds real engine player records without depending on public PeerJS signaling. */
+export function seedLocalUiAuditPlayers(roomCode: string): PlayerJoinCredentials[] {
+  requireUiAuditMode();
+  const names = [
+    'Alexandria Montgomery',
+    'Christopher Rodriguez',
+    'Maximilian Kensington',
+    'Samantha OCallaghan',
+    'Benjamin Fitzpatrick'
+  ];
+  const avatars = ['🐯', '🦊', '🐼', '🐸', '🦁'];
+  const accents = ['#FFB703', '#4CC9F0', '#B5179E', '#70E000', '#F72585'];
+  const credentials = names.map((name, index) => engine.joinPlayer(roomCode, {
+    name,
+    avatar: avatars[index],
+    accent: accents[index]
+  }));
+  emitRoom(roomCode);
+  return credentials;
+}
+
+/** CI/playtest-only direct dispatch for seeded player actions. Uses the production game engine paths. */
+export async function emitLocalUiAuditAck<T = unknown>(event: string, payload: unknown): Promise<T> {
+  requireUiAuditMode();
+  const body = (payload ?? {}) as Record<string, unknown>;
+  const result = await dispatchHost(event, body);
+  const roomCode = String(body.roomCode ?? '').toUpperCase();
+  if (roomCode) emitRoom(roomCode);
+  return result as T;
+}
+
 function jsonResponse(value: unknown, status = 200): Response {
   return new Response(JSON.stringify(value), { status, headers: { 'content-type': 'application/json' } });
 }
