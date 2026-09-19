@@ -33,14 +33,6 @@
   animation: centeredStatusColdPulse .9s ease-in-out infinite alternate !important;
 }
 
-.score.score-impact-pulse-correct {
-  animation: scorePulseGood .5s cubic-bezier(.16,.9,.2,1.2) both;
-}
-
-.score.score-impact-pulse-wrong {
-  animation: scorePulseBad .5s cubic-bezier(.16,.9,.2,1.2) both;
-}
-
 .join-form-v2 .primary-button[aria-busy="true"] {
   opacity: .5;
   filter: grayscale(.55);
