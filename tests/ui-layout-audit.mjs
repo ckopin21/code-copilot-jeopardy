@@ -1,3 +1,4 @@
+/* global process, fetch, console, setTimeout, clearTimeout, window, document, innerWidth, innerHeight, getComputedStyle, localStorage */
 import { chromium } from 'playwright';
 import { spawn } from 'node:child_process';
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -20,7 +21,7 @@ async function waitForServer() {
     try {
       const response = await fetch(baseUrl);
       if (response.ok) return;
-    } catch {}
+    } catch { /* retry until the dev server is ready */ }
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
   throw new Error(`Vite did not start.\n${serverLog}`);
@@ -33,7 +34,7 @@ function safeName(value) {
 async function capture(page, label) {
   try {
     await page.screenshot({ path: `${artifactDir}/${safeName(label)}.png`, fullPage: true });
-  } catch {}
+  } catch { /* screenshots are best-effort diagnostics */ }
 }
 
 async function auditLayout(page, label) {
