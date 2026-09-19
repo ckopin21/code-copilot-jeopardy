@@ -495,6 +495,7 @@ for (const [label, effect, particles] of [
     await page.getByRole('button', { name: 'Open developer mode' }).click();
     const panel = page.locator('.dev-mode-panel');
     await expect(panel).toBeVisible();
+    await panel.getByRole('button', { name: 'P1', exact: true }).click();
 
     const setEffect = async () => {
       await page.locator('[data-player-id="dev-player-1"]').evaluateAll((surfaces, selectedEffect) => {
@@ -511,6 +512,7 @@ for (const [label, effect, particles] of [
     let layer = scoreTarget.locator(`.score-impact-layer[data-score-effect="${effect}"][data-polarity="positive"]`);
     await expect(layer).toHaveCount(1);
     expect(await layer.locator('i').count()).toBe(particles);
+    await expect(scoreTarget).toHaveText('1,100');
     await expect(scoreTarget).not.toHaveClass(/score-impact-active/, { timeout: 3500 });
 
     await setEffect();
@@ -519,6 +521,7 @@ for (const [label, effect, particles] of [
     layer = scoreTarget.locator(`.score-impact-layer[data-score-effect="${effect}"][data-polarity="negative"]`);
     await expect(layer).toHaveCount(1);
     expect(await layer.locator('i').count()).toBe(particles);
+    await expect(scoreTarget).toHaveText('1,000');
   });
 }
 
@@ -528,6 +531,7 @@ test('score effects use a reduced-motion fallback without animation', async ({ p
   await page.goto('/?mode=host&fresh=1');
   await page.getByRole('button', { name: 'Open developer mode' }).click();
   const panel = page.locator('.dev-mode-panel');
+  await panel.getByRole('button', { name: 'P1', exact: true }).click();
   await page.locator('[data-player-id="dev-player-1"]').evaluateAll((surfaces) => {
     for (const surface of surfaces) {
       if (surface instanceof HTMLElement) surface.dataset.scoreEffect = 'wave';
