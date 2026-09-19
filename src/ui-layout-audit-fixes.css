@@ -164,10 +164,12 @@
 
 .question-tile.used.has-result .used-result-chip > b > .player-avatar-art {
   flex: 0 0 auto;
-  width: clamp(22px, 2.2vw, 34px) !important;
-  height: clamp(22px, 2.2vw, 34px) !important;
+  width: 1.7em !important;
+  height: 1.7em !important;
+  max-width: 28px !important;
+  max-height: 28px !important;
   aspect-ratio: 1 / 1;
-  font-size: clamp(1rem, 1.7vw, 1.45rem) !important;
+  font-size: 1.45em !important;
 }
 
 .question-tile.used.has-result .used-result-chip > b > span {
@@ -179,8 +181,10 @@
 .presentation-board .question-tile.used.has-result .used-result-chip > b > .player-avatar-art,
 .presentation-board-fill .question-tile.used.has-result .used-result-chip > b > .player-avatar-art,
 .board-presentation-mode .question-tile.used.has-result .used-result-chip > b > .player-avatar-art {
-  width: clamp(24px, 2.1vh, 36px) !important;
-  height: clamp(24px, 2.1vh, 36px) !important;
+  width: 1.65em !important;
+  height: 1.65em !important;
+  max-width: 32px !important;
+  max-height: 32px !important;
 }
 
 /* Podium names may use a second line instead of disappearing behind ellipsis. */
