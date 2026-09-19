@@ -13,7 +13,7 @@
     "pretypecheck": "npm run packs:sync",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "pretest": "npm run packs:sync",
-    "test": "vitest run",
+    "test": "vitest run tests",
     "test:watch": "vitest",
     "lint": "eslint .",
     "prebuild": "npm run packs:sync",
