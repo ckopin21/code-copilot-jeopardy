@@ -8,6 +8,7 @@ import { PlayerStrip } from './PlayerStrip';
 import { ScoreFlight, type ScoreFlightState } from './ScoreFlight';
 import { ComebackBoostNotice } from './ComebackBoostNotice';
 import { useOutsideDismiss } from '../lib/useOutsideDismiss';
+import { DevPresentationLab, buildDevPresentationRoom } from './DevPresentationLab';
 
 type CardState = 'ready' | 'active' | 'fire' | 'cold';
 type RevealBeat = 0 | 1 | 2 | 3 | 4;
@@ -47,11 +48,25 @@ export function DevModeOverlay() {
   const [transition, setTransition] = useState<TransitionPreview>(null);
   const [revealBeat, setRevealBeat] = useState<RevealBeat>(0);
   const [showComebackBanner, setShowComebackBanner] = useState(false);
+  const [nativeVisualFullscreen, setNativeVisualFullscreen] = useState(false);
+  const [fallbackVisualFullscreen, setFallbackVisualFullscreen] = useState(false);
+  const [visualPresentationMode, setVisualPresentationMode] = useState(false);
+  const [visualToolbarOpen, setVisualToolbarOpen] = useState(true);
   const timersRef = useRef<number[]>([]);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const panelRef = useRef<HTMLElement | null>(null);
+  const visualLabRef = useRef<HTMLElement | null>(null);
+  const visualToolbarRef = useRef<HTMLDivElement | null>(null);
+  const visualLabFullscreen = nativeVisualFullscreen || fallbackVisualFullscreen;
 
-  useOutsideDismiss(open, () => setOpen(false), panelRef, triggerRef);
+  useOutsideDismiss(open && !visualLabFullscreen, () => setOpen(false), panelRef, triggerRef);
+  useOutsideDismiss(
+    visualLabFullscreen && visualToolbarOpen,
+    () => setVisualToolbarOpen(false),
+    visualToolbarRef,
+    undefined,
+    { dismissOnEscape: false }
+  );
 
   useEffect(() => {
     const onState = (snapshot: RoomSnapshot) => setRoom(snapshot);
@@ -62,6 +77,40 @@ export function DevModeOverlay() {
   useEffect(() => () => {
     timersRef.current.forEach((timer) => window.clearTimeout(timer));
   }, []);
+
+  useEffect(() => {
+    const syncFullscreen = () => {
+      const active = document.fullscreenElement === visualLabRef.current;
+      setNativeVisualFullscreen(active);
+      if (!active) {
+        setVisualPresentationMode(false);
+        setVisualToolbarOpen(true);
+      }
+    };
+    document.addEventListener('fullscreenchange', syncFullscreen);
+    return () => document.removeEventListener('fullscreenchange', syncFullscreen);
+  }, []);
+
+  useEffect(() => {
+    if (!fallbackVisualFullscreen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      setFallbackVisualFullscreen(false);
+      setVisualPresentationMode(false);
+      setVisualToolbarOpen(true);
+      clearVisualPreviews();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  });
+
+  useEffect(() => {
+    if (open) return;
+    setFallbackVisualFullscreen(false);
+    setVisualPresentationMode(false);
+    setVisualToolbarOpen(true);
+    if (document.fullscreenElement === visualLabRef.current) void document.exitFullscreen();
+  }, [open]);
 
   const scenarioInput = useMemo(() => ({
     playerCount,
@@ -75,6 +124,11 @@ export function DevModeOverlay() {
 
   const analysis = useMemo(() => analyzeDevScenario(scenarioInput), [scenarioInput]);
   const matrix = useMemo(() => QUESTION_VALUES.map((value) => analyzeDevScenario({ ...scenarioInput, clueValue: value })), [scenarioInput]);
+  const presentationRoom = useMemo(() => buildDevPresentationRoom(analysis.room, lateMultiplier), [analysis.room, lateMultiplier]);
+  const presentationQuestionId = useMemo(
+    () => presentationRoom.board?.questions.find((question) => !question.used)?.questionId ?? 'dev-question',
+    [presentationRoom.board]
+  );
 
   const displayPlayers = useMemo(() => analysis.room.players.map((player) => {
     if (player.id !== analysis.player.id) return player;
@@ -150,7 +204,7 @@ export function DevModeOverlay() {
       : analysis.wrongValue;
     setFlight({
       id: `dev-flight-${Date.now()}`,
-      questionId: 'dev-question',
+      questionId: visualLabFullscreen && visualPresentationMode ? presentationQuestionId : 'dev-question',
       playerId: analysis.player.id,
       delta,
       correct,
@@ -202,6 +256,40 @@ export function DevModeOverlay() {
     setCardState('ready');
   };
 
+  const enterVisualFullscreen = async () => {
+    const lab = visualLabRef.current;
+    if (!lab) return;
+    clearVisualPreviews();
+    setVisualToolbarOpen(true);
+    setVisualPresentationMode(false);
+    if (lab.requestFullscreen) {
+      try {
+        await lab.requestFullscreen();
+        setNativeVisualFullscreen(document.fullscreenElement === lab);
+        return;
+      } catch {
+        // Fall through to a viewport-filling fallback when native fullscreen is blocked.
+      }
+    }
+    setFallbackVisualFullscreen(true);
+  };
+
+  const exitVisualFullscreen = async () => {
+    clearVisualPreviews();
+    setVisualPresentationMode(false);
+    setVisualToolbarOpen(true);
+    setFallbackVisualFullscreen(false);
+    if (document.fullscreenElement === visualLabRef.current && document.exitFullscreen) {
+      try {
+        await document.exitFullscreen();
+      } catch {
+        setNativeVisualFullscreen(false);
+      }
+    } else {
+      setNativeVisualFullscreen(false);
+    }
+  };
+
   const hostMode = new URLSearchParams(location.search).get('mode') === 'host';
   if (!hostMode) return null;
 
@@ -209,6 +297,20 @@ export function DevModeOverlay() {
   const selectedTurn = analysis.player.id;
   const comebackActive = analysis.comeback.multiplier > 1;
   const spectacleText = revealBeat === 1 ? 'LOCK IT IN' : revealBeat === 2 ? 'NO MORE CHANGES' : revealBeat === 3 ? 'THE ANSWER IS…' : 'REVEALED';
+  const renderAnimationButtons = () => <>
+    <button onClick={() => previewScore(true)}>Score +</button>
+    <button onClick={() => previewScore(false)}>Score −</button>
+    <button onClick={() => previewScore(true, true)}>Comeback flight</button>
+    <button onClick={() => previewModifier(2)}>2× reveal</button>
+    <button onClick={() => previewModifier(3)}>3× reveal</button>
+    <button onClick={previewFinalReveal}>Final reveal</button>
+    <button onClick={() => previewTransition('round')}>Round start</button>
+    <button onClick={() => previewTransition('daily')}>Daily Double</button>
+    <button onClick={() => previewTransition('final')}>Final Round</button>
+    <button onClick={() => previewTransition('results')}>Results</button>
+    <button disabled={!comebackActive} onClick={() => setShowComebackBanner((value) => !value)}>Comeback banner</button>
+    <button className="clear" onClick={clearVisualPreviews}>Clear previews</button>
+  </>;
 
   return <>
     <button ref={triggerRef} className={`dev-mode-trigger ${open ? 'active' : ''}`} onClick={() => setOpen((value) => !value)} aria-expanded={open} aria-label="Open developer mode">DEV</button>
@@ -267,35 +369,69 @@ export function DevModeOverlay() {
         <div className="dev-matrix" aria-label="Comeback value matrix"><div className="head"><span>Clue</span><span>Normal</span><span>Boost</span><span>Correct</span></div>{matrix.map((item) => <div key={item.room.currentQuestion!.baseValue}><span>{item.room.currentQuestion!.baseValue}</span><span>{item.normalValue}</span><span>{item.comeback.multiplier}×</span><span>{item.correctValue}</span></div>)}</div>
       </section>
 
-      <section className="dev-section">
-        <div className="dev-section-title"><strong>Visual & animation lab</strong><span>Actual production components / CSS</span></div>
-        <div className="dev-stage">
-          <PlayerStrip players={displayPlayers} activeId={selectedActive} turnId={selectedTurn} turnLabel="ON TURN" />
-          <div className="dev-question-source" data-question-id="dev-question"><small>DEV QUESTION</small><strong>{analysis.normalValue.toLocaleString()}</strong><span>{comebackActive ? `${analysis.normalValue.toLocaleString()} → ${analysis.correctValue.toLocaleString()} for ${analysis.player.name}` : 'Normal scoring'}</span></div>
-        </div>
-        <div className="dev-animation-grid">
-          <button onClick={() => previewScore(true)}>Score +</button>
-          <button onClick={() => previewScore(false)}>Score −</button>
-          <button onClick={() => previewScore(true, true)}>Comeback flight</button>
-          <button onClick={() => previewModifier(2)}>2× reveal</button>
-          <button onClick={() => previewModifier(3)}>3× reveal</button>
-          <button onClick={previewFinalReveal}>Final reveal</button>
-          <button onClick={() => previewTransition('round')}>Round start</button>
-          <button onClick={() => previewTransition('daily')}>Daily Double</button>
-          <button onClick={() => previewTransition('final')}>Final Round</button>
-          <button onClick={() => previewTransition('results')}>Results</button>
-          <button disabled={!comebackActive} onClick={() => setShowComebackBanner((value) => !value)}>Comeback banner</button>
-          <button className="clear" onClick={clearVisualPreviews}>Clear previews</button>
-        </div>
+      <section
+        ref={visualLabRef}
+        className={`dev-section dev-visual-lab-section${nativeVisualFullscreen ? ' is-native-fullscreen' : ''}${fallbackVisualFullscreen ? ' is-fallback-fullscreen' : ''}`}
+        aria-label="Visual & animation lab"
+        data-dev-visual-lab-fullscreen={visualLabFullscreen ? 'true' : 'false'}
+      >
+        {!visualLabFullscreen ? <>
+          <div className="dev-section-title dev-visual-lab-title">
+            <strong>Visual & animation lab</strong>
+            <span>Actual production components / CSS</span>
+            <button type="button" className="dev-visual-fullscreen-button" onClick={() => void enterVisualFullscreen()} aria-label="Fullscreen Visual & animation lab">Fullscreen</button>
+          </div>
+          <div className="dev-stage">
+            <PlayerStrip players={displayPlayers} activeId={selectedActive} turnId={selectedTurn} turnLabel="ON TURN" />
+            <div className="dev-question-source" data-question-id="dev-question"><small>DEV QUESTION</small><strong>{analysis.normalValue.toLocaleString()}</strong><span>{comebackActive ? `${analysis.normalValue.toLocaleString()} → ${analysis.correctValue.toLocaleString()} for ${analysis.player.name}` : 'Normal scoring'}</span></div>
+          </div>
+          <div className="dev-animation-grid">{renderAnimationButtons()}</div>
+        </> : <>
+          <div className="dev-visual-fullscreen-canvas" data-mode={visualPresentationMode ? 'presentation' : 'lab'}>
+            <DevPresentationLab
+              mode={visualPresentationMode ? 'presentation' : 'lab'}
+              scenarioRoom={analysis.room}
+              presentationRoom={presentationRoom}
+              activePlayerId={analysis.player.id}
+              questionId="dev-question"
+              questionValue={analysis.normalValue}
+              correctValue={analysis.correctValue}
+              comebackActive={comebackActive}
+              onExitPresentationMode={() => {
+                clearVisualPreviews();
+                setVisualPresentationMode(false);
+                setVisualToolbarOpen(true);
+              }}
+            />
+          </div>
+
+          {visualToolbarOpen ? <div ref={visualToolbarRef} className="dev-visual-fullscreen-toolbar" role="toolbar" aria-label="Visual lab fullscreen controls">
+            <div className="dev-visual-toolbar-heading"><div><small>DEV · VISUAL LAB</small><strong>{visualPresentationMode ? 'Production presentation mode' : 'Fullscreen lab'}</strong></div><button type="button" onClick={() => setVisualToolbarOpen(false)} aria-label="Hide visual lab controls">×</button></div>
+            <div className="dev-visual-toolbar-modes">
+              <button
+                type="button"
+                className={visualPresentationMode ? 'active' : ''}
+                aria-pressed={visualPresentationMode}
+                onClick={() => {
+                  clearVisualPreviews();
+                  setVisualPresentationMode((value) => !value);
+                }}
+              >{visualPresentationMode ? 'Lab Mode' : 'Presentation Mode'}</button>
+              <button type="button" onClick={() => void exitVisualFullscreen()}>Exit Fullscreen</button>
+            </div>
+            <div className="dev-visual-toolbar-actions">{renderAnimationButtons()}</div>
+          </div> : <button type="button" className="dev-visual-toolbar-reopen" onClick={() => setVisualToolbarOpen(true)}>LAB CONTROLS</button>}
+        </>}
+
+        {flight && <ScoreFlight flight={flight} onImpact={() => {}} onComplete={() => setFlight(null)} />}
+        {showComebackBanner && comebackActive && <ComebackBoostNotice room={visualPresentationMode ? presentationRoom : analysis.room} surface="host" />}
+        {modifierPreview && <div className={`modifier-reveal-overlay x${modifierPreview}`} aria-live="polite"><div className="modifier-reveal-card"><span>{modifierPreview === 2 ? 'FINAL SIX' : 'FINAL THREE'}</span><strong>{modifierPreview === 2 ? 'DOUBLE POINTS' : 'TRIPLE POINTS'}</strong><p>{modifierPreview === 2 ? 'Every question is now worth 2×.' : 'Every remaining question is now worth 3×.'}</p></div></div>}
+        {revealBeat > 0 && <div className={`final-reveal-spectacle beat-${revealBeat}`} aria-live="assertive"><div className="final-reveal-card"><small>FINAL ROUND</small><strong>{spectacleText}</strong><div className="reveal-pulse-dots"><i/><i/><i/></div></div></div>}
+        {transition && <div className={`game-transition-overlay ${transition.categories ? 'category-transition' : ''}`} aria-live="polite"><section><small>{transition.eyebrow}</small><h1>{transition.title}</h1>{transition.detail && <p>{transition.detail}</p>}{transition.categories && <div className="category-intro-grid">{transition.categories.map((category, index) => <span key={category} style={{ '--intro-index': index } as React.CSSProperties}>{category}</span>)}</div>}</section></div>}
       </section>
 
       <footer className="dev-mode-footer"><button onClick={resetScenario}>Reset sandbox</button><span>Nothing in this panel changes scores, questions, turns, or room state.</span></footer>
     </aside>}
 
-    {flight && <ScoreFlight flight={flight} onImpact={() => {}} onComplete={() => setFlight(null)} />}
-    {showComebackBanner && comebackActive && <ComebackBoostNotice room={analysis.room} surface="host" />}
-    {modifierPreview && <div className={`modifier-reveal-overlay x${modifierPreview}`} aria-live="polite"><div className="modifier-reveal-card"><span>{modifierPreview === 2 ? 'FINAL SIX' : 'FINAL THREE'}</span><strong>{modifierPreview === 2 ? 'DOUBLE POINTS' : 'TRIPLE POINTS'}</strong><p>{modifierPreview === 2 ? 'Every question is now worth 2×.' : 'Every remaining question is now worth 3×.'}</p></div></div>}
-    {revealBeat > 0 && <div className={`final-reveal-spectacle beat-${revealBeat}`} aria-live="assertive"><div className="final-reveal-card"><small>FINAL ROUND</small><strong>{spectacleText}</strong><div className="reveal-pulse-dots"><i/><i/><i/></div></div></div>}
-    {transition && <div className={`game-transition-overlay ${transition.categories ? 'category-transition' : ''}`} aria-live="polite"><section><small>{transition.eyebrow}</small><h1>{transition.title}</h1>{transition.detail && <p>{transition.detail}</p>}{transition.categories && <div className="category-intro-grid">{transition.categories.map((category, index) => <span key={category} style={{ '--intro-index': index } as React.CSSProperties}>{category}</span>)}</div>}</section></div>}
   </>;
 }
