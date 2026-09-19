@@ -37,6 +37,39 @@ async function openBoardHarness(page, gameMode) {
   await page.locator('.dev-presentation-control-row select').first().selectOption('5');
 }
 
+for (const viewport of viewports) {
+  test(`desktop menu controls are centered and constrained at ${viewport.width}x${viewport.height}`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await page.goto('/');
+    await expect(page.locator('.showcase-menu .menu-mode-grid')).toBeVisible();
+
+    const geometry = await page.evaluate(() => {
+      const rect = (selector) => {
+        const element = document.querySelector(selector);
+        if (!(element instanceof HTMLElement)) throw new Error(`Missing ${selector}`);
+        const value = element.getBoundingClientRect();
+        return { left: value.left, width: value.width, height: value.height };
+      };
+      return {
+        hostSection: rect('.host-menu-section'),
+        hostActions: rect('.host-menu-actions'),
+        joinSection: rect('.player-menu-section'),
+        joinButton: rect('.join-game-button')
+      };
+    });
+
+    const centerOffset = (outer, inner) =>
+      Math.abs((inner.left + inner.width / 2) - (outer.left + outer.width / 2));
+
+    expect(centerOffset(geometry.hostSection, geometry.hostActions)).toBeLessThanOrEqual(2);
+    expect(centerOffset(geometry.joinSection, geometry.joinButton)).toBeLessThanOrEqual(2);
+    expect(geometry.hostActions.width).toBeLessThan(geometry.hostSection.width * 0.92);
+    expect(geometry.joinButton.width).toBeLessThan(geometry.joinSection.width * 0.94);
+    expect(geometry.joinButton.height).toBeGreaterThanOrEqual(88);
+    expect(geometry.joinButton.height).toBeLessThanOrEqual(132);
+  });
+}
+
 for (const gameMode of ['classic', 'free-response']) {
   for (const viewport of viewports) {
     test(`${gameMode} deterministic host and presentation boards fit at ${viewport.width}x${viewport.height}`, async ({ page }) => {
