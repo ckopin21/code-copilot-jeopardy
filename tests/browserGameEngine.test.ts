@@ -827,7 +827,7 @@ describe('BrowserGameEngine production state', () => {
     expect(confirmed.turnPlayerId).toBe(two.playerId);
   });
 
-  it('does not penalize only the selector when a Free Response timer expires', () => {
+  it('penalizes every Free Response participant who submits no answer', () => {
     const { engine, host } = setup({
       gameMode: 'free-response',
       dailyDoublesEnabled: false,
@@ -841,15 +841,27 @@ describe('BrowserGameEngine production state', () => {
     engine.startGame(host.roomCode, host.hostToken);
     const tile = firstUnused(engine, host.roomCode);
     engine.selectQuestion(host.roomCode, host.hostToken, tile.questionId);
+    const value = engine.snapshot(host.roomCode).currentQuestion!.effectiveValue;
     const endsAt = engine.snapshot(host.roomCode).timer.endsAt!;
 
     engine.tick(endsAt + 1);
 
-    const state = engine.snapshot(host.roomCode);
-    expect(state.currentQuestion?.answerRevealed).toBe(true);
-    expect(state.currentQuestion?.responsesClosed).toBe(true);
-    expect(state.players.find((player) => player.id === one.playerId)?.score).toBe(0);
-    expect(state.players.find((player) => player.id === two.playerId)?.score).toBe(0);
+    const revealed = engine.snapshot(host.roomCode);
+    expect(revealed.currentQuestion?.answerRevealed).toBe(true);
+    expect(revealed.currentQuestion?.responsesClosed).toBe(true);
+    expect(revealed.players.find((player) => player.id === one.playerId)?.score).toBe(0);
+    expect(revealed.players.find((player) => player.id === two.playerId)?.score).toBe(0);
+
+    engine.confirmTextResponses(host.roomCode, host.hostToken);
+
+    const confirmed = engine.snapshot(host.roomCode);
+    const first = confirmed.players.find((player) => player.id === one.playerId)!;
+    const second = confirmed.players.find((player) => player.id === two.playerId)!;
+    expect(first.score).toBe(-value);
+    expect(second.score).toBe(-value);
+    expect(first.stats.incorrect).toBe(1);
+    expect(second.stats.incorrect).toBe(1);
+    expect(confirmed.phase).toBe('board');
   });
 
 
