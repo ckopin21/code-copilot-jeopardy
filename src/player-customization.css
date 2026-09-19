@@ -245,19 +245,31 @@
   padding: 5px 8px !important;
 }
 
-.phone-header-v2 .phone-avatar-art { width: 45px; }
+.phone-header-v2 .phone-avatar-art { width: 38px; }
 .ready-ring .player-avatar-art { width: 74px; }
 .phone-recap-hero .player-avatar-art { width: 72px; }
 .player-avatar-large .player-avatar-art,
 .presentation-player-avatar .player-avatar-art,
 .roster-avatar .player-avatar-art,
-.podium-avatar .player-avatar-art,
-.recap-player-heading > .player-avatar-art,
-.winner-chip > .player-avatar-art,
-.presentation-final-player > .player-avatar-art {
+.podium-avatar .player-avatar-art {
   width: 100%;
   height: 100%;
 }
+.recap-player-heading > .player-avatar-art { width: 42px; height: 42px; }
+.winner-chip > .player-avatar-art { width: 34px; height: 34px; }
+.presentation-final-player > span .player-avatar-art { width: 64px; height: 64px; }
+.presentation-lock-status .player-avatar-art,
+.presentation-scores-v2 .player-avatar-art { width: 28px; height: 28px; vertical-align: middle; }
+.presentation-lock-status > span,
+.presentation-scores-v2 > div > span { display: flex; align-items: center; gap: 7px; }
+.presentation-winner-identity {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  color: #f7d66f;
+}
+.presentation-winner-identity > .player-avatar-art { width: 96px; height: 96px; }
+.presentation-winner-identity > h1 { margin: 0; font-family: 'Oswald', sans-serif; font-size: clamp(3rem,8vw,7rem); line-height: .95; }
 .player-avatar-large,
 .presentation-player-avatar,
 .roster-avatar,
