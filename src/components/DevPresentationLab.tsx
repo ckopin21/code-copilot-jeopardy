@@ -7,6 +7,7 @@ import { ScoreFlight, type ScoreFlightState } from './ScoreFlight';
 import { ComebackBoostNotice } from './ComebackBoostNotice';
 import { Board } from './Board';
 import { BoardPresentation } from './BoardPresentation';
+import { useOutsideDismiss } from '../lib/useOutsideDismiss';
 
 type RevealBeat = 0 | 1 | 2 | 3 | 4;
 type TransitionPreview = { eyebrow: string; title: string; detail?: string; categories?: string[] } | null;
@@ -118,6 +119,11 @@ export function DevPresentationLab() {
   const [controlsOpen, setControlsOpen] = useState(true);
   const timersRef = useRef<number[]>([]);
   const labRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const controlsRef = useRef<HTMLElement | null>(null);
+
+  useOutsideDismiss(open && controlsOpen && !presentationTestMode, () => setOpen(false), controlsRef, triggerRef);
+  useOutsideDismiss(open && controlsOpen && presentationTestMode, () => setControlsOpen(false), controlsRef);
 
   const analysis = useMemo(() => analyzeDevScenario({
     playerCount,
@@ -241,7 +247,7 @@ export function DevPresentationLab() {
     : 'What would this question look like on the presentation screen?';
 
   return <>
-    <button className={`dev-presentation-trigger ${open ? 'active' : ''}`} onClick={() => setOpen(true)} aria-label="Open presentation visual lab">PRES LAB</button>
+    <button ref={triggerRef} className={`dev-presentation-trigger ${open ? 'active' : ''}`} onClick={() => setOpen(true)} aria-label="Open presentation visual lab">PRES LAB</button>
 
     {open && <div ref={labRef} className={`dev-presentation-lab${isFullscreen ? ' is-native-fullscreen' : ''}${presentationTestMode ? ' presentation-test-mode' : ''}`} role="dialog" aria-modal="true" aria-label="Presentation visual and animation lab">
       {previewSurface === 'question' && <main className="presentation-shell dev-presentation-surface">
@@ -275,7 +281,7 @@ export function DevPresentationLab() {
         <BoardPresentation room={boardRoom} onBack={() => {}} onSelect={() => {}} onReview={() => {}} />
       </main>}
 
-      {controlsOpen && <aside className="dev-presentation-controls">
+      {controlsOpen && <aside ref={controlsRef} className="dev-presentation-controls">
         <header>
           <div><small>DEV · PRESENTATION VIEW</small><strong>Visual & Animation Lab</strong></div>
           <div className="dev-presentation-header-actions">
