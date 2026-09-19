@@ -1,0 +1,177 @@
+/* Comprehensive dynamic UI layout repair pass. Loaded last. */
+
+/* Never truncate player identity or state in scoreboards. */
+.presentation-player-main strong,
+.presentation-player-main small,
+.presentation-name-card strong,
+.showcase-player-card .player-name,
+.showcase-player-card .player-name strong,
+.streak-ribbon b,
+.streak-ribbon em,
+.showcase-player-card.is-turn .turn-beacon,
+.showcase-player-card.is-turn .turn-beacon b,
+.podium-name {
+  overflow: visible !important;
+  text-overflow: clip !important;
+  white-space: normal !important;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+.presentation-player-main,
+.showcase-player-card .player-card-main {
+  min-width: 0;
+}
+
+.presentation-name-card {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.presentation-player-main {
+  align-content: center;
+}
+
+/* Five-player presentation layouts keep status text instead of hiding it. */
+@media (max-width: 1100px) and (min-width: 760px) {
+  .presentation-name-strip[data-player-count="5"] .presentation-player-main small {
+    display: block !important;
+    font-size: clamp(.48rem, .75vw, .58rem) !important;
+    line-height: 1.05;
+  }
+}
+
+/* Put turn + streak state into real card space. */
+.showcase-player-card .player-status-stack {
+  position: static !important;
+  inset: auto !important;
+  transform: none !important;
+  grid-column: 3;
+  grid-row: 1;
+  align-self: center;
+  justify-self: end;
+  max-width: min(150px, 34%);
+  min-width: 0;
+}
+
+.showcase-player-card .player-status-stack .streak-ribbon,
+.showcase-player-card .player-status-stack .turn-beacon {
+  position: static !important;
+  transform: none !important;
+  max-width: 100% !important;
+  white-space: normal !important;
+}
+
+.showcase-player-card.is-turn:is(.is-fire,.is-cold) {
+  padding-right: clamp(10px, 1.1vw, 18px) !important;
+}
+
+/* Used-result tiles reserve their top row and allow identity/badges to wrap. */
+.question-tile.used.has-result .used-tile-result {
+  grid-template-rows: auto minmax(0, 1fr) !important;
+}
+
+.question-tile.used.has-result .used-tile-topline {
+  position: static !important;
+  min-height: 0 !important;
+  display: flex !important;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 4px 6px;
+}
+
+.question-tile.used.has-result .used-tile-value,
+.question-tile.used.has-result .used-question-modifiers {
+  position: static !important;
+  inset: auto !important;
+  transform: none !important;
+  max-width: 100% !important;
+}
+
+.question-tile.used.has-result .used-question-modifiers,
+.question-tile.used.has-result .used-result-modifiers {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  overflow: visible !important;
+  justify-content: center;
+}
+
+.question-tile.used.has-result .used-result-chip b {
+  overflow: visible !important;
+  text-overflow: clip !important;
+  white-space: normal !important;
+  overflow-wrap: anywhere;
+}
+
+/* Multi-response cards use dedicated rows rather than clipping long names/modifiers. */
+.presentation-board .used-result-list:has(.used-result-chip:nth-child(2)) .used-result-chip,
+.board-presentation-mode .used-result-list:has(.used-result-chip:nth-child(2)) .used-result-chip,
+.showcase-host:not(.host-presentation-mode) .question-tile.used.has-result .used-result-chip {
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  grid-template-rows: auto auto !important;
+  height: auto !important;
+}
+
+.presentation-board .used-result-list:has(.used-result-chip:nth-child(2)) .used-result-chip b,
+.board-presentation-mode .used-result-list:has(.used-result-chip:nth-child(2)) .used-result-chip b {
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+}
+
+.question-tile.used.has-result .used-result-modifiers {
+  grid-column: 1 / -1;
+}
+
+/* Board tiles and presentation boards consume available space without forcing content off-screen. */
+.showcase-host:not(.host-presentation-mode) .showcase-board-stage > .board,
+.presentation-board-fill .board,
+.presentation-shell > .presentation-board .board {
+  min-height: 0;
+  min-width: 0;
+}
+
+.presentation-board-fill .question-tile.used.has-result,
+.presentation-board .question-tile.used.has-result,
+.showcase-host:not(.host-presentation-mode) .question-tile.used.has-result {
+  overflow: visible !important;
+}
+
+/* Podium names may use a second line instead of disappearing behind ellipsis. */
+.podium-card {
+  min-width: 0;
+}
+.podium-name {
+  min-height: 2.2em;
+  display: grid;
+  place-items: center;
+  line-height: 1.05;
+}
+
+/* Keep final/review text inside its cards without destructive clipping. */
+.final-stage .question-card-v2,
+.final-response-v2 span,
+.answer-reveal-v2,
+.stake-banner-v2 {
+  min-width: 0;
+}
+.final-stage h1,
+.final-response-v2 strong,
+.answer-reveal-v2 strong,
+.stake-banner-v2 {
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+
+/* Short desktop heights scroll the state card itself rather than clipping content. */
+@media (min-width: 760px) and (max-height: 760px) {
+  .showcase-host > :is(.question-stage,.full-state,.recap-scene-v2) {
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+  }
+  .podium-scene {
+    overflow-y: auto !important;
+    align-content: start;
+  }
+}
