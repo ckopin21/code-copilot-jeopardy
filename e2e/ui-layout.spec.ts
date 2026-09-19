@@ -177,6 +177,84 @@ test('presentation lab dynamic overlays remain on-screen', async ({ page }) => {
   }
 });
 
+test('visual lab supports fullscreen presentation testing and outside dismissal', async ({ page }) => {
+  await page.addInitScript(() => {
+    let fakeFullscreenElement = null;
+    Object.defineProperty(document, 'fullscreenElement', {
+      configurable: true,
+      get: () => fakeFullscreenElement
+    });
+    Object.defineProperty(Element.prototype, 'requestFullscreen', {
+      configurable: true,
+      value: async function requestFullscreen() {
+        fakeFullscreenElement = this;
+        document.dispatchEvent(new Event('fullscreenchange'));
+      }
+    });
+    Object.defineProperty(document, 'exitFullscreen', {
+      configurable: true,
+      value: async () => {
+        fakeFullscreenElement = null;
+        document.dispatchEvent(new Event('fullscreenchange'));
+      }
+    });
+  });
+
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/?mode=host&fresh=1');
+  await page.getByRole('button', { name: 'Open presentation visual lab' }).click();
+
+  const lab = page.locator('.dev-presentation-lab');
+  await expect(lab).toBeVisible();
+
+  await page.getByRole('button', { name: 'Fullscreen visual lab' }).click();
+  await expect(lab).toHaveClass(/is-native-fullscreen/);
+
+  await page.getByRole('button', { name: 'PRESENTATION MODE', exact: true }).click();
+  await expect(lab).toHaveClass(/presentation-test-mode/);
+  await expect(page.locator('.dev-board-presentation .board-presentation-mode')).toBeVisible();
+  await expect(page.locator('.dev-presentation-controls')).toHaveCount(0);
+  await expect(page.getByRole('toolbar', { name: 'Presentation test controls' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'CONTROLS', exact: true }).click();
+  await expect(page.locator('.dev-presentation-controls')).toBeVisible();
+
+  await page.mouse.click(30, 300);
+  await expect(page.locator('.dev-presentation-controls')).toHaveCount(0);
+  await expect(lab).toBeVisible();
+
+  await page.getByRole('button', { name: 'EXIT FULLSCREEN', exact: true }).click();
+  await expect(lab).not.toHaveClass(/is-native-fullscreen/);
+
+  await page.getByRole('button', { name: 'EXIT TEST', exact: true }).click();
+  await expect(page.locator('.dev-presentation-controls')).toBeVisible();
+
+  await page.mouse.click(30, 300);
+  await expect(lab).toHaveCount(0);
+});
+
+test('dismissible host panels close when clicking outside', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/?mode=host&fresh=1');
+
+  await page.getByRole('button', { name: /Audio/ }).click();
+  await expect(page.locator('.audio-drawer')).toBeVisible();
+  await page.mouse.click(600, 400);
+  await expect(page.locator('.audio-drawer')).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Open developer mode' }).click();
+  await expect(page.locator('.dev-mode-panel')).toBeVisible();
+  await page.mouse.click(700, 400);
+  await expect(page.locator('.dev-mode-panel')).toHaveCount(0);
+
+  const hostControls = page.getByRole('button', { name: 'Open host controls' });
+  await expect(hostControls).toBeVisible();
+  await hostControls.click();
+  await expect(page.locator('.host-command-drawer')).toBeVisible();
+  await page.mouse.click(700, 400);
+  await expect(page.locator('.host-command-drawer')).toHaveCount(0);
+});
+
 
 const phoneViewports = [
   { width: 360, height: 640 },
