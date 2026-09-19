@@ -6,6 +6,7 @@ import { audio } from '../lib/audio';
 import { readAccessibility, saveAccessibility, type AccessibilityPreferences } from '../lib/accessibility';
 import { readActiveHostCredentials } from '../lib/hostCredentials';
 import { ComebackBoostNotice } from './ComebackBoostNotice';
+import { useOutsideDismiss } from '../lib/useOutsideDismiss';
 type TransitionCard = { key: string; eyebrow: string; title: string; detail?: string; categories?: string[] };
 
 function readCredentials(): HostRoomCredentials | null {
@@ -39,6 +40,10 @@ export function HostEnhancements() {
   const lastGameStartedRef = useRef<number | null>(null);
   const transitionHydratedRef = useRef(false);
   const transitionTimerRef = useRef<number | null>(null);
+  const commandTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const commandDrawerRef = useRef<HTMLElement | null>(null);
+
+  useOutsideDismiss(drawerOpen && !preflightOpen, () => setDrawerOpen(false), commandDrawerRef, commandTriggerRef);
 
   useEffect(() => {
     const syncCredentials = () => {
@@ -186,11 +191,11 @@ export function HostEnhancements() {
 
   return <>
     <ComebackBoostNotice room={room} surface="host" />
-    <button className="host-command-trigger" onClick={() => setDrawerOpen((open) => !open)} aria-expanded={drawerOpen} aria-label="Open host controls">
+    <button ref={commandTriggerRef} className="host-command-trigger" onClick={() => setDrawerOpen((open) => !open)} aria-expanded={drawerOpen} aria-label="Open host controls">
       <span>HOST</span><b>{connectedCount}</b>
     </button>
 
-    {drawerOpen && <aside className="host-command-drawer" aria-label="Host control panel">
+    {drawerOpen && <aside ref={commandDrawerRef} className="host-command-drawer" aria-label="Host control panel">
       <header><div><small>CONTROL PANEL</small><strong>Room {room.code}</strong></div><button onClick={() => setDrawerOpen(false)} aria-label="Close">×</button></header>
 
       <section className="host-command-section recovery-status">

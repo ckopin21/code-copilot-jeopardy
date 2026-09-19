@@ -768,7 +768,7 @@ export function HostAppV3() {
 
       {showJoin && <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Join game" onClick={() => setShowJoin(false)}><section className="modal-card join-modal-v2 expanded-qr-modal" onClick={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setShowJoin(false)} aria-label="Close">×</button><div className="section-kicker">JOIN GAME</div>{qr && <img src={qr} alt="QR code to join or reconnect to the game" />}<strong className="modal-room-code">{room.code}</strong><a href={credentials.joinUrl}>{credentials.joinUrl}</a><p>Returning players reconnect to the same reserved seat on the same phone and browser.</p></section></div>}
 
-      {reviewId && <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Question review"><section className="modal-card review-modal-v2"><button className="modal-close" onClick={() => setReviewId(null)} aria-label="Close">×</button>{(() => {
+      {reviewId && <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Question review" onClick={() => setReviewId(null)}><section className="modal-card review-modal-v2" onClick={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setReviewId(null)} aria-label="Close">×</button>{(() => {
         const entry = historyEntries.find((item) => item.questionId === reviewId);
         const tile = room.board?.questions.find((item) => item.questionId === reviewId);
         if (!entry) return <><div className="section-kicker">USED QUESTION</div><h2>{tile?.category}</h2><p>No answer history was recorded for this question.</p></>;
