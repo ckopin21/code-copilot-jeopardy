@@ -27,6 +27,7 @@ import './presentation-readability.css';
 import './presentation-micro-polish.css';
 import './game-ui-polish-v2.css';
 import './game-modes.css';
+import './normal-host-layout.css';
 
 applyMusicVolumePolicy();
 installModeAwareAudioPolicy();
