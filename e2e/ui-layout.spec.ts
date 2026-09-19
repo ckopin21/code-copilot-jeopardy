@@ -345,6 +345,25 @@ async function assertEffectPreviewContained(page) {
   expect(result.clipped).toBe(true);
 }
 
+async function assertScorePreviewCentered(page) {
+  const geometry = await page.locator('[data-testid="effect-preview-slot"]').evaluate((slot) => {
+    if (!(slot instanceof HTMLElement)) throw new Error('Missing effect preview slot');
+    const score = slot.querySelector('.effect-preview-score');
+    if (!(score instanceof HTMLElement)) throw new Error('Missing score preview');
+    const slotRect = slot.getBoundingClientRect();
+    const scoreRect = score.getBoundingClientRect();
+    return {
+      position: getComputedStyle(score).position,
+      centerXDelta: Math.abs((scoreRect.left + scoreRect.width / 2) - (slotRect.left + slotRect.width / 2)),
+      centerYDelta: Math.abs((scoreRect.top + scoreRect.height / 2) - (slotRect.top + slotRect.height / 2))
+    };
+  });
+
+  expect(geometry.position).toBe('absolute');
+  expect(geometry.centerXDelta).toBeLessThanOrEqual(1);
+  expect(geometry.centerYDelta).toBeLessThanOrEqual(1);
+}
+
 async function assertAvatarFrameCentered(page, selector = '[data-testid="player-customization-preview"] .player-avatar-art') {
   const geometry = await page.locator(selector).first().evaluate((avatar) => {
     if (!(avatar instanceof HTMLElement)) throw new Error('Missing avatar');
@@ -420,6 +439,7 @@ async function readJoinLayout(page) {
 
     const preview = required('[data-testid="player-customization-preview"]');
     const previewAvatar = required('.customization-preview-avatar');
+    const previewCopy = required('.customization-preview-copy');
     const accentBar = required('.customization-accent-bar');
     const tabs = required('.customization-tabs');
     const tabRects = Array.from(tabs.querySelectorAll('button')).map((button) => box(button));
@@ -457,6 +477,7 @@ async function readJoinLayout(page) {
       customizer: box(required('.player-customizer')),
       preview: box(preview),
       previewAvatar: box(previewAvatar),
+      previewCopy: box(previewCopy),
       accentBar: box(accentBar),
       tabs: box(tabs),
       tabRects,
@@ -493,6 +514,7 @@ async function assertJoinScreenGeometry(page) {
   expect(Math.abs(layout.brand.centerX - layout.card.centerX)).toBeLessThanOrEqual(1.5);
   expect(Math.abs(layout.backButton.centerX - layout.card.centerX)).toBeLessThanOrEqual(1.5);
   expect(Math.abs(layout.previewAvatar.centerY - layout.preview.centerY)).toBeLessThanOrEqual(1.5);
+  expect(layout.previewCopy.left - layout.previewAvatar.right).toBeGreaterThanOrEqual(5);
   expect(Math.abs(layout.accentBar.centerY - layout.preview.centerY)).toBeLessThanOrEqual(1.5);
   expect(Math.abs(layout.codeInput.bottom - layout.scanButton.bottom)).toBeLessThanOrEqual(1);
   expect(Math.abs(layout.codeInput.height - layout.scanButton.height)).toBeLessThanOrEqual(1);
@@ -579,6 +601,8 @@ for (const viewport of phoneViewports) {
 
     const tabSizesBefore = await elementSizes(page, '.customization-tabs button');
     await page.getByRole('tab', { name: 'Style' }).click();
+    await expect(page.getByRole('button', { name: 'Clean', exact: true })).toHaveCount(0);
+    await expect(preview.locator('[data-frame="halo"]')).toBeVisible();
     const tabSizesAfter = await elementSizes(page, '.customization-tabs button');
     expect(tabSizesAfter).toEqual(tabSizesBefore);
     const styleLayout = await assertJoinScreenGeometry(page);
@@ -596,6 +620,12 @@ for (const viewport of phoneViewports) {
     await expect(page.locator('.player-title-badge')).toHaveCount(0);
     await expect(preview.locator('[data-frame="halo"]')).toBeVisible();
     await assertAvatarFrameCentered(page);
+    const mobileAvatarOffset = await preview.locator('.customization-preview-avatar').evaluate((avatar) => ({
+      left: Number.parseFloat(getComputedStyle(avatar).left),
+      top: Number.parseFloat(getComputedStyle(avatar).top)
+    }));
+    expect(mobileAvatarOffset.left).toBeLessThan(0);
+    expect(mobileAvatarOffset.top).toBeLessThan(0);
     const mobileEmojiTranslateY = await preview.locator('.player-avatar-emoji').evaluate((emoji) => {
       if (!(emoji instanceof HTMLElement)) throw new Error('Missing preview avatar');
       return new DOMMatrix(getComputedStyle(emoji).transform).m42;
@@ -623,7 +653,10 @@ for (const viewport of phoneViewports) {
       await page.locator('.customization-effects-panel').getByRole('button', { name: score[0], exact: true }).click();
       await expect(preview).toHaveAttribute('data-score-effect', score[1]);
       await expect(preview).toHaveAttribute('data-preview-kind', 'score');
-      await expect(page.locator('.effect-preview-score')).toBeVisible();
+      const scorePreview = page.locator('.effect-preview-score');
+      await expect(scorePreview).toBeVisible();
+      await expect(scorePreview).toHaveClass(/score-impact-host/);
+      await assertScorePreviewCentered(page);
       const layer = page.locator(`[data-testid="effect-preview-slot"] .score-impact-layer[data-score-effect="${score[1]}"][data-polarity="positive"]`);
       await expect(layer).toHaveCount(1);
       expect(await layer.locator('i').count()).toBe(score[2]);
@@ -668,8 +701,10 @@ test('join style choices keep selection geometry stable', async ({ page }) => {
     await assertJoinScreenGeometry(page);
   }
 
+  await expect(page.getByRole('button', { name: 'Clean', exact: true })).toHaveCount(0);
+  await expect(preview.locator('[data-frame="halo"]')).toBeVisible();
   const frameSizes = await elementSizes(page, '.choice-row-v3 button');
-  for (const frame of ['Clean', 'Halo', 'Bracket', 'Neon']) {
+  for (const frame of ['Halo', 'Bracket', 'Neon']) {
     await page.getByRole('button', { name: frame, exact: true }).click();
     expect(await elementSizes(page, '.choice-row-v3 button')).toEqual(frameSizes);
     await assertAvatarFrameCentered(page);
@@ -691,7 +726,8 @@ test('avatar frames stay centered across frame and representative avatar shapes'
   await page.goto('/?mode=player&room=ABCDE');
 
   await page.getByRole('tab', { name: 'Style' }).click();
-  for (const frame of ['Clean', 'Halo', 'Bracket', 'Neon']) {
+  await expect(page.getByRole('button', { name: 'Clean', exact: true })).toHaveCount(0);
+  for (const frame of ['Halo', 'Bracket', 'Neon']) {
     await page.getByRole('button', { name: frame, exact: true }).click();
     await assertAvatarFrameCentered(page);
   }
