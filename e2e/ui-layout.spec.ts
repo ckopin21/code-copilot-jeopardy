@@ -6,6 +6,11 @@ const viewports = [
   { width: 1920, height: 1080 }
 ];
 
+const menuViewports = [
+  ...viewports,
+  { width: 2048, height: 665 }
+];
+
 async function assertViewportFit(page, rootSelector = 'body') {
   const issues = await page.locator(rootSelector).evaluate((root) => {
     const vw = document.documentElement.clientWidth;
@@ -37,8 +42,8 @@ async function openBoardHarness(page, gameMode) {
   await page.locator('.dev-presentation-control-row select').first().selectOption('5');
 }
 
-for (const viewport of viewports) {
-  test(`desktop menu controls are centered and constrained at ${viewport.width}x${viewport.height}`, async ({ page }) => {
+for (const viewport of menuViewports) {
+  test(`desktop menu panels stay compact and centered at ${viewport.width}x${viewport.height}`, async ({ page }) => {
     await page.setViewportSize(viewport);
     await page.goto('/');
     await expect(page.locator('.showcase-menu .menu-mode-grid')).toBeVisible();
@@ -51,9 +56,11 @@ for (const viewport of viewports) {
         return { left: value.left, width: value.width, height: value.height };
       };
       return {
+        grid: rect('.menu-mode-grid'),
         hostSection: rect('.host-menu-section'),
         hostActions: rect('.host-menu-actions'),
         joinSection: rect('.player-menu-section'),
+        joinHeader: rect('.player-menu-section > header'),
         joinButton: rect('.join-game-button')
       };
     });
@@ -61,12 +68,20 @@ for (const viewport of viewports) {
     const centerOffset = (outer, inner) =>
       Math.abs((inner.left + inner.width / 2) - (outer.left + outer.width / 2));
 
+    expect(geometry.grid.width).toBeLessThanOrEqual(1282);
+    expect(geometry.hostSection.width).toBeLessThanOrEqual(900);
+    expect(geometry.joinSection.width).toBeLessThanOrEqual(450);
+    expect(geometry.hostSection.height).toBeLessThanOrEqual(320);
+
     expect(centerOffset(geometry.hostSection, geometry.hostActions)).toBeLessThanOrEqual(2);
     expect(centerOffset(geometry.joinSection, geometry.joinButton)).toBeLessThanOrEqual(2);
-    expect(geometry.hostActions.width).toBeLessThan(geometry.hostSection.width * 0.92);
-    expect(geometry.joinButton.width).toBeLessThan(geometry.joinSection.width * 0.94);
-    expect(geometry.joinButton.height).toBeGreaterThanOrEqual(88);
-    expect(geometry.joinButton.height).toBeLessThanOrEqual(132);
+    expect(geometry.hostActions.width).toBeLessThanOrEqual(762);
+    expect(geometry.joinButton.width).toBeLessThanOrEqual(342);
+    expect(geometry.joinButton.height).toBeGreaterThanOrEqual(70);
+    expect(geometry.joinButton.height).toBeLessThanOrEqual(104);
+
+    expect(geometry.joinButton.top - geometry.joinHeader.bottom).toBeGreaterThanOrEqual(8);
+    expect(geometry.joinSection.bottom - geometry.joinButton.bottom).toBeGreaterThanOrEqual(8);
   });
 }
 
