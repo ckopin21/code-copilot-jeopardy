@@ -343,6 +343,41 @@ async function assertEffectPreviewContained(page) {
   expect(result.clipped).toBe(true);
 }
 
+async function assertAvatarFrameCentered(page, selector = '[data-testid="player-customization-preview"] .player-avatar-art') {
+  const geometry = await page.locator(selector).first().evaluate((avatar) => {
+    if (!(avatar instanceof HTMLElement)) throw new Error('Missing avatar');
+    const frame = avatar.querySelector('.player-avatar-frame');
+    const content = avatar.querySelector('.player-avatar-content');
+    if (!(frame instanceof HTMLElement) || !(content instanceof HTMLElement)) throw new Error('Missing avatar layers');
+    const outer = avatar.getBoundingClientRect();
+    const frameRect = frame.getBoundingClientRect();
+    const contentRect = content.getBoundingClientRect();
+    const center = (rect) => ({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+    return {
+      outer: { width: outer.width, height: outer.height },
+      frame: { width: frameRect.width, height: frameRect.height },
+      outerCenter: center(outer),
+      frameCenter: center(frameRect),
+      contentCenter: center(contentRect),
+      insets: {
+        left: frameRect.left - outer.left,
+        right: outer.right - frameRect.right,
+        top: frameRect.top - outer.top,
+        bottom: outer.bottom - frameRect.bottom
+      }
+    };
+  });
+
+  expect(Math.abs(geometry.outer.width - geometry.outer.height)).toBeLessThanOrEqual(1);
+  expect(Math.abs(geometry.frame.width - geometry.frame.height)).toBeLessThanOrEqual(1);
+  expect(Math.abs(geometry.outerCenter.x - geometry.frameCenter.x)).toBeLessThanOrEqual(1);
+  expect(Math.abs(geometry.outerCenter.y - geometry.frameCenter.y)).toBeLessThanOrEqual(1);
+  expect(Math.abs(geometry.outerCenter.x - geometry.contentCenter.x)).toBeLessThanOrEqual(1);
+  expect(Math.abs(geometry.outerCenter.y - geometry.contentCenter.y)).toBeLessThanOrEqual(1);
+  expect(Math.abs(geometry.insets.left - geometry.insets.right)).toBeLessThanOrEqual(1);
+  expect(Math.abs(geometry.insets.top - geometry.insets.bottom)).toBeLessThanOrEqual(1);
+}
+
 for (const viewport of phoneViewports) {
   test(`player customization stays usable at ${viewport.width}x${viewport.height}`, async ({ page }) => {
     await page.setViewportSize(viewport);
@@ -364,8 +399,10 @@ for (const viewport of phoneViewports) {
     expect(accentBounds).not.toBeNull();
     expect(Math.abs(accentBounds!.width - accentBounds!.height)).toBeLessThanOrEqual(1);
     await page.getByRole('button', { name: 'Halo' }).click();
-    await page.locator('.customization-select select').selectOption('professor');
+    await expect(page.getByText('Title', { exact: true })).toHaveCount(0);
+    await expect(page.locator('.player-title-badge')).toHaveCount(0);
     await expect(page.locator('[data-testid="player-customization-preview"] [data-frame="halo"]')).toBeVisible();
+    await assertAvatarFrameCentered(page);
     await expect(page.locator('[data-testid="player-customization-preview"]')).toHaveCSS('--accent', '#5eead4');
 
     await page.getByRole('tab', { name: 'Effects' }).click();
@@ -379,11 +416,14 @@ for (const viewport of phoneViewports) {
       await assertEffectPreviewContained(page);
     }
 
-    for (const score of [['Pulse', 'pulse'], ['Spark', 'spark'], ['Wave', 'wave']]) {
+    for (const score of [['Pulse', 'pulse', 1], ['Spark', 'spark', 8], ['Wave', 'wave', 2]]) {
       await page.locator('.customization-effects-panel').getByRole('button', { name: score[0], exact: true }).click();
       await expect(page.locator('[data-testid="player-customization-preview"]')).toHaveAttribute('data-score-effect', score[1]);
       await expect(page.locator('[data-testid="player-customization-preview"]')).toHaveAttribute('data-preview-kind', 'score');
       await expect(page.locator('.effect-preview-score')).toBeVisible();
+      const layer = page.locator(`[data-testid="effect-preview-slot"] .score-impact-layer[data-score-effect="${score[1]}"][data-polarity="positive"]`);
+      await expect(layer).toHaveCount(1);
+      expect(await layer.locator('i').count()).toBe(score[2]);
       await assertEffectPreviewContained(page);
     }
 
@@ -415,3 +455,92 @@ for (const viewport of phoneViewports) {
     expect(Math.min(...touchTargets)).toBeGreaterThanOrEqual(40);
   });
 }
+
+
+test('avatar frames stay centered across frame and representative avatar shapes', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/?mode=player&room=ABCDE');
+
+  await page.getByRole('tab', { name: 'Style' }).click();
+  for (const frame of ['Clean', 'Halo', 'Bracket', 'Neon']) {
+    await page.getByRole('button', { name: frame, exact: true }).click();
+    await assertAvatarFrameCentered(page);
+  }
+
+  await page.getByRole('button', { name: 'Halo', exact: true }).click();
+  await page.getByRole('tab', { name: 'Avatar' }).click();
+  const samples = [
+    ['Animals', 'Fox'],
+    ['Robots', 'Robot'],
+    ['Fantasy', 'Mage'],
+    ['Space', 'Satellite'],
+    ['Retro', 'Pixel Alien'],
+    ['Weird', 'Moai']
+  ];
+  for (const [category, avatar] of samples) {
+    await page.getByRole('button', { name: category, exact: true }).click();
+    await page.getByRole('button', { name: avatar, exact: true }).click();
+    await assertAvatarFrameCentered(page);
+  }
+});
+
+for (const [label, effect, particles] of [
+  ['Pulse', 'pulse', 1],
+  ['Spark', 'spark', 8],
+  ['Wave', 'wave', 2]
+]) {
+  test(`${label} is distinct for positive and negative real score impacts`, async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/?mode=host&fresh=1');
+    await page.getByRole('button', { name: 'Open developer mode' }).click();
+    const panel = page.locator('.dev-mode-panel');
+    await expect(panel).toBeVisible();
+
+    const setEffect = async () => {
+      await page.locator('[data-player-id="dev-player-2"]').evaluateAll((surfaces, selectedEffect) => {
+        for (const surface of surfaces) {
+          if (surface instanceof HTMLElement) surface.dataset.scoreEffect = String(selectedEffect);
+        }
+      }, effect);
+    };
+    const scoreTarget = page.locator('[data-player-score="dev-player-2"]:visible').last();
+    const scoreValue = async () => Number(((await scoreTarget.textContent()) ?? '0').replace(/[^0-9-]/g, ''));
+    const initialScore = await scoreValue();
+
+    await setEffect();
+    await panel.getByRole('button', { name: 'Score +', exact: true }).click();
+    await expect(scoreTarget).toHaveClass(new RegExp(`score-impact-${effect}.*score-impact-positive`), { timeout: 3500 });
+    let layer = page.locator(`.score-impact-layer[data-score-target="dev-player-2"][data-score-effect="${effect}"][data-polarity="positive"]`);
+    await expect(layer).toHaveCount(1);
+    expect(await layer.locator('i').count()).toBe(particles);
+    await expect.poll(scoreValue).toBeGreaterThan(initialScore);
+    const positiveScore = await scoreValue();
+    await expect(scoreTarget).not.toHaveClass(/score-impact-active/, { timeout: 3500 });
+
+    await setEffect();
+    await panel.getByRole('button', { name: 'Score −', exact: true }).click();
+    await expect(scoreTarget).toHaveClass(new RegExp(`score-impact-${effect}.*score-impact-negative`), { timeout: 3500 });
+    layer = page.locator(`.score-impact-layer[data-score-target="dev-player-2"][data-score-effect="${effect}"][data-polarity="negative"]`);
+    await expect(layer).toHaveCount(1);
+    expect(await layer.locator('i').count()).toBe(particles);
+    await expect.poll(scoreValue).toBeLessThan(positiveScore);
+  });
+}
+
+test('score effects use a reduced-motion fallback without animation', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/?mode=host&fresh=1');
+  await page.getByRole('button', { name: 'Open developer mode' }).click();
+  const panel = page.locator('.dev-mode-panel');
+  await page.locator('[data-player-id="dev-player-2"]').evaluateAll((surfaces) => {
+    for (const surface of surfaces) {
+      if (surface instanceof HTMLElement) surface.dataset.scoreEffect = 'wave';
+    }
+  });
+
+  const scoreTarget = page.locator('[data-player-score="dev-player-2"]:visible').last();
+  await panel.getByRole('button', { name: 'Score +', exact: true }).click();
+  await expect(scoreTarget).toHaveClass(/score-impact-wave.*score-impact-reduced/, { timeout: 3500 });
+  expect(await scoreTarget.evaluate((element) => getComputedStyle(element).animationName)).toBe('none');
+});

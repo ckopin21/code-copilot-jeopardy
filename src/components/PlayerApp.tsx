@@ -11,16 +11,15 @@ import { Timer } from './Timer';
 import { QrScanner } from './QrScanner';
 import { PlayerAvatar } from './PlayerAvatar';
 import { PlayerJoinCustomization } from './PlayerJoinCustomization';
+import { triggerScoreImpactEffect } from '../lib/scoreEffects';
 import {
   DEFAULT_PLAYER_CUSTOMIZATION,
   PLAYER_ACCENTS,
   getAvatarOption,
-  getPlayerTitleLabel,
   normalizePlayerCustomization,
   type PlayerBuzzerSound,
   type PlayerFrameStyle,
   type PlayerScoreEffect,
-  type PlayerTitle,
   type PlayerVictoryEffect
 } from '../shared/playerCustomization';
 
@@ -39,7 +38,6 @@ export function PlayerApp() {
   const [avatarId, setAvatarId] = useState<string>(DEFAULT_PLAYER_CUSTOMIZATION.avatarId);
   const [accent, setAccent] = useState<string>(PLAYER_ACCENTS[0].color);
   const [frameStyle, setFrameStyle] = useState<PlayerFrameStyle>(DEFAULT_PLAYER_CUSTOMIZATION.frameStyle);
-  const [title, setTitle] = useState<PlayerTitle>(DEFAULT_PLAYER_CUSTOMIZATION.title);
   const [buzzerSound, setBuzzerSound] = useState<PlayerBuzzerSound>(DEFAULT_PLAYER_CUSTOMIZATION.buzzerSound);
   const [scoreEffect, setScoreEffect] = useState<PlayerScoreEffect>(DEFAULT_PLAYER_CUSTOMIZATION.scoreEffect);
   const [victoryEffect, setVictoryEffect] = useState<PlayerVictoryEffect>(DEFAULT_PLAYER_CUSTOMIZATION.victoryEffect);
@@ -59,6 +57,8 @@ export function PlayerApp() {
   const lastQuestionIdRef = useRef('');
   const lastMultiplierRef = useRef<1 | 2 | 3 | null>(null);
   const modifierTimerRef = useRef<number | null>(null);
+  const scoreTargetRef = useRef<HTMLElement | null>(null);
+  const previousScoreRef = useRef<{ playerId: string; score: number } | null>(null);
 
   useEffect(() => {
     const onState = (snapshot: RoomSnapshot) => {
@@ -178,6 +178,22 @@ export function PlayerApp() {
   const current = room?.currentQuestion;
 
   useEffect(() => {
+    if (!me) {
+      previousScoreRef.current = null;
+      return;
+    }
+    const previous = previousScoreRef.current;
+    if (previous?.playerId === me.id && previous.score !== me.score && scoreTargetRef.current) {
+      triggerScoreImpactEffect({
+        scoreTarget: scoreTargetRef.current,
+        effect: normalizePlayerCustomization(me).scoreEffect,
+        delta: me.score - previous.score
+      });
+    }
+    previousScoreRef.current = { playerId: me.id, score: me.score };
+  }, [me]);
+
+  useEffect(() => {
     const questionId = current?.questionId ?? '';
     if (questionId === lastQuestionIdRef.current) return;
     lastQuestionIdRef.current = questionId;
@@ -225,7 +241,7 @@ export function PlayerApp() {
       await audio.unlock();
       const avatar = getAvatarOption(avatarId);
       const result = await emitAck<PlayerJoinCredentials>('player:join', {
-        roomCode, name, avatar: avatar.fallback, avatarId, accent, frameStyle, title, buzzerSound, scoreEffect, victoryEffect
+        roomCode, name, avatar: avatar.fallback, avatarId, accent, frameStyle, buzzerSound, scoreEffect, victoryEffect
       });
       localStorage.setItem(PLAYER_KEY, JSON.stringify(result));
       setCredentials(result);
@@ -353,9 +369,9 @@ export function PlayerApp() {
       <div className="join-code-row"><label>Room code<input value={roomCode} maxLength={8} autoCapitalize="characters" onChange={(event)=>setRoomCode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g,''))} placeholder="ABCDE" /></label><button type="button" className="secondary-button scan-qr-button" onClick={()=>setShowScanner(true)}>Scan QR</button></div>
       <label>Your name<input value={name} maxLength={24} onChange={(event)=>setName(event.target.value)} placeholder="Player name" /></label>
       <PlayerJoinCustomization
-        name={name} avatarId={avatarId} accent={accent} frameStyle={frameStyle} title={title}
+        name={name} avatarId={avatarId} accent={accent} frameStyle={frameStyle}
         buzzerSound={buzzerSound} scoreEffect={scoreEffect} victoryEffect={victoryEffect}
-        onAvatarId={setAvatarId} onAccent={setAccent} onFrameStyle={setFrameStyle} onTitle={setTitle}
+        onAvatarId={setAvatarId} onAccent={setAccent} onFrameStyle={setFrameStyle}
         onBuzzerSound={setBuzzerSound} onScoreEffect={setScoreEffect} onVictoryEffect={setVictoryEffect}
       />
       {error && <p className={error.startsWith('Room code scanned') ? 'form-success' : 'form-error'}>{error}</p>}
@@ -366,7 +382,6 @@ export function PlayerApp() {
   }
 
   const customization = normalizePlayerCustomization(me);
-  const titleLabel = getPlayerTitleLabel(customization.title);
   const buzzerOpen = room.phase === 'question' && current?.responseMode !== 'text' && current?.buzzOpen && me.buzzEligible;
   const winner = current?.buzzWinnerId === me.id;
   const myResponse = current?.textResponses?.[me.id];
@@ -387,7 +402,7 @@ export function PlayerApp() {
   const showAllIn = Boolean(finalWagerRule?.allInAllowed && !FINAL_WAGER_PRESETS.some((value) => value === me.score));
 
   return <main className={`player-phone-v2 ${me.onFire?'phone-fire':''} ${me.isCold?'phone-cold':''}`} data-score-effect={customization.scoreEffect} data-victory-effect={customization.victoryEffect} style={{'--accent':me.accent} as React.CSSProperties}>
-    <header className="phone-header-v2"><button className="phone-menu" onClick={leaveToMenu} aria-label="Leave game">←</button><span className="phone-avatar"><PlayerAvatar avatarId={me.avatarId} fallback={me.avatar} frameStyle={customization.frameStyle} accent={me.accent} /></span><div className="phone-identity"><strong>{me.name}</strong>{titleLabel && <span className="player-title-badge">{titleLabel}</span>}<small className={showTurnIndicator && room.turnPlayerId === me.id ? 'phone-turn-line' : ''}>{!recovering && socket.connected ? `${showTurnIndicator && room.turnPlayerId === me.id ? 'YOUR TURN · ' : ''}ROOM ${room.code}` : 'RECONNECTING…'}</small></div><div className="phone-score-stack"><b>{me.score.toLocaleString()}</b>{me.onFire && <small className="phone-header-streak fire">🔥 ON FIRE</small>}{me.isCold && <small className="phone-header-streak cold">❄ COLD</small>}{showFinalWager && me.finalWagerSubmitted && me.finalWager !== null && <small className="phone-wager-pill">WAGER {me.finalWager.toLocaleString()}</small>}</div></header>
+    <header className="phone-header-v2"><button className="phone-menu" onClick={leaveToMenu} aria-label="Leave game">←</button><span className="phone-avatar"><PlayerAvatar avatarId={me.avatarId} fallback={me.avatar} frameStyle={customization.frameStyle} accent={me.accent} /></span><div className="phone-identity"><strong>{me.name}</strong><small className={showTurnIndicator && room.turnPlayerId === me.id ? 'phone-turn-line' : ''}>{!recovering && socket.connected ? `${showTurnIndicator && room.turnPlayerId === me.id ? 'YOUR TURN · ' : ''}ROOM ${room.code}` : 'RECONNECTING…'}</small></div><div className="phone-score-stack"><b ref={scoreTargetRef} data-player-score={me.id}>{me.score.toLocaleString()}</b>{me.onFire && <small className="phone-header-streak fire">🔥 ON FIRE</small>}{me.isCold && <small className="phone-header-streak cold">❄ COLD</small>}{showFinalWager && me.finalWagerSubmitted && me.finalWager !== null && <small className="phone-wager-pill">WAGER {me.finalWager.toLocaleString()}</small>}</div></header>
 
     {modifierReveal && <div className={`modifier-reveal-overlay x${modifierReveal}`} aria-live="polite"><div className="modifier-reveal-card"><span>{modifierReveal === 2 ? 'FINAL SIX' : 'FINAL THREE'}</span><strong>{modifierReveal === 2 ? 'DOUBLE POINTS' : 'TRIPLE POINTS'}</strong><p>{modifierReveal === 2 ? 'Every question is now worth 2×.' : 'Every remaining question is now worth 3×.'}</p></div></div>}
 

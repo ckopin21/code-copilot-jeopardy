@@ -1,19 +1,17 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { audio } from '../lib/audio';
+import { triggerScoreImpactEffect } from '../lib/scoreEffects';
 import {
   AVATAR_CATALOG,
   AVATAR_CATEGORIES,
   BUZZER_SOUNDS,
   FRAME_STYLES,
   PLAYER_ACCENTS,
-  PLAYER_TITLES,
   SCORE_EFFECTS,
   VICTORY_EFFECTS,
-  getPlayerTitleLabel,
   type PlayerBuzzerSound,
   type PlayerFrameStyle,
   type PlayerScoreEffect,
-  type PlayerTitle,
   type PlayerVictoryEffect
 } from '../shared/playerCustomization';
 import { PlayerAvatar } from './PlayerAvatar';
@@ -23,14 +21,12 @@ type Props = {
   avatarId: string;
   accent: string;
   frameStyle: PlayerFrameStyle;
-  title: PlayerTitle;
   buzzerSound: PlayerBuzzerSound;
   scoreEffect: PlayerScoreEffect;
   victoryEffect: PlayerVictoryEffect;
   onAvatarId: (value: string) => void;
   onAccent: (value: string) => void;
   onFrameStyle: (value: PlayerFrameStyle) => void;
-  onTitle: (value: PlayerTitle) => void;
   onBuzzerSound: (value: PlayerBuzzerSound) => void;
   onScoreEffect: (value: PlayerScoreEffect) => void;
   onVictoryEffect: (value: PlayerVictoryEffect) => void;
@@ -47,7 +43,7 @@ export function PlayerJoinCustomization(props: Props) {
   const selected = AVATAR_CATALOG.find((avatar) => avatar.id === props.avatarId) ?? AVATAR_CATALOG[0];
   const [category, setCategory] = useState(selected.category);
   const [effectPreview, setEffectPreview] = useState<EffectPreview>(null);
-  const titleLabel = getPlayerTitleLabel(props.title);
+  const scorePreviewRef = useRef<HTMLSpanElement | null>(null);
 
   const previewBuzzer = async (sound: PlayerBuzzerSound) => {
     props.onBuzzerSound(sound);
@@ -63,6 +59,10 @@ export function PlayerJoinCustomization(props: Props) {
   const previewScoreEffect = (effect: PlayerScoreEffect) => {
     props.onScoreEffect(effect);
     setEffectPreview({ kind: 'score', id: effect, nonce: Date.now() });
+    window.requestAnimationFrame(() => {
+      if (!scorePreviewRef.current) return;
+      triggerScoreImpactEffect({ scoreTarget: scorePreviewRef.current, effect, delta: 100 });
+    });
   };
 
   const previewVictoryEffect = (effect: PlayerVictoryEffect) => {
@@ -70,12 +70,11 @@ export function PlayerJoinCustomization(props: Props) {
     setEffectPreview({ kind: 'victory', id: effect, nonce: Date.now() });
   };
 
-  const previewClass = effectPreview ? ` preview-${effectPreview.kind}-${effectPreview.id}` : '';
   const effectMode = tab === 'effects';
 
   return <section className="player-customizer" style={{ '--accent': props.accent } as React.CSSProperties}>
     <div
-      className={`customization-preview${effectMode ? ' effect-mode' : ''}${previewClass}`}
+      className={`customization-preview${effectMode ? ' effect-mode' : ''}`}
       data-testid="player-customization-preview"
       data-score-effect={props.scoreEffect}
       data-victory-effect={props.victoryEffect}
@@ -86,13 +85,13 @@ export function PlayerJoinCustomization(props: Props) {
       <div className="customization-preview-copy">
         <small>PLAYER PREVIEW</small>
         <strong>{props.name.trim() || 'Your name'}</strong>
-        <span>{titleLabel ?? 'No title'} · {FRAME_STYLES.find((item) => item.id === props.frameStyle)?.label}</span>
+        <span>{FRAME_STYLES.find((item) => item.id === props.frameStyle)?.label} frame</span>
       </div>
-      {effectMode && <div className="effect-preview-slot" data-testid="effect-preview-slot" aria-hidden="true">
+      {effectMode && <div className="effect-preview-slot" data-testid="effect-preview-slot" data-score-impact-root="preview" aria-hidden="true">
         {effectPreview
           ? <div className="effect-preview-layer" key={effectPreview.nonce}>
               {effectPreview.kind === 'buzzer' && <span className="effect-preview-buzz">BUZZ!</span>}
-              {effectPreview.kind === 'score' && <span className="effect-preview-score">+100</span>}
+              {effectPreview.kind === 'score' && <span ref={scorePreviewRef} className="effect-preview-score" data-player-score="preview">+100</span>}
               {effectPreview.kind === 'victory' && effectPreview.id === 'confetti' && <span className="effect-preview-confetti">{Array.from({ length: 10 }, (_, index) => <i key={index} />)}</span>}
               {effectPreview.kind === 'victory' && effectPreview.id === 'spotlight' && <span className="effect-preview-spotlight" />}
               {effectPreview.kind === 'victory' && effectPreview.id === 'stars' && <span className="effect-preview-stars">✦ ✧ ✦</span>}
@@ -133,10 +132,6 @@ export function PlayerJoinCustomization(props: Props) {
         <span className="customization-label">Frame <small>Around your avatar</small></span>
         <div className="choice-row-v3">{FRAME_STYLES.map((item) => <button type="button" key={item.id} aria-pressed={props.frameStyle === item.id} className={props.frameStyle === item.id ? 'selected' : ''} onClick={() => props.onFrameStyle(item.id)}>{item.label}</button>)}</div>
       </div>
-      <label className="customization-field customization-select">
-        <span className="customization-label">Title <small>Shown with your name</small></span>
-        <select value={props.title} onChange={(event) => props.onTitle(event.target.value as PlayerTitle)}>{PLAYER_TITLES.map((item) => <option value={item.id} key={item.id}>{item.label}</option>)}</select>
-      </label>
     </div>}
 
     {tab === 'effects' && <div className="customization-panel customization-effects-panel" role="tabpanel">

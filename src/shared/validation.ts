@@ -9,7 +9,6 @@ export const playerJoinSchema = z.object({
   accent: z.string().regex(/^#[0-9a-fA-F]{6}$/),
   avatarId: z.string().refine((value) => AVATAR_CATALOG.some((item) => item.id === value), 'Unknown avatar').optional(),
   frameStyle: z.enum(['clean', 'halo', 'bracket', 'neon']).optional(),
-  title: z.enum(['none', 'wildcard', 'speed-demon', 'professor', 'clutch', 'night-owl', 'chaos-agent', 'ace']).optional(),
   buzzerSound: z.enum(['classic', 'laser', 'chime', 'arcade']).optional(),
   scoreEffect: z.enum(['pulse', 'spark', 'wave']).optional(),
   victoryEffect: z.enum(['confetti', 'spotlight', 'stars']).optional()

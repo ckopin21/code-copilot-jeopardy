@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { audio } from '../lib/audio';
 import { readAccessibility } from '../lib/accessibility';
+import { scoreEffectFromTarget, triggerScoreImpactEffect } from '../lib/scoreEffects';
 
 export type ScoreFlightState = {
   id: string;
@@ -26,7 +27,7 @@ export function ScoreFlight({ flight, onImpact, onComplete }: { flight: ScoreFli
     let cancelled = false;
     let frame = 0;
     let finishTimer = 0;
-    let impactTimer = 0;
+    let effectFrame = 0;
     let token: HTMLDivElement | null = null;
     let animation: Animation | null = null;
 
@@ -74,16 +75,16 @@ export function ScoreFlight({ flight, onImpact, onComplete }: { flight: ScoreFli
         onImpact(flight);
         audio.cue('score');
 
-        scoreTarget.classList.remove('score-impact-pulse-correct', 'score-impact-pulse-wrong');
-        playerCard?.classList.remove('score-impact-correct', 'score-impact-wrong');
-        void (playerCard ?? scoreTarget).offsetWidth;
-        scoreTarget.classList.add(flight.correct ? 'score-impact-pulse-correct' : 'score-impact-pulse-wrong');
-        playerCard?.classList.add(flight.correct ? 'score-impact-correct' : 'score-impact-wrong');
-
-        impactTimer = window.setTimeout(() => {
-          scoreTarget.classList.remove('score-impact-pulse-correct', 'score-impact-pulse-wrong');
-          playerCard?.classList.remove('score-impact-correct', 'score-impact-wrong');
-        }, 640);
+        effectFrame = window.requestAnimationFrame(() => {
+          const currentScoreTarget = findByData('playerScore', flight.playerId) ?? scoreTarget;
+          const currentPlayerCard = findByData('playerId', flight.playerId) ?? playerCard;
+          triggerScoreImpactEffect({
+            scoreTarget: currentScoreTarget,
+            effect: scoreEffectFromTarget(currentScoreTarget, currentPlayerCard),
+            delta: flight.delta,
+            reducedMotion
+          });
+        });
         token?.remove();
         token = null;
         finishTimer = window.setTimeout(() => onComplete(flight.id), 240);
@@ -111,8 +112,8 @@ export function ScoreFlight({ flight, onImpact, onComplete }: { flight: ScoreFli
     return () => {
       cancelled = true;
       window.cancelAnimationFrame(frame);
+      window.cancelAnimationFrame(effectFrame);
       window.clearTimeout(finishTimer);
-      window.clearTimeout(impactTimer);
       animation?.cancel();
       token?.remove();
     };

@@ -220,6 +220,18 @@ export function DevModeOverlay() {
     });
   };
 
+  const handleDevScoreImpact = useCallback((impact: ScoreFlightState) => {
+    const seat = Number(impact.playerId.replace('dev-player-', ''));
+    if (!Number.isInteger(seat) || seat < 1 || seat > 5) return;
+    setScores((current) => {
+      const next = [...current];
+      next[seat - 1] = (current[seat - 1] ?? 0) + impact.delta;
+      return next;
+    });
+  }, []);
+
+  const handleDevScoreComplete = useCallback(() => setFlight(null), []);
+
   const loadLiveRoom = () => {
     if (!room) return;
     const livePlayers = room.players.slice(0, 5);
@@ -424,7 +436,7 @@ export function DevModeOverlay() {
           </div> : <button type="button" className="dev-visual-toolbar-reopen" onClick={() => setVisualToolbarOpen(true)}>LAB CONTROLS</button>}
         </>}
 
-        {flight && <ScoreFlight flight={flight} onImpact={() => {}} onComplete={() => setFlight(null)} />}
+        {flight && <ScoreFlight flight={flight} onImpact={handleDevScoreImpact} onComplete={handleDevScoreComplete} />}
         {showComebackBanner && comebackActive && <ComebackBoostNotice room={visualPresentationMode ? presentationRoom : analysis.room} surface="host" />}
         {modifierPreview && <div className={`modifier-reveal-overlay x${modifierPreview}`} aria-live="polite"><div className="modifier-reveal-card"><span>{modifierPreview === 2 ? 'FINAL SIX' : 'FINAL THREE'}</span><strong>{modifierPreview === 2 ? 'DOUBLE POINTS' : 'TRIPLE POINTS'}</strong><p>{modifierPreview === 2 ? 'Every question is now worth 2×.' : 'Every remaining question is now worth 3×.'}</p></div></div>}
         {revealBeat > 0 && <div className={`final-reveal-spectacle beat-${revealBeat}`} aria-live="assertive"><div className="final-reveal-card"><small>FINAL ROUND</small><strong>{spectacleText}</strong><div className="reveal-pulse-dots"><i/><i/><i/></div></div></div>}

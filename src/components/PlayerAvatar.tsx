@@ -7,28 +7,30 @@ export function PlayerAvatar({
   frameStyle = 'clean',
   accent = '#ffd166',
   className = '',
-  title
+  label
 }: {
   avatarId?: string | null;
   fallback?: string;
   frameStyle?: PlayerFrameStyle;
   accent?: string;
   className?: string;
-  title?: string;
+  label?: string;
 }) {
   const known = avatarId && AVATAR_CATALOG.some((avatar) => avatar.id === avatarId) ? getAvatarOption(avatarId) : null;
   const emoji = known?.fallback ?? fallback ?? '⭐';
-  const label = title ?? known?.label ?? 'Player avatar';
+  const accessibleLabel = label ?? known?.label ?? 'Player avatar';
 
   return <span
     className={`player-avatar-art emoji-avatar ${className}`}
     data-avatar-id={known?.id}
     data-frame={frameStyle}
     style={{ '--avatar-accent': accent } as CSSProperties}
-    title={label}
     role="img"
-    aria-label={label}
+    aria-label={accessibleLabel}
   >
-    <span className="player-avatar-emoji" aria-hidden="true">{emoji}</span>
+    <span className="player-avatar-frame" aria-hidden="true" />
+    <span className="player-avatar-content" aria-hidden="true">
+      <span className="player-avatar-emoji">{emoji}</span>
+    </span>
   </span>;
 }

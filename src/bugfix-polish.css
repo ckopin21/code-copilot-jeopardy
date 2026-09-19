@@ -33,22 +33,6 @@
   animation: centeredStatusColdPulse .9s ease-in-out infinite alternate !important;
 }
 
-.score.score-impact-pulse-correct,
-.score.score-impact-pulse-wrong {
-  transform-origin: left center;
-  will-change: transform, filter;
-  position: relative;
-  z-index: 8;
-}
-
-.score.score-impact-pulse-correct {
-  animation: scorePulseGood .5s cubic-bezier(.16,.9,.2,1.2) both;
-}
-
-.score.score-impact-pulse-wrong {
-  animation: scorePulseBad .5s cubic-bezier(.16,.9,.2,1.2) both;
-}
-
 .join-form-v2 .primary-button[aria-busy="true"] {
   opacity: .5;
   filter: grayscale(.55);
@@ -75,25 +59,11 @@
   to { transform: scale(1.035); filter: brightness(1.1); }
 }
 
-@keyframes scorePulseGood {
-  0% { transform: scale(1); filter: brightness(1); }
-  48% { transform: scale(1.34); filter: brightness(1.35); }
-  100% { transform: scale(1); filter: brightness(1); }
-}
-
-@keyframes scorePulseBad {
-  0% { transform: scale(1); filter: brightness(1); }
-  48% { transform: scale(1.28); filter: brightness(1.22); }
-  100% { transform: scale(1); filter: brightness(1); }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .player-phone-v2.phone-fire::before,
   .player-phone-v2.phone-cold::before,
   .phone-state-v2 .status-badge.fire,
-  .phone-state-v2 .status-badge.cold,
-  .score.score-impact-pulse-correct,
-  .score.score-impact-pulse-wrong {
+  .phone-state-v2 .status-badge.cold {
     animation: none !important;
     transform: none !important;
   }

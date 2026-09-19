@@ -21,7 +21,7 @@ import { stripFreshHostFlag } from '../lib/hostSession';
 import { randomId } from '../lib/ids';
 import { readAccessibility } from '../lib/accessibility';
 import { PlayerAvatar } from './PlayerAvatar';
-import { getPlayerTitleLabel, normalizePlayerCustomization } from '../shared/playerCustomization';
+import { normalizePlayerCustomization } from '../shared/playerCustomization';
 import { useOutsideDismiss } from '../lib/useOutsideDismiss';
 type HostStored = HostRoomCredentials;
 type HistoryAttempt = { playerId: string; playerName: string; playerAvatar: string; correct: boolean };
@@ -643,8 +643,7 @@ export function HostAppV3() {
           <div className="lobby-players-v2">
             {room.players.length ? room.players.map((player) => {
               const customization = normalizePlayerCustomization(player);
-              const title = getPlayerTitleLabel(customization.title);
-              return <div className={`roster-row ${player.connected ? '' : 'reserved'}`} key={player.id} style={{ '--accent': player.accent } as React.CSSProperties}><span className="roster-avatar"><PlayerAvatar avatarId={player.avatarId} fallback={player.avatar} frameStyle={customization.frameStyle} accent={player.accent} /></span><div><strong>{player.name}</strong>{title && <span className="player-title-badge">{title}</span>}<small>{player.connected ? `Seat ${player.seat} · key ${player.seat}` : `Seat ${player.seat} · disconnected · reserved`}</small></div><div className="roster-actions">{player.connected && <button className="seat-pause-button" onClick={() => void perform('host:suspend-player', { playerId: player.id })} title="Temporarily disconnect this controller but keep its seat, score, and reconnect token">Pause seat</button>}<button className="seat-remove-button" onClick={() => permanentlyRemovePlayer(player.id, player.name)} title="Permanently erase this player and reconnect seat">Remove</button></div></div>;
+              return <div className={`roster-row ${player.connected ? '' : 'reserved'}`} key={player.id} style={{ '--accent': player.accent } as React.CSSProperties}><span className="roster-avatar"><PlayerAvatar avatarId={player.avatarId} fallback={player.avatar} frameStyle={customization.frameStyle} accent={player.accent} /></span><div><strong>{player.name}</strong><small>{player.connected ? `Seat ${player.seat} · key ${player.seat}` : `Seat ${player.seat} · disconnected · reserved`}</small></div><div className="roster-actions">{player.connected && <button className="seat-pause-button" onClick={() => void perform('host:suspend-player', { playerId: player.id })} title="Temporarily disconnect this controller but keep its seat, score, and reconnect token">Pause seat</button>}<button className="seat-remove-button" onClick={() => permanentlyRemovePlayer(player.id, player.name)} title="Permanently erase this player and reconnect seat">Remove</button></div></div>;
             }) : <div className="empty-roster">No phone players connected. Practice mode still works.</div>}
             {reservedSeatCount > 0 && <div className="reserved-seat-note">{reservedSeatCount} seat{reservedSeatCount === 1 ? '' : 's'} reserved for reconnect.</div>}
           </div>
@@ -730,7 +729,7 @@ export function HostAppV3() {
 
           {current.responseMode !== 'text' && !current.answerRevealed && buzzerCountdown !== null && !current.buzzOpen && !current.buzzWinnerId && <div className="countdown-panel"><small>BUZZERS OPEN IN</small><strong>{buzzerCountdown || 'GO'}</strong></div>}
           {current.responseMode !== 'text' && !current.answerRevealed && current.buzzOpen && !current.buzzWinnerId && <div className="buzzer-live-banner">BUZZERS LIVE</div>}
-          {buzzWinner && (() => { const customization = normalizePlayerCustomization(buzzWinner); const title = getPlayerTitleLabel(customization.title); return <div className="winner-chip" style={{ '--accent': buzzWinner.accent } as React.CSSProperties}><PlayerAvatar avatarId={buzzWinner.avatarId} fallback={buzzWinner.avatar} frameStyle={customization.frameStyle} accent={buzzWinner.accent} /><span>{buzzWinner.name}{title && <small className="player-title-badge">{title}</small>}</span><b>BUZZED IN</b></div>; })()}
+          {buzzWinner && (() => { const customization = normalizePlayerCustomization(buzzWinner); return <div className="winner-chip" style={{ '--accent': buzzWinner.accent } as React.CSSProperties}><PlayerAvatar avatarId={buzzWinner.avatarId} fallback={buzzWinner.avatar} frameStyle={customization.frameStyle} accent={buzzWinner.accent} /><span>{buzzWinner.name}</span><b>BUZZED IN</b></div>; })()}
 
           {current.responseMode === 'text' && !current.answerRevealed && readingTimer && <div className="reading-countdown-v2"><small>READING TIME · ANSWERS OPEN IN</small><Timer timer={readingTimer} serverNow={room.serverNow} /><span>Answer entry stays locked until this countdown finishes.</span></div>}
           {current.responseMode === 'text' && !current.answerRevealed && !readingTimer && <div className="response-progress"><strong>{textResponseCount}/{activeQuestionPlayers.length}</strong><span>responses locked in</span><small>Answer entry is open. The answer reveals automatically when every active player submits or the answer timer expires.</small></div>}

@@ -113,6 +113,8 @@ export class BrowserGameEngine {
       }
       const claimedSeats = new Set<number>();
       for (const player of record.state.players) {
+        // Titles were removed from customization. Strip the legacy field while restoring old saves.
+        delete (player as Player & { title?: unknown }).title;
         const currentSeat = Number(player.seat);
         if (Number.isInteger(currentSeat) && currentSeat >= 1 && currentSeat <= 5 && !claimedSeats.has(currentSeat)) {
           claimedSeats.add(currentSeat);
@@ -147,6 +149,9 @@ export class BrowserGameEngine {
             ? Math.max(0, finalRound.participantIds.indexOf(finalRound.reviewPlayerId))
             : 0;
         }
+      }
+      for (const question of record.state.board?.questions ?? []) {
+        for (const result of question.results ?? []) delete (result as typeof result & { playerTitle?: unknown }).playerTitle;
       }
       if (record.state.phase === 'recap' && record.state.resultPlayerIds === undefined) {
         record.state.resultPlayerIds = record.state.finalRound?.rosterIds ?? record.state.players.map((player) => player.id);
@@ -346,7 +351,7 @@ export class BrowserGameEngine {
     const customization = normalizePlayerCustomization(input);
     room.state.players.push({
       id: playerId, seat, name, avatar: input.avatar, avatarId: customization.avatarId, accent: input.accent,
-      frameStyle: customization.frameStyle, title: customization.title, buzzerSound: customization.buzzerSound,
+      frameStyle: customization.frameStyle, buzzerSound: customization.buzzerSound,
       scoreEffect: customization.scoreEffect, victoryEffect: customization.victoryEffect, score: 0, connected: true,
       positiveStreak: 0, coldStreak: 0, onFire: false, isCold: false, buzzEligible: false, hasBuzzedThisQuestion: false,
       finalWager: finalRosterFrozen ? 0 : null,
@@ -881,7 +886,7 @@ export class BrowserGameEngine {
     const result = {
       playerId: player.id, playerName: player.name, playerAvatar: player.avatar,
       playerAvatarId: customization.avatarId, playerAccent: player.accent,
-      playerFrameStyle: customization.frameStyle, playerTitle: customization.title,
+      playerFrameStyle: customization.frameStyle,
       correct, delta
     };
     tile.results = [...(tile.results ?? []).filter((entry) => entry.playerId !== player.id), result];
