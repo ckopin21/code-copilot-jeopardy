@@ -186,6 +186,8 @@ export interface CurrentQuestionState {
   responseMode?: ResponseMode;
   textResponses?: Record<string, TextResponseState>;
   responsesClosed?: boolean;
+  /** Authoritative point loss preview for an incorrect/missing Free Response answer after reveal. */
+  pendingIncorrectValue?: number | null;
   /** Absolute server timestamp when Free Response answer entry becomes available. Null once open. */
   responseOpensAt?: number | null;
   /** Preserved reading time while the game is paused. */

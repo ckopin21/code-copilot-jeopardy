@@ -234,11 +234,14 @@ export class BrowserGameEngine {
     return connected.find((player) => player.seat > seat) ?? connected[0];
   }
   private currentQuestionParticipants(room: RoomRecord): Player[] {
-    const connected = this.connectedPlayers(room);
     const ids = room.state.currentQuestion?.participantIds;
-    if (!ids) return connected;
+    if (!ids) return this.connectedPlayers(room);
     const eligible = new Set(ids);
-    return connected.filter((player) => eligible.has(player.id));
+    // Keep the roster frozen for the whole typed question. A transient disconnect
+    // must not make everyone else appear "done" and prematurely reveal the answer.
+    return room.state.players
+      .filter((player) => eligible.has(player.id))
+      .sort((a, b) => a.seat - b.seat);
   }
   private ensureTurnPlayer(room: RoomRecord): Player | null {
     const connected = this.connectedPlayers(room);
@@ -668,6 +671,7 @@ export class BrowserGameEngine {
     // A typed-response clue cannot make progress with no phones. Practice mode falls back to the normal reveal flow.
     const responseMode = connected.length === 0 && configuredResponseMode === 'text' ? 'buzz' : configuredResponseMode;
     tile.used = true;
+    tile.turnPlayerId = turnPlayer?.id ?? null;
     tile.playedValue = question.value * multiplier;
     tile.results = [];
     room.state.remainingQuestions -= 1;
@@ -683,6 +687,7 @@ export class BrowserGameEngine {
       responseMode,
       textResponses: {},
       responsesClosed: false,
+      pendingIncorrectValue: null,
       responseOpensAt: null,
       responseReadRemainingMs: null,
       dailyDouble: isPlayableDailyDouble,
@@ -955,6 +960,7 @@ export class BrowserGameEngine {
     if (!response) throw new Error('Response not found');
     if (response.resolvedCorrect !== null) throw new Error('Response is already graded');
     response.reviewCorrect = correct;
+    this.refreshTextPenaltyPreview(room);
     this.persist();
     return this.snapshot(roomCode);
   }
@@ -974,11 +980,17 @@ export class BrowserGameEngine {
 
     if (!pending.length && !noResponsePlayers.length) throw new Error('There are no response grades awaiting confirmation');
 
-    const anyCorrect = participantIds.some((playerId) => {
-      const response = responses[playerId];
-      return Boolean(response && (response.resolvedCorrect ?? response.reviewCorrect ?? response.autoCorrect));
-    });
-    const missPenalty = anyCorrect ? current.effectiveValue : Math.round(current.effectiveValue / 2);
+    const missPenalty = this.refreshTextPenaltyPreview(room);
+    // Calculate every award from the same pre-confirmation state so one player's
+    // score change cannot alter another player's comeback eligibility.
+    const scoringState = structuredClone(room.state);
+    const correctAwards = new Map<string, number>();
+    for (const [playerId, response] of pending) {
+      const correct = response.reviewCorrect ?? response.autoCorrect;
+      if (!correct) continue;
+      const scoringPlayer = scoringState.players.find((item) => item.id === playerId);
+      if (scoringPlayer) correctAwards.set(playerId, calculateComebackAward(scoringState, scoringPlayer, current.effectiveValue).points);
+    }
 
     this.checkpointScore(room);
     for (const [playerId, response] of pending) {
@@ -987,7 +999,7 @@ export class BrowserGameEngine {
       const correct = response.reviewCorrect ?? response.autoCorrect;
       response.reviewCorrect = correct;
       response.resolvedCorrect = correct;
-      const points = correct ? calculateComebackAward(room.state, player, current.effectiveValue).points : missPenalty;
+      const points = correct ? (correctAwards.get(playerId) ?? current.effectiveValue) : missPenalty;
       const scoreDelta = this.addScore(player, correct ? points : -points, room.state.settings);
       this.recordBoardResult(room, player, correct, scoreDelta);
       if (correct) player.stats.correct += 1; else player.stats.incorrect += 1;
@@ -1004,11 +1016,26 @@ export class BrowserGameEngine {
     return this.advanceToBoard(roomCode, hostToken);
   }
 
+  private refreshTextPenaltyPreview(room: RoomRecord): number {
+    const current = room.state.currentQuestion;
+    if (!current || current.responseMode !== 'text') return 0;
+    const responses = current.textResponses ?? {};
+    const participantIds = current.participantIds ?? room.state.players.map((player) => player.id);
+    const anyCorrect = participantIds.some((playerId) => {
+      const response = responses[playerId];
+      return Boolean(response && (response.resolvedCorrect ?? response.reviewCorrect ?? response.autoCorrect));
+    });
+    const missPenalty = anyCorrect ? current.effectiveValue : Math.round(current.effectiveValue / 2);
+    current.pendingIncorrectValue = missPenalty;
+    return missPenalty;
+  }
+
   private closeTextResponsesInternal(room: RoomRecord): void {
     const current = room.state.currentQuestion;
     if (!current || current.responseMode !== 'text') return;
     current.responsesClosed = true;
     current.answerRevealed = true;
+    this.refreshTextPenaltyPreview(room);
     current.buzzOpen = false;
     room.state.players.forEach((player) => { player.buzzEligible = false; });
     this.stopTimerInternal(room);
@@ -1023,6 +1050,7 @@ export class BrowserGameEngine {
     }
     if (current.responseMode === 'text') current.responsesClosed = true;
     current.answerRevealed = true;
+    if (current.responseMode === 'text') this.refreshTextPenaltyPreview(room);
     current.buzzOpen = false;
     room.state.players.forEach((player) => { player.buzzEligible = false; });
     this.stopTimerInternal(room);

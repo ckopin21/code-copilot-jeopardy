@@ -954,4 +954,129 @@ describe('BrowserGameEngine production state', () => {
     expect(board.questions.every((question) => question.questionId.startsWith('free-response-general-1-'))).toBe(true);
   });
 
+
+  it('keeps disconnected Free Response participants in the active question roster', () => {
+    const { engine, host } = setup({
+      gameMode: 'free-response',
+      dailyDoublesEnabled: false,
+      finalRoundEnabled: false,
+      timerSeconds: null,
+      freeResponseReadSeconds: 0
+    });
+    const one = addPlayer(engine, host.roomCode, 'One');
+    const two = addPlayer(engine, host.roomCode, 'Two');
+    engine.startGame(host.roomCode, host.hostToken);
+    const tile = firstUnused(engine, host.roomCode);
+    engine.selectQuestion(host.roomCode, host.hostToken, tile.questionId);
+
+    engine.submitTextResponse(host.roomCode, one.playerId, one.reconnectToken, 'first answer');
+    engine.setPlayerConnected(host.roomCode, two.playerId, false);
+
+    const waiting = engine.snapshot(host.roomCode);
+    expect(waiting.currentQuestion?.answerRevealed).toBe(false);
+    expect(waiting.currentQuestion?.responsesClosed).toBe(false);
+
+    engine.reconnectPlayer(host.roomCode, two.playerId, two.reconnectToken);
+    engine.submitTextResponse(host.roomCode, two.playerId, two.reconnectToken, 'second answer');
+
+    const revealed = engine.snapshot(host.roomCode);
+    expect(revealed.currentQuestion?.answerRevealed).toBe(true);
+    expect(revealed.currentQuestion?.responsesClosed).toBe(true);
+  });
+
+  it('lets the host close an unlimited Free Response round and publishes the exact miss penalty preview', () => {
+    const { engine, host } = setup({
+      gameMode: 'free-response',
+      dailyDoublesEnabled: false,
+      finalRoundEnabled: false,
+      timerSeconds: null,
+      freeResponseReadSeconds: 0,
+      allowNegativeScores: true
+    });
+    const one = addPlayer(engine, host.roomCode, 'One');
+    addPlayer(engine, host.roomCode, 'Two');
+    engine.startGame(host.roomCode, host.hostToken);
+    const tile = firstUnused(engine, host.roomCode);
+    engine.selectQuestion(host.roomCode, host.hostToken, tile.questionId);
+
+    const rooms = (engine as unknown as { rooms: Map<string, { questions: Record<string, { acceptedAnswers: string[] }> }> }).rooms;
+    const accepted = rooms.get(host.roomCode)!.questions[tile.questionId].acceptedAnswers[0];
+    engine.submitTextResponse(host.roomCode, one.playerId, one.reconnectToken, accepted);
+
+    const open = engine.snapshot(host.roomCode);
+    expect(open.timer.running).toBe(false);
+    expect(open.currentQuestion?.answerRevealed).toBe(false);
+
+    engine.revealAnswer(host.roomCode, host.hostToken);
+
+    const revealed = engine.snapshot(host.roomCode);
+    const value = revealed.currentQuestion!.effectiveValue;
+    expect(revealed.currentQuestion?.responsesClosed).toBe(true);
+    expect(revealed.currentQuestion?.pendingIncorrectValue).toBe(value);
+
+    engine.resolveTextResponse(host.roomCode, host.hostToken, one.playerId, false);
+    expect(engine.snapshot(host.roomCode).currentQuestion?.pendingIncorrectValue).toBe(Math.round(value / 2));
+  });
+
+  it('uses one pre-confirmation score snapshot for all Free Response comeback awards', () => {
+    const { engine, host } = setup({
+      gameMode: 'free-response',
+      gameLength: 'quick',
+      dailyDoublesEnabled: false,
+      finalRoundEnabled: false,
+      timerSeconds: null,
+      freeResponseReadSeconds: 0,
+      lateGameModifiers: false,
+      allowNegativeScores: true,
+      streaksEnabled: false
+    });
+    const one = addPlayer(engine, host.roomCode, 'One');
+    const two = addPlayer(engine, host.roomCode, 'Two');
+    const three = addPlayer(engine, host.roomCode, 'Three');
+    engine.startGame(host.roomCode, host.hostToken);
+
+    for (let index = 0; index < 6; index += 1) {
+      const warmup = firstUnused(engine, host.roomCode);
+      engine.selectQuestion(host.roomCode, host.hostToken, warmup.questionId);
+      engine.revealAnswer(host.roomCode, host.hostToken);
+      engine.confirmTextResponses(host.roomCode, host.hostToken);
+    }
+
+    expect(engine.snapshot(host.roomCode).turnPlayerId).toBe(one.playerId);
+    const tile = firstUnused(engine, host.roomCode);
+    engine.selectQuestion(host.roomCode, host.hostToken, tile.questionId);
+    const selected = engine.snapshot(host.roomCode);
+    expect(selected.currentQuestion?.turnPlayerId).toBe(one.playerId);
+    expect(selected.board?.questions.find((question) => question.questionId === tile.questionId)?.turnPlayerId).toBe(one.playerId);
+
+    const value = selected.currentQuestion!.effectiveValue;
+    const reference = Math.max(...selected.board!.questions.map((question) => question.value));
+    const oneTarget = -2 * reference;
+    const threeTarget = oneTarget + value;
+    const setScore = (playerId: string, target: number) => {
+      const currentScore = engine.snapshot(host.roomCode).players.find((player) => player.id === playerId)!.score;
+      engine.adjustScore(host.roomCode, host.hostToken, playerId, target - currentScore);
+    };
+    setScore(one.playerId, oneTarget);
+    setScore(two.playerId, 0);
+    setScore(three.playerId, threeTarget);
+
+    const rooms = (engine as unknown as { rooms: Map<string, { questions: Record<string, { acceptedAnswers: string[] }> }> }).rooms;
+    const accepted = rooms.get(host.roomCode)!.questions[tile.questionId].acceptedAnswers[0];
+
+    // Insert the future incorrect response first. Sequential scoring used to drop
+    // Three into a tie for last before One's comeback award was calculated.
+    engine.submitTextResponse(host.roomCode, three.playerId, three.reconnectToken, 'definitely wrong');
+    engine.submitTextResponse(host.roomCode, one.playerId, one.reconnectToken, accepted);
+    engine.submitTextResponse(host.roomCode, two.playerId, two.reconnectToken, accepted);
+    engine.resolveTextResponse(host.roomCode, host.hostToken, three.playerId, false);
+    engine.resolveTextResponse(host.roomCode, host.hostToken, one.playerId, true);
+    engine.resolveTextResponse(host.roomCode, host.hostToken, two.playerId, true);
+    engine.confirmTextResponses(host.roomCode, host.hostToken);
+
+    const confirmed = engine.snapshot(host.roomCode);
+    expect(confirmed.players.find((player) => player.id === one.playerId)?.score).toBe(oneTarget + value * 2);
+    expect(confirmed.players.find((player) => player.id === three.playerId)?.score).toBe(threeTarget - value);
+  });
+
 });
