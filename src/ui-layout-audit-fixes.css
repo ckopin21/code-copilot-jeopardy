@@ -188,11 +188,11 @@
 .presentation-board .question-tile.used.has-result .used-result-avatar-art,
 .presentation-board-fill .question-tile.used.has-result .used-result-avatar-art,
 .board-presentation-mode .question-tile.used.has-result .used-result-avatar-art {
-  width: 30px !important;
+  width: 42px !important;
   height: 30px !important;
-  max-width: 30px !important;
+  max-width: 42px !important;
   max-height: 30px !important;
-  aspect-ratio: 1 / 1;
+  aspect-ratio: auto;
   display: inline-grid !important;
   place-items: center !important;
   align-items: center !important;
