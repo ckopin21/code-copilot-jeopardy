@@ -1,0 +1,84 @@
+/* Normal host board layout. Presentation mode intentionally remains unchanged. */
+@media (min-width: 900px) {
+  :root {
+    --normal-host-stage-width: min(1540px, calc(100vw - 32px));
+    --normal-host-stage-edge: max(16px, calc((100vw - var(--normal-host-stage-width)) / 2));
+  }
+
+  .showcase-host:not(.host-presentation-mode) > .showcase-topbar {
+    display: flex !important;
+    position: relative !important;
+    width: 100%;
+    flex: 0 0 auto;
+  }
+
+  .showcase-host:not(.host-presentation-mode) > .showcase-board-stage.game-stage {
+    width: var(--normal-host-stage-width) !important;
+    max-width: 1540px !important;
+    margin: 0 auto !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    padding-bottom: 64px !important;
+    gap: clamp(7px, 1vh, 12px) !important;
+  }
+
+  .showcase-host:not(.host-presentation-mode) .showcase-board-stage > .board-header-v2 {
+    width: 100%;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+    gap: 24px;
+    padding: 0 3px 3px !important;
+  }
+
+  .showcase-host:not(.host-presentation-mode) .board-header-v2 > div:first-child {
+    min-width: 0;
+    justify-items: start;
+    text-align: left;
+  }
+
+  .showcase-host:not(.host-presentation-mode) .board-header-v2 .game-mode-pill {
+    margin-top: 1px;
+  }
+
+  .showcase-host:not(.host-presentation-mode) .board-actions {
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: nowrap;
+  }
+
+  .showcase-host:not(.host-presentation-mode) .showcase-board-stage > .board,
+  .showcase-host:not(.host-presentation-mode) .showcase-board-stage > .modifier-banner,
+  .showcase-host:not(.host-presentation-mode) .showcase-board-stage > .score-controls-v2 {
+    width: 100%;
+    margin-inline: auto !important;
+  }
+
+  body:has(.showcase-host:not(.host-presentation-mode)) .dev-mode-trigger {
+    left: var(--normal-host-stage-edge) !important;
+    bottom: 12px !important;
+  }
+
+  body:has(.showcase-host:not(.host-presentation-mode)) .dev-presentation-trigger {
+    left: calc(var(--normal-host-stage-edge) + 74px) !important;
+    bottom: 12px !important;
+  }
+
+  body:has(.showcase-host:not(.host-presentation-mode)) .host-command-trigger {
+    right: var(--normal-host-stage-edge) !important;
+    bottom: 12px !important;
+  }
+}
+
+/* Keep the compact dock from covering content on shorter desktop windows. */
+@media (min-width: 900px) and (max-height: 760px) {
+  .showcase-host:not(.host-presentation-mode) > .showcase-board-stage.game-stage {
+    padding-bottom: 56px !important;
+  }
+
+  body:has(.showcase-host:not(.host-presentation-mode)) .dev-mode-trigger,
+  body:has(.showcase-host:not(.host-presentation-mode)) .dev-presentation-trigger,
+  body:has(.showcase-host:not(.host-presentation-mode)) .host-command-trigger {
+    bottom: 8px !important;
+  }
+}
