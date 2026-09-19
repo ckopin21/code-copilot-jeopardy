@@ -181,10 +181,19 @@
 .presentation-board .question-tile.used.has-result .used-result-chip > b > .player-avatar-art,
 .presentation-board-fill .question-tile.used.has-result .used-result-chip > b > .player-avatar-art,
 .board-presentation-mode .question-tile.used.has-result .used-result-chip > b > .player-avatar-art {
-  width: 1.65em !important;
-  height: 1.65em !important;
+  width: 32px !important;
+  height: 32px !important;
   max-width: 32px !important;
   max-height: 32px !important;
+}
+
+.presentation-board .question-tile.used.has-result .used-result-avatar-art,
+.presentation-board-fill .question-tile.used.has-result .used-result-avatar-art,
+.board-presentation-mode .question-tile.used.has-result .used-result-avatar-art {
+  border: 2px solid rgba(255,255,255,.75);
+  border-radius: 50%;
+  background: rgba(2,20,33,.66);
+  font-size: 1.1rem !important;
 }
 
 
