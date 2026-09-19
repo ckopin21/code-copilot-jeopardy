@@ -827,7 +827,7 @@ describe('BrowserGameEngine production state', () => {
     expect(confirmed.turnPlayerId).toBe(two.playerId);
   });
 
-  it('penalizes every Free Response participant who submits no answer', () => {
+  it('applies Group Miss Mercy when every Free Response participant submits no answer', () => {
     const { engine, host } = setup({
       gameMode: 'free-response',
       dailyDoublesEnabled: false,
@@ -857,11 +857,39 @@ describe('BrowserGameEngine production state', () => {
     const confirmed = engine.snapshot(host.roomCode);
     const first = confirmed.players.find((player) => player.id === one.playerId)!;
     const second = confirmed.players.find((player) => player.id === two.playerId)!;
-    expect(first.score).toBe(-value);
-    expect(second.score).toBe(-value);
+    expect(first.score).toBe(-value / 2);
+    expect(second.score).toBe(-value / 2);
     expect(first.stats.incorrect).toBe(1);
     expect(second.stats.incorrect).toBe(1);
     expect(confirmed.phase).toBe('board');
+  });
+
+
+  it('applies Group Miss Mercy when everyone submits an incorrect answer', () => {
+    const { engine, host } = setup({
+      gameMode: 'free-response',
+      dailyDoublesEnabled: false,
+      finalRoundEnabled: false,
+      timerSeconds: 15,
+      freeResponseReadSeconds: 0,
+      allowNegativeScores: true
+    });
+    const one = addPlayer(engine, host.roomCode, 'One');
+    const two = addPlayer(engine, host.roomCode, 'Two');
+    engine.startGame(host.roomCode, host.hostToken);
+    const tile = firstUnused(engine, host.roomCode);
+    engine.selectQuestion(host.roomCode, host.hostToken, tile.questionId);
+    const value = engine.snapshot(host.roomCode).currentQuestion!.effectiveValue;
+
+    engine.submitTextResponse(host.roomCode, one.playerId, one.reconnectToken, 'definitely wrong one');
+    engine.submitTextResponse(host.roomCode, two.playerId, two.reconnectToken, 'definitely wrong two');
+    engine.resolveTextResponse(host.roomCode, host.hostToken, one.playerId, false);
+    engine.resolveTextResponse(host.roomCode, host.hostToken, two.playerId, false);
+    engine.confirmTextResponses(host.roomCode, host.hostToken);
+
+    const confirmed = engine.snapshot(host.roomCode);
+    expect(confirmed.players.find((player) => player.id === one.playerId)?.score).toBe(-value / 2);
+    expect(confirmed.players.find((player) => player.id === two.playerId)?.score).toBe(-value / 2);
   });
 
 
