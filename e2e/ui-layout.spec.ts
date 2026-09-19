@@ -56,8 +56,7 @@ async function assertPresentationResultAvatarsArePlain(page, rootSelector) {
       if (!(node instanceof HTMLElement)) throw new Error('Invalid presentation result avatar');
       const content = node.querySelector('.player-avatar-content');
       const emoji = node.querySelector('.player-avatar-emoji');
-      const identity = node.parentElement;
-      const name = identity?.querySelector(':scope > span');
+      const name = node.nextElementSibling;
       const chip = node.closest('.used-result-chip');
       const tile = node.closest('.question-tile.used.has-result');
       if (!(content instanceof HTMLElement) || !(emoji instanceof HTMLElement) || !(name instanceof HTMLElement) || !(chip instanceof HTMLElement) || !(tile instanceof HTMLElement)) {
