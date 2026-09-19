@@ -87,9 +87,11 @@
 /* Classic board content fitting. Normal host only. */
 @media (min-width: 900px) {
   .showcase-host:not(.host-presentation-mode) > .showcase-board-stage.game-stage {
-    height: auto !important;
-    flex: 1 1 auto !important;
+    height: 0 !important;
+    flex: 1 1 0 !important;
     min-height: 0 !important;
+    align-self: stretch;
+    box-sizing: border-box;
     grid-template-rows: auto auto minmax(0, 1fr) auto !important;
     overflow: hidden;
   }
