@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { QUESTION_VALUES } from '../shared/types';
 import type { QuestionValue, RoomSnapshot } from '../shared/types';
 import { socket } from '../lib/socket';
@@ -68,15 +68,32 @@ export function DevModeOverlay() {
     { dismissOnEscape: false }
   );
 
+  const clearTimers = useCallback(() => {
+    timersRef.current.forEach((timer) => window.clearTimeout(timer));
+    timersRef.current = [];
+  }, []);
+
+  const later = useCallback((ms: number, action: () => void) => {
+    const timer = window.setTimeout(action, ms);
+    timersRef.current.push(timer);
+  }, []);
+
+  const clearVisualPreviews = useCallback(() => {
+    clearTimers();
+    setModifierPreview(null);
+    setTransition(null);
+    setRevealBeat(0);
+    setShowComebackBanner(false);
+    setFlight(null);
+  }, [clearTimers]);
+
   useEffect(() => {
     const onState = (snapshot: RoomSnapshot) => setRoom(snapshot);
     socket.on('room:state', onState);
     return () => socket.off('room:state', onState);
   }, []);
 
-  useEffect(() => () => {
-    timersRef.current.forEach((timer) => window.clearTimeout(timer));
-  }, []);
+  useEffect(() => () => clearTimers(), [clearTimers]);
 
   useEffect(() => {
     const syncFullscreen = () => {
@@ -102,7 +119,7 @@ export function DevModeOverlay() {
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  });
+  }, [fallbackVisualFullscreen, clearVisualPreviews]);
 
   useEffect(() => {
     if (open) return;
@@ -150,23 +167,6 @@ export function DevModeOverlay() {
   const liveComeback = room && liveTurnPlayer && liveNormalValue > 0
     ? calculateComebackAward(room, liveTurnPlayer, liveNormalValue)
     : null;
-
-  const clearTimers = () => {
-    timersRef.current.forEach((timer) => window.clearTimeout(timer));
-    timersRef.current = [];
-  };
-  const later = (ms: number, action: () => void) => {
-    const timer = window.setTimeout(action, ms);
-    timersRef.current.push(timer);
-  };
-  const clearVisualPreviews = () => {
-    clearTimers();
-    setModifierPreview(null);
-    setTransition(null);
-    setRevealBeat(0);
-    setShowComebackBanner(false);
-    setFlight(null);
-  };
 
   const previewModifier = (multiplier: 2 | 3) => {
     clearTimers();
