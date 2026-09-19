@@ -181,19 +181,25 @@
 .presentation-board .question-tile.used.has-result .used-result-chip > b > .player-avatar-art,
 .presentation-board-fill .question-tile.used.has-result .used-result-chip > b > .player-avatar-art,
 .board-presentation-mode .question-tile.used.has-result .used-result-chip > b > .player-avatar-art {
-  width: 32px !important;
-  height: 32px !important;
-  max-width: 32px !important;
-  max-height: 32px !important;
+  width: 30px !important;
+  height: 30px !important;
+  max-width: 30px !important;
+  max-height: 30px !important;
 }
 
 .presentation-board .question-tile.used.has-result .used-result-avatar-art,
 .presentation-board-fill .question-tile.used.has-result .used-result-avatar-art,
 .board-presentation-mode .question-tile.used.has-result .used-result-avatar-art {
-  border: 2px solid rgba(255,255,255,.75);
-  border-radius: 50%;
-  background: rgba(2,20,33,.66);
-  font-size: 1.1rem !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  font-size: 1.55rem !important;
+}
+
+.presentation-board .question-tile.used.has-result .used-result-avatar-art .player-avatar-content,
+.presentation-board-fill .question-tile.used.has-result .used-result-avatar-art .player-avatar-content,
+.board-presentation-mode .question-tile.used.has-result .used-result-avatar-art .player-avatar-content {
+  inset: 1px;
 }
 
 
