@@ -73,8 +73,10 @@
   }
 
   .showcase-menu .host-menu-actions {
-    width: 100% !important;
-    max-width: none !important;
+    width: min(680px, 88%) !important;
+    max-width: 680px !important;
+    margin-inline: auto;
+    justify-self: center;
     gap: clamp(9px, 1.2vh, 15px) !important;
   }
 
@@ -105,7 +107,13 @@
   }
 
   .showcase-menu .join-game-button {
-    min-height: clamp(160px, 22vh, 260px) !important;
+    width: min(340px, 88%) !important;
+    max-width: 340px !important;
+    height: auto !important;
+    min-height: clamp(92px, 12vh, 128px) !important;
+    margin-inline: auto;
+    justify-self: center;
+    align-self: start;
   }
 
   .showcase-menu .menu-tool-button {
@@ -168,7 +176,7 @@
   }
 
   .showcase-menu .join-game-button {
-    min-height: 118px !important;
+    min-height: 92px !important;
   }
 
   .showcase-menu .menu-tool-button {

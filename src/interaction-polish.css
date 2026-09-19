@@ -23,10 +23,6 @@
   justify-items: center;
 }
 
-.showcase-menu .menu-actions {
-  width: min(760px, 100%);
-}
-
 .showcase-menu .menu-footer {
   position: fixed;
   left: 50%;
