@@ -671,6 +671,7 @@ export class BrowserGameEngine {
     // A typed-response clue cannot make progress with no phones. Practice mode falls back to the normal reveal flow.
     const responseMode = connected.length === 0 && configuredResponseMode === 'text' ? 'buzz' : configuredResponseMode;
     tile.used = true;
+    tile.turnPlayerId = turnPlayer?.id ?? null;
     tile.playedValue = question.value * multiplier;
     tile.results = [];
     room.state.remainingQuestions -= 1;
