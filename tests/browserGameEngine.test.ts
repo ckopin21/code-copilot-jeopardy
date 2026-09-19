@@ -592,7 +592,6 @@ describe('BrowserGameEngine production state', () => {
       engine.revealAnswer(host.roomCode, host.hostToken);
       engine.resolveTextResponse(host.roomCode, host.hostToken, player.playerId, false);
       engine.confirmTextResponses(host.roomCode, host.hostToken);
-      engine.advanceToBoard(host.roomCode, host.hostToken);
     }
 
     finishBoardWithoutScoring(engine, host.roomCode, host.hostToken);
@@ -823,9 +822,9 @@ describe('BrowserGameEngine production state', () => {
     const confirmed = engine.snapshot(host.roomCode);
     expect(confirmed.players.find((player) => player.id === one.playerId)?.score).toBe(value);
     expect(confirmed.players.find((player) => player.id === two.playerId)?.score).toBe(-value);
-
-    engine.advanceToBoard(host.roomCode, host.hostToken);
-    expect(engine.snapshot(host.roomCode).turnPlayerId).toBe(two.playerId);
+    expect(confirmed.phase).toBe('board');
+    expect(confirmed.currentQuestion).toBeNull();
+    expect(confirmed.turnPlayerId).toBe(two.playerId);
   });
 
   it('does not penalize only the selector when a Free Response timer expires', () => {
@@ -895,7 +894,10 @@ describe('BrowserGameEngine production state', () => {
     expect(revealed.players.find((candidate) => candidate.id === player.playerId)?.score).toBe(0);
 
     engine.confirmTextResponses(host.roomCode, host.hostToken);
-    expect(engine.snapshot(host.roomCode).currentQuestion?.textResponses?.[player.playerId].resolvedCorrect).toBe(true);
+    const confirmed = engine.snapshot(host.roomCode);
+    expect(confirmed.phase).toBe('board');
+    expect(confirmed.currentQuestion).toBeNull();
+    expect(confirmed.players.find((candidate) => candidate.id === player.playerId)?.score).toBeGreaterThan(0);
   });
 
   it('keeps Classic and Free Response question packs isolated', () => {
