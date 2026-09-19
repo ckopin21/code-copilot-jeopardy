@@ -505,6 +505,7 @@ async function assertJoinScreenGeometry(page) {
   expect(Math.abs(layout.previewAvatar.centerY - layout.preview.centerY)).toBeLessThanOrEqual(1.5);
   expect(layout.previewCopy.left - layout.previewAvatar.right).toBeGreaterThanOrEqual(5);
   expect(Math.abs(layout.accentBar.centerY - layout.preview.centerY)).toBeLessThanOrEqual(1.5);
+  expect(layout.joinButton.top - layout.customizer.bottom).toBeGreaterThanOrEqual(8.5);
   expect(Math.abs(layout.codeInput.bottom - layout.scanButton.bottom)).toBeLessThanOrEqual(1);
   expect(Math.abs(layout.codeInput.height - layout.scanButton.height)).toBeLessThanOrEqual(1);
 
