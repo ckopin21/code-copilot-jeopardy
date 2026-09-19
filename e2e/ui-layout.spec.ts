@@ -179,14 +179,14 @@ test('presentation lab dynamic overlays remain on-screen', async ({ page }) => {
 
 test('visual lab supports fullscreen presentation testing and outside dismissal', async ({ page }) => {
   await page.addInitScript(() => {
-    let fakeFullscreenElement = null;
+    let fakeFullscreenElement: Element | null = null;
     Object.defineProperty(document, 'fullscreenElement', {
       configurable: true,
       get: () => fakeFullscreenElement
     });
     Object.defineProperty(Element.prototype, 'requestFullscreen', {
       configurable: true,
-      value: async function requestFullscreen() {
+      value: async function requestFullscreen(this: Element) {
         fakeFullscreenElement = this;
         document.dispatchEvent(new Event('fullscreenchange'));
       }
