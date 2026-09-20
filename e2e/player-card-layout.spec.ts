@@ -353,6 +353,18 @@ test('avatar remains centered for 2–5 players in the normal-host cascade', asy
     const selected = panel.locator('.dev-stage [data-player-id="dev-player-2"]');
     const geometry = await measurePlayerCard(selected);
     expectAvatarCentered(geometry);
+    if (count === 5) {
+      const cards = panel.locator('.dev-stage .showcase-player-card');
+      for (let index = 0; index < await cards.count(); index += 1) {
+        const avatarGeometry = await measurePlayerCard(cards.nth(index));
+        console.info('AVATAR_DIAGNOSTIC host-avatar', JSON.stringify({
+          index,
+          x: avatarGeometry.avatarGlyphCenterDeltaX,
+          y: avatarGeometry.avatarGlyphCenterDeltaY,
+          transform: avatarGeometry.avatarGlyphTransform
+        }));
+      }
+    }
     expect(geometry.textBadgeOverlap).toBe(false);
     expect(geometry.avatarBadgeOverlap).toBe(false);
     expectTransparentStatusLane(geometry, 2);
@@ -440,18 +452,35 @@ async function measurePresentationCard(card: Locator) {
       inner.right <= outer.right + 1 &&
       inner.top >= outer.top - 1 &&
       inner.bottom <= outer.bottom + 1;
+    const centerX = (rect: ReturnType<typeof rectOf>) => (rect.left + rect.right) / 2;
+    const centerY = (rect: ReturnType<typeof rectOf>) => (rect.top + rect.bottom) / 2;
 
     const avatar = element.querySelector('.presentation-player-avatar');
+    const avatarArt = element.querySelector('.presentation-player-avatar .player-avatar-art');
+    const avatarGlyph = element.querySelector('.presentation-player-avatar .player-avatar-emoji');
     const main = element.querySelector('.presentation-player-main');
     const name = main?.querySelector('strong');
     const status = main?.querySelector('small');
     const score = element.querySelector(':scope > b');
-    if (!(avatar instanceof HTMLElement) || !(main instanceof HTMLElement) || !(name instanceof HTMLElement) || !(status instanceof HTMLElement) || !(score instanceof HTMLElement)) {
+    if (!(avatar instanceof HTMLElement) || !(avatarArt instanceof HTMLElement) || !(avatarGlyph instanceof HTMLElement) || !(main instanceof HTMLElement) || !(name instanceof HTMLElement) || !(status instanceof HTMLElement) || !(score instanceof HTMLElement)) {
       throw new Error('Missing presentation card content');
     }
 
     const cardRect = rectOf(element);
     const avatarRect = rectOf(avatar);
+    const avatarArtRect = rectOf(avatarArt);
+    const glyphRange = document.createRange();
+    glyphRange.selectNodeContents(avatarGlyph);
+    const glyphRectRaw = glyphRange.getBoundingClientRect();
+    glyphRange.detach();
+    const glyphRect = {
+      left: glyphRectRaw.left,
+      top: glyphRectRaw.top,
+      right: glyphRectRaw.right,
+      bottom: glyphRectRaw.bottom,
+      width: glyphRectRaw.width,
+      height: glyphRectRaw.height
+    };
     const mainRect = rectOf(main);
     const scoreRect = rectOf(score);
     const nameStyle = getComputedStyle(name);
@@ -463,6 +492,11 @@ async function measurePresentationCard(card: Locator) {
       avatarMainOverlap: overlaps(avatarRect, mainRect),
       mainScoreOverlap: overlaps(mainRect, scoreRect),
       childrenContained: [avatar, main, name, status, score].every((node) => contains(cardRect, rectOf(node))),
+      avatarArtCenterDeltaX: centerX(avatarArtRect) - centerX(avatarRect),
+      avatarArtCenterDeltaY: centerY(avatarArtRect) - centerY(avatarRect),
+      avatarGlyphCenterDeltaX: centerX(glyphRect) - centerX(avatarRect),
+      avatarGlyphCenterDeltaY: centerY(glyphRect) - centerY(avatarRect),
+      avatarGlyphTransform: getComputedStyle(avatarGlyph).transform,
       nameWhiteSpace: nameStyle.whiteSpace,
       nameOverflow: nameStyle.overflow,
       nameTextOverflow: nameStyle.textOverflow,
@@ -481,6 +515,19 @@ for (const multiplier of [2, 3] as const) {
 
     const heights = await cards.evaluateAll((nodes) => nodes.map((node) => node instanceof HTMLElement ? node.offsetHeight : node.getBoundingClientRect().height));
     for (const height of heights) closeTo(height, heights[0]);
+
+    for (let index = 0; index < await cards.count(); index += 1) {
+      const avatarGeometry = await measurePresentationCard(cards.nth(index));
+      console.info('AVATAR_DIAGNOSTIC presentation-avatar', JSON.stringify({
+        multiplier,
+        index,
+        artX: avatarGeometry.avatarArtCenterDeltaX,
+        artY: avatarGeometry.avatarArtCenterDeltaY,
+        x: avatarGeometry.avatarGlyphCenterDeltaX,
+        y: avatarGeometry.avatarGlyphCenterDeltaY,
+        transform: avatarGeometry.avatarGlyphTransform
+      }));
+    }
 
     const fire = presentation.locator('.presentation-name-card.is-fire').first();
     const coldTurn = presentation.locator('.presentation-name-card.is-cold.is-turn').first();
