@@ -55,6 +55,7 @@ export function HostAppV3() {
   const [qr, setQr] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [connectionOnline, setConnectionOnline] = useState(socket.connected);
   const [controllerId, setControllerId] = useState('');
   const [showJoin, setShowJoin] = useState(false);
   const [reviewId, setReviewId] = useState<string | null>(null);
@@ -100,8 +101,16 @@ export function HostAppV3() {
   useEffect(() => {
     fetch('/api/packs').then((response) => response.json()).then(setPacks).catch(() => setError('Could not load question packs'));
     const onState = (next: RoomSnapshot) => setRoom(next);
+    const onConnect = () => setConnectionOnline(true);
+    const onDisconnect = () => setConnectionOnline(false);
     socket.on('room:state', onState);
-    return () => socket.off('room:state', onState);
+    socket.on('connect', onConnect);
+    socket.on('disconnect', onDisconnect);
+    return () => {
+      socket.off('room:state', onState);
+      socket.off('connect', onConnect);
+      socket.off('disconnect', onDisconnect);
+    };
   }, []);
 
   useEffect(() => {
@@ -123,7 +132,7 @@ export function HostAppV3() {
           const parsed = readActiveHostCredentials();
           if (parsed) {
             try {
-              const snapshot = await emitAck<RoomSnapshot>('host:reconnect', { roomCode: parsed.roomCode, hostToken: parsed.hostToken });
+              const snapshot = await emitAck<RoomSnapshot>('host:reconnect', { roomCode: parsed.roomCode, hostToken: parsed.hostToken, allowAuthorityTakeover: true });
               writeHostCredentials(parsed);
               setCredentials(parsed);
               setRoom(snapshot);
@@ -620,7 +629,7 @@ export function HostAppV3() {
         <button className="nav-button" onClick={goMenu}>← Menu</button>
         <div className="mini-brand"><span>BLUE STAGE</span><strong>TRIVIA</strong></div>
         <div className="room-code">ROOM <strong>{room.code}</strong></div>
-        <div className={`connection-pill ${socket.connected ? 'online' : ''}`}>{socket.connected ? 'LIVE' : 'RECONNECTING'}</div>
+        <div className={`connection-pill ${connectionOnline ? 'online' : ''}`} role="status" aria-live="polite">{connectionOnline ? 'LIVE' : 'RECONNECTING'}</div>
         <button className="nav-button" onClick={() => setShowJoin(true)}>Join QR</button>
         <button className="nav-button danger-ghost" onClick={() => void resetGame()}>Reset Game</button>
         <button className="nav-button danger-ghost" onClick={hardReset}>Reset Instance</button>
