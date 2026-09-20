@@ -391,10 +391,7 @@ async function openProductionPresentation(page: Page, multiplier: 2 | 3) {
   await page.addInitScript(() => {
     Object.defineProperty(Element.prototype, 'requestFullscreen', {
       configurable: true,
-      value: async function (this: Element) {
-        this.setAttribute('data-playwright-fullscreen-target', 'true');
-        throw new Error('Use deterministic fallback fullscreen in layout tests');
-      }
+      value: undefined
     });
   });
 
@@ -409,7 +406,9 @@ async function openProductionPresentation(page: Page, multiplier: 2 | 3) {
   const lab = page.locator('.dev-visual-lab-section');
   await lab.getByRole('button', { name: 'Fullscreen Visual & animation lab' }).click();
   await expect(lab).toHaveAttribute('data-dev-visual-lab-fullscreen', 'true');
-  await lab.getByRole('button', { name: 'Presentation Mode', exact: true }).click({ force: true });
+  const presentationToggle = lab.getByRole('button', { name: 'Presentation Mode', exact: true });
+  await presentationToggle.evaluate((element) => (element as HTMLButtonElement).click());
+  await expect(presentationToggle).toHaveAttribute('aria-pressed', 'true');
 
   const presentation = lab.locator('[data-dev-production-presentation="true"] .board-presentation-mode');
   await expect(presentation).toBeVisible();
