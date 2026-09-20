@@ -7,6 +7,7 @@ import { menuUrl } from '../lib/resetInstance';
 import { turnIndicatorVisible } from '../lib/gameUiRules';
 import { finalWagerRules } from '../lib/finalWagerRules';
 import { freeResponseReadingTimer } from '../lib/freeResponseFlow';
+import { shouldRefreshAfterHeartbeatFailures } from '../lib/clientRecoveryPolicy';
 import { Timer } from './Timer';
 import { QrScanner } from './QrScanner';
 import { PlayerAvatar } from './PlayerAvatar';
@@ -148,8 +149,11 @@ export function PlayerApp() {
         setRecovering(false);
       } catch (err) {
         syncFailuresRef.current += 1;
-        setRecovering(true);
-        setError(err instanceof Error ? `Connection interrupted: ${err.message}. Retrying automatically.` : 'Connection interrupted. Retrying automatically.');
+        if (shouldRefreshAfterHeartbeatFailures(syncFailuresRef.current)) {
+          setRecovering(true);
+          setError(err instanceof Error ? `Connection interrupted: ${err.message}. Rebuilding the connection automatically.` : 'Connection interrupted. Rebuilding the connection automatically.');
+          resumeClientSession(false, true);
+        }
       } finally { syncing = false; }
     };
     const timer = window.setInterval(() => { void sync(); }, 3000);
