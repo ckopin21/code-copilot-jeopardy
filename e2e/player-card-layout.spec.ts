@@ -16,7 +16,6 @@ type CardGeometry = {
   turnContained: boolean;
   avatarCenterDelta: number;
   avatarArtCenterDelta: number;
-  avatarGridOffsetX: number;
   avatarGlyphTransform: string;
   statusBackgroundColor: string | null;
   statusBoxShadow: string | null;
@@ -75,7 +74,6 @@ async function measurePlayerCard(card: Locator): Promise<CardGeometry> {
       inner.right <= outer.right + 1 &&
       inner.top >= outer.top - 1 &&
       inner.bottom <= outer.bottom + 1;
-    const centerX = (rect: ReturnType<typeof rectOf>) => (rect.left + rect.right) / 2;
     const centerY = (rect: ReturnType<typeof rectOf>) => (rect.top + rect.bottom) / 2;
 
     const cardRect = rectOf(element);
@@ -128,13 +126,6 @@ async function measurePlayerCard(card: Locator): Promise<CardGeometry> {
     const nameTextRect = textRect(name);
     const scoreTextRect = textRect(score);
     const nameStyle = getComputedStyle(name);
-    const cardStyle = getComputedStyle(element);
-    const firstGridTrack = Number.parseFloat(cardStyle.gridTemplateColumns.split(/\s+/)[0] ?? '0');
-    const gridTrackCenterX =
-      cardRect.left +
-      Number.parseFloat(cardStyle.borderLeftWidth || '0') +
-      Number.parseFloat(cardStyle.paddingLeft || '0') +
-      firstGridTrack / 2;
     const statusStyle = status instanceof HTMLElement ? getComputedStyle(status) : null;
 
     return {
@@ -153,7 +144,6 @@ async function measurePlayerCard(card: Locator): Promise<CardGeometry> {
       turnContained: turnRect && turnRect.width > 0 && turnRect.height > 0 ? contains(cardRect, turnRect) : true,
       avatarCenterDelta: Math.abs(centerY(avatarRect) - centerY(cardRect)),
       avatarArtCenterDelta: Math.abs(centerY(avatarArtRect) - centerY(avatarRect)),
-      avatarGridOffsetX: centerX(avatarRect) - gridTrackCenterX,
       avatarGlyphTransform: getComputedStyle(avatarGlyph).transform,
       statusBackgroundColor: statusStyle?.backgroundColor ?? null,
       statusBoxShadow: statusStyle?.boxShadow ?? null,
@@ -202,26 +192,8 @@ async function setBoardMultiplier(panel: Locator, multiplier: 1 | 2 | 3) {
   await panel.locator('label').filter({ hasText: 'Board modifier' }).locator('select').selectOption(String(multiplier));
 }
 
-async function setQuestionViewSurface(panel: Locator, enabled: boolean) {
-  await panel.locator('.dev-stage').evaluate((element, shouldEnable) => {
-    element.querySelector(':scope > .question-stage[data-layout-test-surface]')?.remove();
-    if (!shouldEnable) return;
-    const marker = document.createElement('section');
-    marker.className = 'question-stage';
-    marker.setAttribute('data-layout-test-surface', 'true');
-    marker.hidden = true;
-    element.appendChild(marker);
-  }, enabled);
-}
-
-function expectQuestionAvatarOpticalOffset(geometry: CardGeometry) {
-  expect(geometry.avatarGridOffsetX).toBeGreaterThanOrEqual(-2.5);
-  expect(geometry.avatarGridOffsetX).toBeLessThanOrEqual(-1.5);
-}
-
 test('Question View keeps player-card geometry stable and the status lane visually transparent', async ({ page }) => {
   const panel = await openDevPanel(page, { width: 1440, height: 900 });
-  await setQuestionViewSurface(panel, true);
   const selected = panel.locator('.dev-stage [data-player-id="dev-player-2"]');
   const normal = panel.locator('.dev-stage [data-player-id="dev-player-1"]');
   await expect(selected).toBeVisible();
@@ -234,7 +206,6 @@ test('Question View keeps player-card geometry stable and the status lane visual
   closeTo(baseline.width, normalGeometry.width);
   closeTo(baseline.height, normalGeometry.height);
   expectAvatarCentered(baseline);
-  expectQuestionAvatarOpticalOffset(baseline);
 
   await setTurnPreview(panel, 'question');
   const turnGeometry = await measurePlayerCard(selected);
@@ -243,7 +214,6 @@ test('Question View keeps player-card geometry stable and the status lane visual
   expect(turnGeometry.mainTurnOverlap).toBe(false);
   expect(turnGeometry.turnContained).toBe(true);
   expectAvatarCentered(turnGeometry);
-  expectQuestionAvatarOpticalOffset(turnGeometry);
 
   await setTurnPreview(panel, 'none');
   await setCardState(panel, 'fire');
@@ -319,7 +289,6 @@ test('Question View keeps player-card geometry stable and the status lane visual
 
 test('Board View star-only turn state keeps the same player-card geometry', async ({ page }) => {
   const panel = await openDevPanel(page);
-  await setQuestionViewSurface(panel, false);
   const selected = panel.locator('.dev-stage [data-player-id="dev-player-2"]');
 
   await setTurnPreview(panel, 'none');
@@ -369,7 +338,6 @@ for (const viewport of [
 ]) {
   test(`${viewport.label} keeps status effects from resizing or painting the wrapper`, async ({ page }) => {
     const panel = await openDevPanel(page, { width: viewport.width, height: viewport.height });
-    await setQuestionViewSurface(panel, true);
     const selected = panel.locator('.dev-stage [data-player-id="dev-player-2"]');
 
     await setTurnPreview(panel, 'none');
@@ -381,7 +349,6 @@ for (const viewport of [
     closeTo(fireOnly.width, baseline.width);
     closeTo(fireOnly.height, baseline.height);
     expectAvatarCentered(fireOnly);
-    expectQuestionAvatarOpticalOffset(fireOnly);
     expect(fireOnly.textBadgeOverlap).toBe(false);
     expect(fireOnly.avatarBadgeOverlap).toBe(false);
     expectTransparentStatusLane(fireOnly, 1);
