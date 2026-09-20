@@ -87,6 +87,8 @@ Allowed wagers are fixed presets: 100, 200, 300, 400, 500, and 1000, subject to 
 
 After selection, the locked wager and total points in play are visible on the host question area and on all connected phones. If Daily Double multiplier stacking is enabled, the displayed points in play include the current late-game multiplier.
 
+Daily Double scoring is committed immediately by the authoritative game engine when the host judges the response. The score-flight animation is presentation-only and must not mask or delay the updated score, including when the Daily Double is the first scored clue of a fresh game.
+
 ## Streaks
 
 On Fire activates after three consecutive correct responses. Cold Streak activates at the configured consecutive-miss threshold. A correct response resets cold progress; an incorrect response resets positive streak progress. Streak states are reflected in the host player card and phone UI.
