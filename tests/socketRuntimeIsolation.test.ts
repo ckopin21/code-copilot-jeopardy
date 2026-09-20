@@ -188,4 +188,77 @@ describe('production socket runtime isolation', () => {
     expect(players[0]).toMatchObject({ id: credentials.playerId, seat, connected: true, name: 'Reconnect' });
     host.destroy(); replacement.destroy();
   });
+
+  it('rejects delayed stale-question and stale-game packets on the production host dispatcher', async () => {
+    const { createSocketRuntime } = await import('../src/lib/socket');
+    DeterministicPeer.peers.clear();
+    DeterministicPeer.clientConnections = [];
+    const peerFactory = (id: string | undefined) => new DeterministicPeer(id) as never;
+    const engine = new BrowserGameEngine();
+    location.search = '?mode=host';
+    const host = createSocketRuntime({ createPeer: peerFactory, createEngine: () => engine, installBrowserHooks: false });
+    const room = await host.emitAck<{ roomCode: string; hostToken: string }>('room:create', { settings: { dailyDoublesEnabled: false, finalRoundEnabled: false } });
+    const player = createSocketRuntime({ createPeer: peerFactory, installBrowserHooks: false });
+    location.search = '?mode=player';
+    const identity = await player.emitAck<{ playerId: string; reconnectToken: string }>('player:join', { roomCode: room.roomCode, name: 'Stale', avatar: '🚀', accent: '#93c5fd' });
+    location.search = '?mode=host';
+    await host.emitAck('host:start-game', { roomCode: room.roomCode, hostToken: room.hostToken });
+    const first = engine.snapshot(room.roomCode);
+    const firstQuestion = first.board!.questions.find((entry) => !entry.used)!;
+    await host.emitAck('host:select-question', { roomCode: room.roomCode, hostToken: room.hostToken, questionId: firstQuestion.questionId });
+    const staleContext = engine.snapshot(room.roomCode);
+    await host.emitAck('host:reveal-answer', { roomCode: room.roomCode, hostToken: room.hostToken });
+    await host.emitAck('host:advance-board', { roomCode: room.roomCode, hostToken: room.hostToken });
+    const secondQuestion = engine.snapshot(room.roomCode).board!.questions.find((entry) => !entry.used)!;
+    await host.emitAck('host:select-question', { roomCode: room.roomCode, hostToken: room.hostToken, questionId: secondQuestion.questionId });
+    await host.emitAck('host:open-buzzers', { roomCode: room.roomCode, hostToken: room.hostToken });
+    const wire = DeterministicPeer.clientConnections[0]!;
+    const errors: string[] = [];
+    wire.on('data', (message: { kind?: string; requestId?: string; ok?: boolean; error?: string }) => { if (message.kind === 'response' && message.requestId?.startsWith('stale-') && !message.ok) errors.push(message.error ?? ''); });
+    wire.send({ kind: 'request', requestId: 'stale-question', event: 'player:buzz', payload: { roomCode: room.roomCode, ...identity, questionId: staleContext.currentQuestion!.questionId, gameStartedAt: staleContext.gameStartedAt } });
+    await settle();
+    const afterQuestion = engine.snapshot(room.roomCode);
+    expect(afterQuestion.currentQuestion?.buzzWinnerId).toBeNull();
+    expect(errors.join(' ')).toMatch(/older question/i);
+
+    await host.emitAck('host:reset-game', { roomCode: room.roomCode, hostToken: room.hostToken });
+    wire.send({ kind: 'request', requestId: 'stale-game', event: 'player:buzz', payload: { roomCode: room.roomCode, ...identity, questionId: secondQuestion.questionId, gameStartedAt: staleContext.gameStartedAt } });
+    await settle();
+    expect(engine.snapshot(room.roomCode).phase).toBe('lobby');
+    expect(errors.join(' ')).toMatch(/older game/i);
+    host.destroy(); player.destroy();
+  });
+
+  it('reconstructs a persisted host room and restores an existing player without duplicate state', async () => {
+    const { createSocketRuntime } = await import('../src/lib/socket');
+    DeterministicPeer.peers.clear();
+    const peerFactory = (id: string | undefined) => new DeterministicPeer(id) as never;
+    const initialEngine = new BrowserGameEngine();
+    location.search = '?mode=host';
+    const firstHost = createSocketRuntime({ createPeer: peerFactory, createEngine: () => initialEngine, installBrowserHooks: false });
+    const room = await firstHost.emitAck<{ roomCode: string; hostToken: string }>('room:create', { settings: { dailyDoublesEnabled: false, finalRoundEnabled: false } });
+    const firstPlayer = createSocketRuntime({ createPeer: peerFactory, installBrowserHooks: false });
+    location.search = '?mode=player';
+    const identity = await firstPlayer.emitAck<{ playerId: string; reconnectToken: string }>('player:join', { roomCode: room.roomCode, name: 'Recovery', avatar: '🚀', accent: '#93c5fd' });
+    location.search = '?mode=host';
+    await firstHost.emitAck('host:start-game', { roomCode: room.roomCode, hostToken: room.hostToken });
+    const before = initialEngine.snapshot(room.roomCode);
+    firstHost.destroy();
+    firstPlayer.destroy();
+    await settle();
+
+    const recoveredEngine = new BrowserGameEngine();
+    const recoveredHost = createSocketRuntime({ createPeer: peerFactory, createEngine: () => recoveredEngine, installBrowserHooks: false });
+    const restored = await recoveredHost.emitAck<{ code: string; phase: string }>('host:reconnect', { roomCode: room.roomCode, hostToken: room.hostToken });
+    location.search = '?mode=player';
+    const recoveredPlayer = createSocketRuntime({ createPeer: peerFactory, installBrowserHooks: false });
+    await recoveredPlayer.emitAck('player:reconnect', { roomCode: room.roomCode, ...identity });
+    const after = recoveredEngine.snapshot(room.roomCode);
+
+    expect(restored).toMatchObject({ code: room.roomCode, phase: before.phase });
+    expect(after.players).toHaveLength(1);
+    expect(after.players[0]).toMatchObject({ id: identity.playerId, name: 'Recovery', connected: true });
+    expect(after.phase).toBe(before.phase);
+    recoveredHost.destroy(); recoveredPlayer.destroy();
+  });
 });
