@@ -11,6 +11,8 @@ The host has two different player-management actions:
 
 The room stays open throughout the game. There is no host-facing lock-session control.
 
+When the host returns to the main menu from an active game, the room is paused rather than torn down. Connected phones remain connected to the same room and see the paused state. **Continue Saved Game** returns to that paused game. **Start New Game** reuses the same room, resets scores/board/stats/history, and preserves each player's seat, name, avatar, accent, buzzer sound, score effect, victory effect, reconnect token, and current connection state.
+
 ## Lobby
 
 The host chooses a game mode, exactly one compatible question pack, and the game rules, then starts the game. Players can join by room code or QR scan. The lobby QR itself is clickable and opens a larger scanning view. Audio begins when the host starts or continues a game. Fresh instances start at Master 75%, Music 50%, and Effects 75%; all remain adjustable.
@@ -114,7 +116,9 @@ Every lobby rule control has a brief desktop hover/focus tooltip describing what
 
 ## Reset behavior
 
-Reset Game preserves the room and reserved player seats but clears the current board, scores, streaks, statistics, Final state, timers, and host question history. Connected phones receive the new lobby snapshot immediately and should not require a page reload.
+New Game/Reset Game preserves the room, connected controllers, reserved seats, reconnect identities, and player customization, while clearing the current board, scores, streaks, statistics, Final state, timers, and host question history. Connected phones receive the new lobby snapshot immediately and do not need to rejoin.
+
+After a completed game reaches recap, the host can choose **Start New Game** directly from the podium/statistics flow. This uses the same carryover behavior and returns the existing room to the lobby.
 
 Reset Instance is the destructive recovery option. It clears saved Blue Stage host/player/game state and reloads the application cleanly.
 
