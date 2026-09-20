@@ -21,7 +21,7 @@ export function BoardPresentation({ room, onBack, onSelect, onReview, results = 
           const displayedScore = scoreOverrides[player.id] ?? player.score;
           const customization = normalizePlayerCustomization(player);
           return <div data-player-id={player.id} data-score-effect={customization.scoreEffect} className={`presentation-name-card ${room.turnPlayerId === player.id ? 'is-turn' : ''} ${player.onFire ? 'is-fire' : ''} ${player.isCold ? 'is-cold' : ''}`} key={player.id} style={{ '--accent': player.accent } as React.CSSProperties}>
-            <span className="presentation-player-avatar"><PlayerAvatar avatarId={player.avatarId} fallback={player.avatar} frameStyle={customization.frameStyle} accent={player.accent} /></span>
+            <span className="presentation-player-avatar"><PlayerAvatar avatarId={player.avatarId} fallback={player.avatar} frameStyle={customization.frameStyle} accent={player.accent} autoCenter /></span>
             <div className="presentation-player-main"><strong>{player.name}</strong><small>{status}</small></div>
             <b data-player-score={player.id}>{displayedScore.toLocaleString()}</b>
           </div>;
