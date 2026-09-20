@@ -32,6 +32,8 @@ type CardGeometry = {
   nameWhiteSpace: string;
   nameOverflow: string;
   nameTextOverflow: string;
+  streakLabelTruncated: boolean;
+  streakLabelContained: boolean;
 };
 
 const closeTo = (actual: number, expected: number, tolerance = 1.5) => {
@@ -46,6 +48,11 @@ function expectAvatarCentered(geometry: CardGeometry) {
   expect(geometry.avatarArtCenterDelta).toBeLessThanOrEqual(1);
   expect(Math.abs(geometry.avatarGlyphCenterDeltaX)).toBeLessThanOrEqual(1);
   expect(Math.abs(geometry.avatarGlyphCenterDeltaY)).toBeLessThanOrEqual(1);
+}
+
+function expectStreakLabelFits(geometry: CardGeometry) {
+  expect(geometry.streakLabelTruncated).toBe(false);
+  expect(geometry.streakLabelContained).toBe(true);
 }
 
 function expectTransparentStatusLane(geometry: CardGeometry, expectedVisiblePills: number) {
@@ -124,12 +131,15 @@ async function measurePlayerCard(card: Locator): Promise<CardGeometry> {
       const style = getComputedStyle(badge);
       return style.display !== 'none' && style.visibility !== 'hidden' && Number(style.opacity || '1') > 0;
     });
-    const textRect = (node: HTMLElement) => {
+    const rawTextRect = (node: HTMLElement) => {
       const range = document.createRange();
       range.selectNodeContents(node);
       const rect = range.getBoundingClientRect();
       range.detach();
-      const raw = { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height };
+      return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height };
+    };
+    const textRect = (node: HTMLElement) => {
+      const raw = rawTextRect(node);
       const style = getComputedStyle(node);
       if (style.overflow !== 'hidden' && style.overflowX !== 'hidden' && style.textOverflow !== 'ellipsis') return raw;
       const clip = rectOf(node);
@@ -139,6 +149,8 @@ async function measurePlayerCard(card: Locator): Promise<CardGeometry> {
       const bottom = Math.min(raw.bottom, clip.bottom);
       return { left, top, right, bottom, width: Math.max(0, right - left), height: Math.max(0, bottom - top) };
     };
+    const streakBadge = status instanceof HTMLElement ? status.querySelector('.streak-ribbon') : null;
+    const streakLabel = streakBadge instanceof HTMLElement ? streakBadge.querySelector('b') : null;
     const nameTextRect = textRect(name);
     const scoreTextRect = textRect(score);
     const nameStyle = getComputedStyle(name);
@@ -175,7 +187,11 @@ async function measurePlayerCard(card: Locator): Promise<CardGeometry> {
       visiblePillShadows: visibleBadges.map((badge) => getComputedStyle(badge).boxShadow),
       nameWhiteSpace: nameStyle.whiteSpace,
       nameOverflow: nameStyle.overflow,
-      nameTextOverflow: nameStyle.textOverflow
+      nameTextOverflow: nameStyle.textOverflow,
+      streakLabelTruncated: streakLabel instanceof HTMLElement ? streakLabel.scrollWidth > streakLabel.clientWidth + 1 : false,
+      streakLabelContained: streakBadge instanceof HTMLElement && streakLabel instanceof HTMLElement
+        ? contains(rectOf(streakBadge), rawTextRect(streakLabel))
+        : true
     };
   });
 }
@@ -243,6 +259,7 @@ test('Question View keeps player-card geometry stable and the status lane visual
   expect(fireOnly.avatarBadgeOverlap).toBe(false);
   expect(fireOnly.badgesContained).toBe(true);
   expectTransparentStatusLane(fireOnly, 1);
+  expectStreakLabelFits(fireOnly);
   expectAvatarCentered(fireOnly);
 
   await setCardState(panel, 'cold');
@@ -253,6 +270,7 @@ test('Question View keeps player-card geometry stable and the status lane visual
   expect(coldOnly.textBadgeOverlap).toBe(false);
   expect(coldOnly.avatarBadgeOverlap).toBe(false);
   expectTransparentStatusLane(coldOnly, 1);
+  expectStreakLabelFits(coldOnly);
 
   await setTurnPreview(panel, 'question');
   await setCardState(panel, 'fire');
@@ -264,6 +282,7 @@ test('Question View keeps player-card geometry stable and the status lane visual
   expect(fireTurn.avatarBadgeOverlap).toBe(false);
   expect(fireTurn.badgesContained).toBe(true);
   expectTransparentStatusLane(fireTurn, 2);
+  expectStreakLabelFits(fireTurn);
 
   await setCardState(panel, 'cold');
   const coldTurn = await measurePlayerCard(selected);
@@ -273,6 +292,7 @@ test('Question View keeps player-card geometry stable and the status lane visual
   expect(coldTurn.textBadgeOverlap).toBe(false);
   expect(coldTurn.avatarBadgeOverlap).toBe(false);
   expectTransparentStatusLane(coldTurn, 2);
+  expectStreakLabelFits(coldTurn);
 
   await setCardState(panel, 'fire');
   await setBoardMultiplier(panel, 2);
@@ -281,6 +301,7 @@ test('Question View keeps player-card geometry stable and the status lane visual
   closeTo(doubleGeometry.height, baseline.height);
   expect(doubleGeometry.textBadgeOverlap).toBe(false);
   expectTransparentStatusLane(doubleGeometry, 2);
+  expectStreakLabelFits(doubleGeometry);
 
   await setBoardMultiplier(panel, 3);
   const tripleGeometry = await measurePlayerCard(selected);
@@ -288,6 +309,7 @@ test('Question View keeps player-card geometry stable and the status lane visual
   closeTo(tripleGeometry.height, baseline.height);
   expect(tripleGeometry.textBadgeOverlap).toBe(false);
   expectTransparentStatusLane(tripleGeometry, 2);
+  expectStreakLabelFits(tripleGeometry);
 
   await setTurnPreview(panel, 'question');
   await setCardState(panel, 'ready');
@@ -327,6 +349,7 @@ test('Board View star-only turn state keeps the same player-card geometry', asyn
   expect(boardFire.textBadgeOverlap).toBe(false);
   expect(boardFire.avatarBadgeOverlap).toBe(false);
   expectTransparentStatusLane(boardFire, 1);
+  expectStreakLabelFits(boardFire);
 });
 
 test('avatar remains centered for 2–5 players in the normal-host cascade', async ({ page }) => {
@@ -353,6 +376,7 @@ test('avatar remains centered for 2–5 players in the normal-host cascade', asy
     expect(geometry.textBadgeOverlap).toBe(false);
     expect(geometry.avatarBadgeOverlap).toBe(false);
     expectTransparentStatusLane(geometry, 2);
+  expectStreakLabelFits(geometry);
   }
 });
 
@@ -376,6 +400,7 @@ for (const viewport of [
     expect(fireOnly.textBadgeOverlap).toBe(false);
     expect(fireOnly.avatarBadgeOverlap).toBe(false);
     expectTransparentStatusLane(fireOnly, 1);
+  expectStreakLabelFits(fireOnly);
 
     await setTurnPreview(panel, 'question');
     const fireTurn = await measurePlayerCard(selected);
@@ -384,6 +409,7 @@ for (const viewport of [
     expect(fireTurn.textBadgeOverlap).toBe(false);
     expect(fireTurn.avatarBadgeOverlap).toBe(false);
     expectTransparentStatusLane(fireTurn, 2);
+  expectStreakLabelFits(fireTurn);
   });
 }
 

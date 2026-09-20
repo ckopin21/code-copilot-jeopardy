@@ -54,19 +54,14 @@
 }
 
 /*
- * Keep the avatar shell and artwork box on the card grid centerline. Rendered layout
- * measurements show the normal-host emoji glyph itself sits 1.5–2.6px right of that
- * centerline, while the old vertical lift moved it about 1px too high. Correct only
- * the glyph in normal host views so card geometry and Presentation Mode stay unchanged.
+ * Keep the avatar shell itself centered in its grid track. PlayerAvatar optically centers
+ * host/game emoji from their rendered glyph bounds so Apple, Segoe, and Noto emoji fonts
+ * do not need a platform-specific hard-coded offset.
  */
 .showcase-player-card .player-avatar-large {
   align-self: center !important;
   justify-self: center;
   margin-block: 0 !important;
-}
-
-.showcase-host:not(.host-presentation-mode) .showcase-player-card .player-avatar-large .player-avatar-emoji {
-  transform: translateX(-2px);
 }
 
 /* Five-player presentation layouts retain status text without allowing it to add a second row. */
@@ -127,20 +122,30 @@
   inset: auto !important;
   margin: 0 !important;
   transform: none !important;
-  flex: 0 1 auto;
-  min-width: 0;
-  max-width: 100% !important;
   white-space: nowrap !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
 }
 
-.showcase-player-card .player-status-stack .streak-ribbon > span {
+.showcase-player-card .player-status-stack .streak-ribbon {
   flex: 0 0 auto;
+  min-width: max-content;
+  max-width: none !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
 }
 
+.showcase-player-card .player-status-stack .streak-ribbon > span,
 .showcase-player-card .player-status-stack .streak-ribbon b,
-.showcase-player-card .player-status-stack .streak-ribbon em,
+.showcase-player-card .player-status-stack .streak-ribbon em {
+  flex: 0 0 auto;
+  min-width: max-content;
+  max-width: none;
+  white-space: nowrap !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  overflow-wrap: normal !important;
+  word-break: normal;
+}
+
 .showcase-player-card .player-status-stack .turn-beacon,
 .showcase-player-card .player-status-stack .turn-beacon b {
   min-width: 0;

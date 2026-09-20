@@ -66,8 +66,13 @@ async function assertPresentationResultAvatarsArePlain(page, rootSelector) {
       const avatarStyle = getComputedStyle(node);
       const contentStyle = getComputedStyle(content);
       const emojiStyle = getComputedStyle(emoji);
+      const glyphRange = document.createRange();
+      glyphRange.selectNodeContents(emoji);
+      const glyphRect = glyphRange.getBoundingClientRect();
+      glyphRange.detach();
       return {
         glyph: emoji.textContent?.trim() ?? '',
+        glyphBox: { left: glyphRect.left, top: glyphRect.top, right: glyphRect.right, bottom: glyphRect.bottom, width: glyphRect.width, height: glyphRect.height },
         avatar: {
           ...box(node),
           borderWidths: [avatarStyle.borderTopWidth, avatarStyle.borderRightWidth, avatarStyle.borderBottomWidth, avatarStyle.borderLeftWidth],
@@ -128,6 +133,8 @@ async function assertPresentationResultAvatarsArePlain(page, rootSelector) {
 
     expect(Math.abs((item.avatar.left + item.avatar.right) / 2 - (item.content.left + item.content.right) / 2)).toBeLessThanOrEqual(1);
     expect(Math.abs((item.avatar.top + item.avatar.bottom) / 2 - (item.content.top + item.content.bottom) / 2)).toBeLessThanOrEqual(1);
+    expect(Math.abs((item.avatar.left + item.avatar.right) / 2 - (item.glyphBox.left + item.glyphBox.right) / 2)).toBeLessThanOrEqual(1);
+    expect(Math.abs((item.avatar.top + item.avatar.bottom) / 2 - (item.glyphBox.top + item.glyphBox.bottom) / 2)).toBeLessThanOrEqual(1);
     expect(item.avatar.left).toBeGreaterThanOrEqual(item.tile.left - 1);
     expect(item.avatar.right).toBeLessThanOrEqual(item.tile.right + 1);
     expect(item.avatar.top).toBeGreaterThanOrEqual(item.tile.top - 1);
