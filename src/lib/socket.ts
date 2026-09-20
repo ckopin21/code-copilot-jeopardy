@@ -81,6 +81,7 @@ const playerLastSeen = new Map<string, number>();
 const connections = new Set<DataConnection>();
 const pending = new Map<string, PendingRequest>();
 const completedRequests = new Map<DataConnection, Map<string, ResponseMessage>>();
+const completedSessionRequests = new Map<string, Map<string, ResponseMessage>>();
 const inFlightRequests = new Map<DataConnection, Map<string, Promise<void>>>();
 let hostPeer: Peer | null = null;
 let hostRoomCode = '';
@@ -391,6 +392,11 @@ async function handleHostRequest(connection: DataConnection, message: RequestMes
     if (connection.open) connection.send(prior);
     return;
   }
+  const sessionPrior = completedSessionRequests.get(requestSessionKey(identities.get(connection)) ?? '')?.get(message.requestId);
+  if (sessionPrior) {
+    if (connection.open) connection.send(sessionPrior);
+    return;
+  }
   const active = inFlightRequests.get(connection)?.get(message.requestId);
   if (active) {
     await active;
@@ -415,25 +421,35 @@ async function handleHostRequest(connection: DataConnection, message: RequestMes
     authorizeRemoteEvent(identity, message.event, message.payload);
     const data = await dispatchHost(message.event, message.payload, connection);
     const response = { kind: 'response', requestId: message.requestId, ok: true, data } satisfies ResponseMessage;
-    const responses = completedRequests.get(connection) ?? new Map<string, ResponseMessage>();
-    responses.set(message.requestId, response);
-    completedRequests.set(connection, responses);
-    if (responses.size > 128) responses.delete(responses.keys().next().value!);
+    cacheCompletedRequest(connection, message.requestId, response);
     connection.send(response);
     const roomCode = String(message.payload.roomCode ?? '').toUpperCase();
     if (roomCode && message.event !== 'player:heartbeat') emitRoom(roomCode);
   } catch (error) {
     const response = { kind: 'response', requestId: message.requestId, ok: false, error: failMessage(error) } satisfies ResponseMessage;
-    const responses = completedRequests.get(connection) ?? new Map<string, ResponseMessage>();
-    responses.set(message.requestId, response);
-    completedRequests.set(connection, responses);
-    if (responses.size > 128) responses.delete(responses.keys().next().value!);
+    cacheCompletedRequest(connection, message.requestId, response);
     if (connection.open) connection.send(response);
   } finally {
     activeRequests.delete(message.requestId);
     if (!activeRequests.size) inFlightRequests.delete(connection);
     finishRequest();
   }
+}
+function requestSessionKey(identity: Identity | undefined): string | null {
+  if (!identity) return null;
+  return `${identity.roomCode}:${identity.role}:${identity.playerId ?? ''}`;
+}
+function cacheCompletedRequest(connection: DataConnection, requestId: string, response: ResponseMessage): void {
+  const responses = completedRequests.get(connection) ?? new Map<string, ResponseMessage>();
+  responses.set(requestId, response);
+  completedRequests.set(connection, responses);
+  if (responses.size > 128) responses.delete(responses.keys().next().value!);
+  const key = requestSessionKey(identities.get(connection));
+  if (!key) return;
+  const sessionResponses = completedSessionRequests.get(key) ?? new Map<string, ResponseMessage>();
+  sessionResponses.set(requestId, response);
+  completedSessionRequests.set(key, sessionResponses);
+  if (sessionResponses.size > 128) sessionResponses.delete(sessionResponses.keys().next().value!);
 }
 function attachHostConnection(connection: DataConnection): void {
   connections.add(connection);
@@ -982,6 +998,7 @@ window.setInterval(() => {
       playerConnections.clear();
       playerLastSeen.clear();
       completedRequests.clear();
+      completedSessionRequests.clear();
       inFlightRequests.clear();
       listeners.clear();
       if (hostRoomCode && hostAuthorityId) releaseHostAuthority(hostRoomCode, hostAuthorityId);
