@@ -17,10 +17,18 @@
 
 .presentation-name-card {
   grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
+  grid-template-rows: minmax(0, 1fr);
+  align-items: center !important;
+  align-content: center !important;
   min-height: 58px;
   height: 58px;
   box-sizing: border-box;
+}
+
+.presentation-name-card:not(.practice) > .presentation-player-avatar,
+.presentation-name-card:not(.practice) > .presentation-player-main,
+.presentation-name-card:not(.practice) > b {
+  align-self: center !important;
 }
 
 .presentation-name-strip[data-player-count="1"] .presentation-name-card,
