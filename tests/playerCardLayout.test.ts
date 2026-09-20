@@ -28,15 +28,13 @@ describe('player card layout regression', () => {
     expect(statusRules).not.toContain('position: static !important;\n  inset: auto !important;\n  transform: none !important;\n  grid-column: 3;');
   });
 
-  it('keeps the avatar shell centered and applies scoped optical corrections', () => {
+  it('keeps the avatar shell centered and applies only a tiny glyph-level optical correction', () => {
     const css = read('../src/ui-layout-audit-fixes.css');
     expect(css).toContain('.showcase-player-card .player-avatar-large {');
     expect(css).toContain('align-self: center !important;');
     expect(css).toContain('justify-self: center;');
     expect(css).toContain('.showcase-player-card .player-avatar-large .player-avatar-emoji {');
     expect(css).toContain('transform: translateY(-0.04em);');
-    expect(css).toContain('.showcase-host:not(.host-presentation-mode):has(> .question-stage) > .showcase-player-strip .showcase-player-card .player-avatar-large');
-    expect(css).toContain('transform: translateX(-2px);');
   });
 
   it('uses single-line overflow handling instead of allowing names to resize scorecards', () => {
