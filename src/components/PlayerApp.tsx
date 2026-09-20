@@ -94,23 +94,6 @@ export function PlayerApp() {
   }, []);
 
   useEffect(() => {
-    const onPageHide = () => suspendClientSession();
-    const onPageShow = () => resumeClientSession();
-    const onVisibilityChange = () => {
-      if (document.visibilityState === 'visible') resumeClientSession();
-    };
-    window.addEventListener('pagehide', onPageHide);
-    window.addEventListener('pageshow', onPageShow);
-    document.addEventListener('visibilitychange', onVisibilityChange);
-    return () => {
-      window.removeEventListener('pagehide', onPageHide);
-      window.removeEventListener('pageshow', onPageShow);
-      document.removeEventListener('visibilitychange', onVisibilityChange);
-      suspendClientSession();
-    };
-  }, []);
-
-  useEffect(() => {
     const saved = localStorage.getItem(PLAYER_KEY);
     if (!saved) return;
     let parsed: PlayerJoinCredentials;
@@ -144,7 +127,7 @@ export function PlayerApp() {
           return;
         }
         setRecovering(true);
-        setError('Reconnecting to your saved seat…');
+        setError(message);
         retryTimer = window.setTimeout(reconnect, 1500);
       }
     };
@@ -163,9 +146,10 @@ export function PlayerApp() {
         await emitAck('player:heartbeat', credentials);
         syncFailuresRef.current = 0;
         setRecovering(false);
-      } catch {
+      } catch (err) {
         syncFailuresRef.current += 1;
         setRecovering(true);
+        setError(err instanceof Error ? `Connection interrupted: ${err.message}. Retrying automatically.` : 'Connection interrupted. Retrying automatically.');
       } finally { syncing = false; }
     };
     const timer = window.setInterval(() => { void sync(); }, 3000);
@@ -359,7 +343,7 @@ export function PlayerApp() {
 
   if (!room || !me) {
     if (credentials && recovering) {
-      return <main className="phone-shell phone-join"><section className="phone-card reconnect-card"><div className="phone-brand"><span>BLUE STAGE</span><strong>TRIVIA</strong></div><div className="pulse-orb"/><h1>Reconnecting</h1><p>Restoring your seat in room <strong>{credentials.roomCode}</strong>.</p><button className="secondary-button" onClick={forgetSeat}>Use another seat</button><button className="text-button" onClick={leaveToMenu}>Back to menu</button></section></main>;
+      return <main className="phone-shell phone-join"><section className="phone-card reconnect-card"><div className="phone-brand"><span>BLUE STAGE</span><strong>TRIVIA</strong></div><div className="pulse-orb"/><h1>Reconnecting</h1><p>Restoring your seat in room <strong>{credentials.roomCode}</strong>.</p>{error && <p className="form-error" role="status">{error}</p>}<button className="secondary-button" onClick={forgetSeat}>Use another seat</button><button className="text-button" onClick={leaveToMenu}>Back to menu</button></section></main>;
     }
     return <main className="phone-shell phone-join"><section className="phone-card join-form-v2">
       <div className="phone-brand"><span>BLUE STAGE</span><strong>TRIVIA</strong></div>
@@ -401,6 +385,7 @@ export function PlayerApp() {
 
   return <main className={`player-phone-v2 ${me.onFire?'phone-fire':''} ${me.isCold?'phone-cold':''}`} data-score-effect={customization.scoreEffect} data-victory-effect={customization.victoryEffect} style={{'--accent':me.accent} as React.CSSProperties}>
     <header className="phone-header-v2"><button className="phone-menu" onClick={leaveToMenu} aria-label="Leave game">←</button><span className="phone-avatar"><PlayerAvatar avatarId={me.avatarId} fallback={me.avatar} accent={me.accent} /></span><div className="phone-identity"><strong>{me.name}</strong><small className={showTurnIndicator && room.turnPlayerId === me.id ? 'phone-turn-line' : ''}>{!recovering && socket.connected ? `${showTurnIndicator && room.turnPlayerId === me.id ? 'YOUR TURN · ' : ''}ROOM ${room.code}` : 'RECONNECTING…'}</small></div><div className="phone-score-stack"><b ref={scoreTargetRef} data-player-score={me.id}>{me.score.toLocaleString()}</b>{me.onFire && <small className="phone-header-streak fire">🔥 ON FIRE</small>}{me.isCold && <small className="phone-header-streak cold">❄ COLD</small>}{showFinalWager && me.finalWagerSubmitted && me.finalWager !== null && <small className="phone-wager-pill">WAGER {me.finalWager.toLocaleString()}</small>}</div></header>
+    {recovering && error && <p className="form-error" role="status">{error}</p>}
 
     {modifierReveal && <div className={`modifier-reveal-overlay x${modifierReveal}`} aria-live="polite"><div className="modifier-reveal-card"><span>{modifierReveal === 2 ? 'FINAL SIX' : 'FINAL THREE'}</span><strong>{modifierReveal === 2 ? 'DOUBLE POINTS' : 'TRIPLE POINTS'}</strong><p>{modifierReveal === 2 ? 'Every question is now worth 2×.' : 'Every remaining question is now worth 3×.'}</p></div></div>}
 

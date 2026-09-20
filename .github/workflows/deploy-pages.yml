@@ -37,6 +37,8 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build
+        env:
+          VITE_ICE_CONFIG_URL: ${{ vars.VITE_ICE_CONFIG_URL }}
       - uses: actions/configure-pages@v5
         with:
           enablement: true
