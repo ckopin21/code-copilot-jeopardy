@@ -536,7 +536,12 @@ export function HostAppV3() {
     const comeback = correct && !current.dailyDouble ? calculateComebackAward(room, player, pointsAtStake) : null;
     const awardedPoints = comeback?.points ?? pointsAtStake;
     const signedDelta = correct ? awardedPoints : settings.allowNegativeScores ? -incorrectPoints : -Math.min(Math.max(0, player.score), incorrectPoints);
-    setScoreOverrides((previous) => ({ ...previous, [player.id]: player.score }));
+    // Daily Double scoring is already authoritative when the resolve action returns.
+    // Do not visually pin the old score behind the flight animation: a phase transition
+    // can interrupt that first flight and make the wager look like it scored nothing.
+    if (!current.dailyDouble) {
+      setScoreOverrides((previous) => ({ ...previous, [player.id]: player.score }));
+    }
     return {
       id: randomId('score-flight'),
       questionId: current.questionId,
