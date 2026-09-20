@@ -122,8 +122,9 @@ export function HostAppV3() {
         const created = await emitAck<HostRoomCredentials>('room:create', { settings: DEFAULT_SETTINGS, baseUrl: network.baseUrl });
         writeHostCredentials(created);
         setCredentials(created);
-        if (new URLSearchParams(location.search).get('fresh') === '1') {
-          history.replaceState(null, '', stripFreshHostFlag(location.href));
+        const launchParams = new URLSearchParams(location.search);
+        if (launchParams.get('fresh') === '1' || launchParams.get('new-game') === '1') {
+          history.replaceState(null, '', stripNewGameHostFlag(stripFreshHostFlag(location.href)));
         }
       };
       try {
