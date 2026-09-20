@@ -8,6 +8,8 @@ There is intentionally one game engine and one multiplayer authority path. The f
 
 The host page must remain open for the live room to exist. The browser engine persists room snapshots to host `localStorage` so a host refresh can restore the room, subject to the room TTL and browser storage remaining intact. Running timers preserve their absolute `endsAt` value across engine reconstruction and are reconciled on load.
 
+Within one loaded app session, the authoritative host PeerJS endpoint outlives the React host screen. Returning from `?mode=host` to the main menu uses History API navigation instead of a page reload, so the host peer, player data channels, authority lease, heartbeat tracking, and room code stay alive. Active gameplay is paused before that route change. Re-entering with the one-shot new-game flag reconnects to the saved room and calls `resetGame()` instead of creating a replacement room whenever valid host credentials exist.
+
 ### Main client entry points
 
 - `src/App.tsx` — top-level host/player/presentation routing, global button audio, phone haptics, menu/fullscreen behavior, audio default migration
@@ -51,7 +53,7 @@ Final responses are private until review. A player may retain their own submitte
 
 Host credentials are stored under `blue-stage-host-room`. Player seat credentials are stored under `blue-stage-player`. A player credential contains a stable player ID, reconnect token, and room code. Leaving the phone UI intentionally does not discard those credentials, allowing the same browser to reclaim the reserved seat.
 
-The browser engine persists active rooms under `blue-stage-p2p-engine-v2`. The hard Reset Instance path clears Blue Stage client state and reloads a clean build. Normal Reset Game keeps the room and player seats but resets board, score, statistics, and game progression.
+The browser engine persists active rooms under `blue-stage-p2p-engine-v2`. The hard Reset Instance path clears Blue Stage client state and reloads a clean build. Normal New Game/Reset Game keeps the same room, host/player credentials, connection flags, permanent seats, and customization fields while resetting board, score, statistics, and game progression.
 
 ## Question flow
 
