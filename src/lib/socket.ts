@@ -26,31 +26,6 @@ export interface PlayerConnectionHealth {
   quality: 'good' | 'fair' | 'stale' | 'offline';
 }
 
-const engine = new BrowserGameEngine();
-const listeners = new Map<string, Set<Listener>>();
-const identities = new Map<DataConnection, Identity>();
-const playerConnections = new Map<string, DataConnection>();
-const playerLastSeen = new Map<string, number>();
-const connections = new Set<DataConnection>();
-const pending = new Map<string, PendingRequest>();
-const completedRequests = new Map<DataConnection, Map<string, ResponseMessage>>();
-const inFlightRequests = new Map<DataConnection, Map<string, Promise<void>>>();
-let hostPeer: Peer | null = null;
-let hostRoomCode = '';
-let hostAuthorityId = '';
-let clientPeer: Peer | null = null;
-let clientTransportGeneration = 0;
-let clientConnection: DataConnection | null = null;
-let clientRoomCode = '';
-let clientSuspended = false;
-let clientHostPaused = false;
-let reconnectDelayMs = 400;
-let reconnectTimer: number | null = null;
-let clientConnectPromise: { roomCode: string; promise: Promise<DataConnection> } | null = null;
-let authReplay: { event: 'player:reconnect' | 'presentation:join'; payload: Record<string, unknown> } | null = null;
-let hostStaleSweepBlockedUntil = 0;
-let lastHostStaleSweepAt = Date.now();
-
 const PLAYER_STALE_MS = 30000;
 const PLAYER_HEALTH_FAIR_MS = 7000;
 const PLAYER_HEALTH_STALE_MS = 15000;
@@ -89,6 +64,8 @@ export interface SocketRuntime {
 export interface SocketRuntimeOptions {
   /** Supplies the real PeerJS constructor in production or a deterministic peer in tests. */
   createPeer?: (id: string | undefined, options: { debug: number; config: { iceServers: RTCIceServer[] } }) => Peer;
+  /** Keeps deterministic runtimes on caller-controlled engine storage/state. */
+  createEngine?: () => BrowserGameEngine;
   /** Extra runtimes normally do not need duplicate global browser lifecycle hooks. */
   installBrowserHooks?: boolean;
 }
@@ -96,6 +73,30 @@ export interface SocketRuntimeOptions {
 export function createSocketRuntime(options: SocketRuntimeOptions = {}): SocketRuntime {
 const makePeer = options.createPeer ?? ((id, peerOptions) => id === undefined ? new Peer(peerOptions) : new Peer(id, peerOptions));
 const installBrowserHooks = options.installBrowserHooks ?? true;
+const engine = options.createEngine?.() ?? new BrowserGameEngine();
+const listeners = new Map<string, Set<Listener>>();
+const identities = new Map<DataConnection, Identity>();
+const playerConnections = new Map<string, DataConnection>();
+const playerLastSeen = new Map<string, number>();
+const connections = new Set<DataConnection>();
+const pending = new Map<string, PendingRequest>();
+const completedRequests = new Map<DataConnection, Map<string, ResponseMessage>>();
+const inFlightRequests = new Map<DataConnection, Map<string, Promise<void>>>();
+let hostPeer: Peer | null = null;
+let hostRoomCode = '';
+let hostAuthorityId = '';
+let clientPeer: Peer | null = null;
+let clientTransportGeneration = 0;
+let clientConnection: DataConnection | null = null;
+let clientRoomCode = '';
+let clientSuspended = false;
+let clientHostPaused = false;
+let reconnectDelayMs = 400;
+let reconnectTimer: number | null = null;
+let clientConnectPromise: { roomCode: string; promise: Promise<DataConnection> } | null = null;
+let authReplay: { event: 'player:reconnect' | 'presentation:join'; payload: Record<string, unknown> } | null = null;
+let hostStaleSweepBlockedUntil = 0;
+let lastHostStaleSweepAt = Date.now();
 let activeIceServers: RTCIceServer[] = DEFAULT_ICE_SERVERS;
 let iceConfigWarning = '';
 
