@@ -691,7 +691,8 @@ async function openConnectionToHost(targetRoom: string): Promise<DataConnection>
       if (settled) return;
       settled = true;
       try { connection.close(); } catch { /* ignore failed connection */ }
-      reject(error instanceof Error ? error : new Error(`Could not connect to host.${connectionFailureHint()}`));
+      const detail = error instanceof Error ? error.message : 'Could not connect to host.';
+      reject(new Error(`${detail}${connectionFailureHint()}`));
     });
     window.setTimeout(() => {
       if (settled) return;
