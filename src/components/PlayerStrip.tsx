@@ -21,12 +21,10 @@ export function PlayerStrip({ players, activeId, turnId, turnLabel = '', showWag
           ? <span className={`turn-beacon ${turnLabel ? '' : 'star-only'}`}><i>★</i>{turnLabel && <b>{turnLabel}</b>}</span>
           : null;
         return (
-          <section data-player-id={player.id} key={player.id} data-score-effect={customization.scoreEffect} data-frame={customization.frameStyle} className={`player-card showcase-player-card ${activeId === player.id ? 'is-active' : ''} ${isTurn ? 'is-turn' : ''} ${player.onFire ? 'is-fire' : ''} ${player.isCold ? 'is-cold' : ''}`} style={{ '--accent': player.accent } as React.CSSProperties}>
-            {isTurn && hasStreakStatus
-              ? <div className="player-status-stack">{streakBadge}{turnBadge}</div>
-              : streakBadge}
+          <section data-player-id={player.id} key={player.id} data-score-effect={customization.scoreEffect} data-frame={customization.frameStyle} className={`player-card showcase-player-card ${activeId === player.id ? 'is-active' : ''} ${isTurn ? 'is-turn' : ''} ${isTurn && turnLabel ? 'has-turn-label' : ''} ${player.onFire ? 'is-fire' : ''} ${player.isCold ? 'is-cold' : ''}`} style={{ '--accent': player.accent } as React.CSSProperties}>
+            {hasStreakStatus && <div className="player-status-stack">{streakBadge}{turnBadge}</div>}
             <div className="player-avatar-large"><PlayerAvatar avatarId={player.avatarId} fallback={player.avatar} frameStyle={customization.frameStyle} accent={player.accent} /></div>
-            <div className="player-card-main"><div className="player-name"><strong>{player.name}</strong></div><div className="score" data-player-score={player.id}>{displayedScore.toLocaleString()}</div>{showWagers && player.finalWagerSubmitted && player.finalWager !== null && <div className="player-wager-pill">WAGER {player.finalWager.toLocaleString()}</div>}</div>
+            <div className="player-card-main"><div className="player-name"><strong title={player.name}>{player.name}</strong></div><div className="score" data-player-score={player.id}>{displayedScore.toLocaleString()}</div>{showWagers && player.finalWagerSubmitted && player.finalWager !== null && <div className="player-wager-pill">WAGER {player.finalWager.toLocaleString()}</div>}</div>
             {isTurn && !hasStreakStatus
               ? turnBadge
               : !isTurn && !hasStreakStatus && !player.finalWagerSubmitted && <div className="streak neutral">{player.positiveStreak > 0 ? `STREAK ${player.positiveStreak}` : 'READY'}</div>}

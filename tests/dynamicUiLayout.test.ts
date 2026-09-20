@@ -10,25 +10,27 @@ describe('dynamic UI layout regression', () => {
       .toBeGreaterThan(main.indexOf("import './normal-host-layout.css';"));
   });
 
-  it('keeps player names, statuses, result names, turn badges, and podium names untruncated', () => {
+  it('keeps live player identities single-line while long-form result and podium text may wrap', () => {
     const css = read('../src/ui-layout-audit-fixes.css');
     for (const selector of [
       '.presentation-player-main strong',
       '.presentation-player-main small',
       '.showcase-player-card .player-name',
-      '.streak-ribbon b',
-      '.showcase-player-card.is-turn .turn-beacon',
+      '.showcase-player-card .player-name strong',
       '.podium-name',
       '.question-tile.used.has-result .used-result-chip b'
     ]) expect(css).toContain(selector);
+    expect(css).toContain('text-overflow: ellipsis !important;');
+    expect(css).toContain('white-space: nowrap !important;');
     expect(css).toContain('text-overflow: clip !important;');
     expect(css).toContain('white-space: normal !important;');
   });
 
-  it('uses dedicated flow space for stacked status and result modifiers', () => {
+  it('isolates stacked player status from card sizing while result modifiers keep dedicated flow rows', () => {
     const css = read('../src/ui-layout-audit-fixes.css');
     expect(css).toContain('.showcase-player-card .player-status-stack');
-    expect(css).toContain('position: static !important;');
+    expect(css).toContain('position: absolute !important;');
+    expect(css).toContain('transform: translateY(-50%) !important;');
     expect(css).toContain('grid-template-rows: auto minmax(0, 1fr) !important;');
     expect(css).toContain('flex-wrap: wrap !important;');
   });

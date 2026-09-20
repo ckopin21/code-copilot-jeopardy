@@ -842,13 +842,13 @@ for (const [label, effect, particles] of [
     await expect(panel).toBeVisible();
 
     const setEffect = async () => {
-      await page.locator('[data-player-id="dev-player-2"]').evaluateAll((surfaces, selectedEffect) => {
+      await panel.locator('.dev-stage [data-player-id="dev-player-2"]').evaluateAll((surfaces, selectedEffect) => {
         for (const surface of surfaces) {
           if (surface instanceof HTMLElement) surface.dataset.scoreEffect = String(selectedEffect);
         }
       }, effect);
     };
-    const scoreTarget = page.locator('[data-player-score="dev-player-2"]:visible').last();
+    const scoreTarget = panel.locator('.dev-stage [data-player-score="dev-player-2"]').last();
     const scoreValue = async () => Number(((await scoreTarget.textContent()) ?? '0').replace(/[^0-9-]/g, ''));
     const initialScore = await scoreValue();
 
@@ -878,13 +878,13 @@ test('score effects use a reduced-motion fallback without animation', async ({ p
   await page.goto('/?mode=host&fresh=1');
   await page.getByRole('button', { name: 'Open developer mode' }).click();
   const panel = page.locator('.dev-mode-panel');
-  await page.locator('[data-player-id="dev-player-2"]').evaluateAll((surfaces) => {
+  await panel.locator('.dev-stage [data-player-id="dev-player-2"]').evaluateAll((surfaces) => {
     for (const surface of surfaces) {
       if (surface instanceof HTMLElement) surface.dataset.scoreEffect = 'wave';
     }
   });
 
-  const scoreTarget = page.locator('[data-player-score="dev-player-2"]:visible').last();
+  const scoreTarget = panel.locator('.dev-stage [data-player-score="dev-player-2"]').last();
   await panel.getByRole('button', { name: 'Score +', exact: true }).click();
   await expect(scoreTarget).toHaveClass(/score-impact-wave.*score-impact-reduced/, { timeout: 3500 });
   expect(await scoreTarget.evaluate((element) => getComputedStyle(element).animationName)).toBe('none');
