@@ -233,6 +233,8 @@ export interface FinalRoundState {
   /** Players who were in the game when Final began. Late joins spectate until the next game. */
   rosterIds?: string[];
   responsesClosed: boolean;
+  /** Why Final answers were locked; retained through host recovery. */
+  responsesClosedReason?: 'all-submitted' | 'timer-expired' | 'host-force-close' | null;
 }
 
 export interface RoomState {

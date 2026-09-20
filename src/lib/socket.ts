@@ -299,7 +299,7 @@ async function dispatchHost(event: string, payload: Record<string, unknown>, con
     case 'host:stop-timer': return engine.stopTimer(roomCode, hostToken);
     case 'host:begin-final-wagers': return engine.beginFinalWagers(roomCode, hostToken);
     case 'host:open-final-question': return engine.openFinalQuestion(roomCode, hostToken);
-    case 'host:begin-final-review': return engine.beginFinalReview(roomCode, hostToken);
+    case 'host:begin-final-review': return engine.beginFinalReview(roomCode, hostToken, payload.forceClose === true);
     case 'host:resolve-final': return engine.resolveFinalAnswer(roomCode, hostToken, String(payload.playerId ?? ''), typeof payload.correct === 'boolean' ? payload.correct : undefined);
     case 'host:end-game': return engine.endGame(roomCode, hostToken);
     case 'player:buzz': {

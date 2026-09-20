@@ -618,8 +618,10 @@ export function HostAppV3() {
 
   const beginFinalReview = async () => {
     if (revealRunningRef.current) return;
+    const forceClose = !room.finalRound?.responsesClosed;
+    if (forceClose && !confirm('Some Final answers are still being entered. Close submissions and begin review?')) return;
     await runRevealTension();
-    const ok = await perform('host:begin-final-review');
+    const ok = await perform('host:begin-final-review', { forceClose });
     if (!ok) {
       cancelRevealTension();
       return;

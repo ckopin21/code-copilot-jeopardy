@@ -436,11 +436,26 @@ describe('BrowserGameEngine production state', () => {
     const locked = engine.snapshot(host.roomCode);
     expect(locked.phase).toBe('final-question');
     expect(locked.finalRound?.responsesClosed).toBe(true);
+    expect(locked.finalRound?.responsesClosedReason).toBe('timer-expired');
     expect(locked.timer.running).toBe(false);
     expect(() => engine.submitFinalAnswer(host.roomCode, player.playerId, player.reconnectToken, 'late answer')).toThrow(/closed/i);
 
     engine.beginFinalReview(host.roomCode, host.hostToken);
     expect(engine.snapshot(host.roomCode).phase).toBe('final-review');
+  });
+
+  it('requires a confirmed force-close before Final review can end an active answer window', () => {
+    const { engine, host } = setup({ gameLength: 'quick', dailyDoublesEnabled: false, finalRoundEnabled: true });
+    const player = addPlayer(engine, host.roomCode);
+    engine.startGame(host.roomCode, host.hostToken);
+    finishBoardWithoutScoring(engine, host.roomCode, host.hostToken);
+    engine.beginFinalWagers(host.roomCode, host.hostToken);
+    engine.submitFinalWager(host.roomCode, player.playerId, player.reconnectToken, 0);
+    engine.openFinalQuestion(host.roomCode, host.hostToken);
+
+    expect(() => engine.beginFinalReview(host.roomCode, host.hostToken)).toThrow(/still open/i);
+    engine.beginFinalReview(host.roomCode, host.hostToken, true);
+    expect(engine.snapshot(host.roomCode).finalRound?.responsesClosedReason).toBe('host-force-close');
   });
 
   it('locks Final responses after all active participants submit but preserves host-controlled reveal', () => {

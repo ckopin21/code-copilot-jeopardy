@@ -134,6 +134,7 @@ export class BrowserGameEngine {
         finalRound.participantIds ??= previouslyConnected.length ? previouslyConnected : record.state.players.map((player) => player.id);
         finalRound.rosterIds ??= record.state.players.map((player) => player.id);
         finalRound.responsesClosed ??= record.state.phase === 'final-review' || record.state.phase === 'recap';
+        finalRound.responsesClosedReason ??= finalRound.responsesClosed ? 'timer-expired' : null;
         if (record.state.phase === 'final-review') {
           const unresolved = (playerId: string) => {
             const candidate = record.state.players.find((player) => player.id === playerId);
@@ -474,7 +475,7 @@ export class BrowserGameEngine {
       room.state.finalRound.rosterIds = (room.state.finalRound.rosterIds ?? []).filter((idValue) => idValue !== playerId);
       if (room.state.phase === 'final-question' && !room.state.finalRound.responsesClosed) {
         const active = this.activeFinalParticipants(room);
-        if (active.length === 0 || active.every((candidate) => candidate.finalAnswerSubmitted)) this.closeFinalResponsesInternal(room);
+        if (active.length === 0 || active.every((candidate) => candidate.finalAnswerSubmitted)) this.closeFinalResponsesInternal(room, 'all-submitted');
       }
       if (room.state.phase === 'final-review') this.setNextFinalReviewPlayer(room);
     }
@@ -767,7 +768,7 @@ export class BrowserGameEngine {
     if (room.state.phase !== 'daily-double-wager' || !current?.dailyDoublePlayerId) throw new Error('No Daily Double wager is pending');
     const player = room.state.players.find((item) => item.id === current.dailyDoublePlayerId)!;
     const maximum = room.state.settings.allowWagerBeyondScore ? room.state.settings.maxWager : Math.min(room.state.settings.maxWager, Math.max(0, player.score));
-    if (!Number.isInteger(wager) || wager < 0 || wager > maximum) throw new Error(`Wager must be between 0 and ${maximum}`);
+    if (!QUESTION_VALUES.includes(wager as (typeof QUESTION_VALUES)[number]) || wager > maximum) throw new Error('Choose an available preset Daily Double wager');
     current.wager = wager;
     const tile = room.state.board?.questions.find((entry) => entry.questionId === current.questionId);
     if (tile) {
@@ -1167,7 +1168,7 @@ export class BrowserGameEngine {
     if (!room.state.timer.running || !room.state.timer.endsAt || room.state.timer.endsAt > now) return false;
     room.state.timer = emptyTimer();
     if (room.state.phase === 'final-question') {
-      this.closeFinalResponsesInternal(room);
+      this.closeFinalResponsesInternal(room, 'timer-expired');
     } else if (room.state.currentQuestion?.responseMode === 'text' && !room.state.currentQuestion.answerRevealed) {
       if (gameModePenalizesTypedTimeout(room.state.settings)) this.penalizeUnansweredTurn(room);
       this.closeTextResponsesInternal(room);
@@ -1247,7 +1248,8 @@ export class BrowserGameEngine {
       reviewPlayerId: null,
       participantIds,
       rosterIds: room.state.players.map((player) => player.id),
-      responsesClosed: false
+      responsesClosed: false,
+      responsesClosedReason: null
     };
     const participants = new Set(participantIds);
     room.state.players.forEach((player) => {
@@ -1277,7 +1279,9 @@ export class BrowserGameEngine {
     if (!room.state.finalRound.participantIds.includes(player.id)) throw new Error('This seat is not participating in Final Round');
     if (player.finalWagerSubmitted) throw new Error('Your Final wager is already locked');
     const { maxWager } = finalWagerRules(room.state, player.id);
-    if (!Number.isInteger(wager) || wager < 0 || wager > maxWager) throw new Error(`Wager must be between 0 and ${maxWager}`);
+    const rules = finalWagerRules(room.state, player.id);
+    const allIn = rules.allInAllowed && player.score > 0 && wager === player.score;
+    if ((!QUESTION_VALUES.includes(wager as (typeof QUESTION_VALUES)[number]) && wager !== 0 && !allIn) || wager > maxWager) throw new Error('Choose an available Final preset: 0 and 1000 are the bounds, or All In');
     player.finalWager = wager;
     player.finalWagerSubmitted = true;
     player.stats.biggestWager = Math.max(player.stats.biggestWager, wager);
@@ -1316,29 +1320,31 @@ export class BrowserGameEngine {
     player.finalAnswer = trimmed;
     player.finalAnswerSubmitted = true;
     const active = this.activeFinalParticipants(room);
-    if (active.length === 0 || active.every((candidate) => candidate.finalAnswerSubmitted)) this.closeFinalResponsesInternal(room);
+    if (active.length === 0 || active.every((candidate) => candidate.finalAnswerSubmitted)) this.closeFinalResponsesInternal(room, 'all-submitted');
     this.persist();
     return this.snapshot(roomCode);
   }
 
-  private closeFinalResponsesInternal(room: RoomRecord): void {
+  private closeFinalResponsesInternal(room: RoomRecord, reason: NonNullable<RoomState['finalRound']>['responsesClosedReason']): void {
     if (!room.state.finalRound) return;
     room.state.finalRound.responsesClosed = true;
+    room.state.finalRound.responsesClosedReason = reason;
     this.stopTimerInternal(room);
   }
 
-  private enterFinalReviewInternal(room: RoomRecord): void {
+  private enterFinalReviewInternal(room: RoomRecord, forceClose = false): void {
     const finalRound = room.state.finalRound;
     if (!finalRound) return;
-    this.closeFinalResponsesInternal(room);
+    if (!finalRound.responsesClosed && !forceClose) throw new Error('Final answers are still open');
+    if (!finalRound.responsesClosed) this.closeFinalResponsesInternal(room, 'host-force-close');
     room.state.phase = 'final-review';
     this.setNextFinalReviewPlayer(room);
   }
 
-  beginFinalReview(roomCode: string, hostToken: string): RoomSnapshot {
+  beginFinalReview(roomCode: string, hostToken: string, forceClose = false): RoomSnapshot {
     const room = this.hostRoom(roomCode, hostToken);
     if (room.state.phase !== 'final-question' || !room.state.finalRound) throw new Error('Final question is not active');
-    this.enterFinalReviewInternal(room);
+    this.enterFinalReviewInternal(room, forceClose);
     this.persist();
     return this.snapshot(roomCode);
   }
