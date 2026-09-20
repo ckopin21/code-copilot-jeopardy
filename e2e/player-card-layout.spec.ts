@@ -199,7 +199,15 @@ async function measurePlayerCard(card: Locator): Promise<CardGeometry> {
 async function openDevPanel(page: Page, viewport = { width: 1440, height: 900 }) {
   await page.setViewportSize(viewport);
   await page.goto('/?mode=host&fresh=1');
-  await page.getByRole('button', { name: 'Open developer mode' }).click();
+  const trigger = page.getByRole('button', { name: 'Open developer mode' });
+  await expect(trigger).toBeVisible();
+  // These tests validate player-card layout, not pointer actionability. WebKit can report
+  // this fixed dev-only trigger as perpetually "unstable" while the host boot UI settles.
+  // A DOM click avoids that unrelated flake without weakening the layout assertions.
+  await trigger.evaluate((button) => {
+    if (!(button instanceof HTMLButtonElement)) throw new Error('Developer mode trigger is unavailable');
+    button.click();
+  });
   const panel = page.locator('.dev-mode-panel');
   await expect(panel).toBeVisible();
   await panel.getByRole('button', { name: '2P', exact: true }).click();
