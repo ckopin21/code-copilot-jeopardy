@@ -1,15 +1,6 @@
 /* Comprehensive dynamic UI layout repair pass. Loaded last. */
 
-/* Never truncate player identity or state in scoreboards. */
-.presentation-player-main strong,
-.presentation-player-main small,
-.presentation-name-card strong,
-.showcase-player-card .player-name,
-.showcase-player-card .player-name strong,
-.streak-ribbon b,
-.streak-ribbon em,
-.showcase-player-card.is-turn .turn-beacon,
-.showcase-player-card.is-turn .turn-beacon b,
+/* Long-form podium text may wrap, but live player scorecards must not grow with labels. */
 .podium-name {
   overflow: visible !important;
   text-overflow: clip !important;
@@ -18,6 +9,7 @@
   word-break: normal;
 }
 
+/* Player identity surfaces keep a fixed geometry while names/status text use their allotted space. */
 .presentation-player-main,
 .showcase-player-card .player-card-main {
   min-width: 0;
@@ -26,13 +18,42 @@
 .presentation-name-card {
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
+  min-height: 58px;
+  height: 58px;
+  box-sizing: border-box;
+}
+
+.presentation-name-strip[data-player-count="1"] .presentation-name-card,
+.presentation-name-strip[data-player-count="2"] .presentation-name-card {
+  min-height: 72px;
+  height: 72px;
 }
 
 .presentation-player-main {
+  min-width: 0;
   align-content: center;
 }
 
-/* Five-player presentation layouts keep status text instead of hiding it. */
+.presentation-player-main strong,
+.presentation-player-main small,
+.presentation-name-card strong,
+.showcase-player-card .player-name,
+.showcase-player-card .player-name strong {
+  min-width: 0;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  overflow-wrap: normal !important;
+  word-break: normal;
+}
+
+.showcase-player-card .player-name,
+.showcase-player-card .player-name strong {
+  display: block;
+  width: 100%;
+}
+
+/* Five-player presentation layouts retain status text without allowing it to add a second row. */
 @media (max-width: 1100px) and (min-width: 760px) {
   .presentation-name-strip[data-player-count="5"] .presentation-player-main small {
     display: block !important;
@@ -41,29 +62,121 @@
   }
 }
 
-/* Put turn + streak state into real card space. */
-.showcase-player-card .player-status-stack {
-  position: static !important;
-  inset: auto !important;
-  transform: none !important;
-  grid-column: 3;
-  grid-row: 1;
-  align-self: center;
-  justify-self: end;
-  max-width: min(150px, 34%);
+@media (max-height: 720px) and (min-width: 760px) {
+  .presentation-name-strip[data-player-count="1"] .presentation-name-card,
+  .presentation-name-strip[data-player-count="2"] .presentation-name-card {
+    min-height: 58px;
+    height: 58px;
+  }
+}
+
+/*
+ * Status badges are overlaid in a reserved right-hand slot. They never participate in
+ * the card's grid sizing, so adding Fire/Cold + turn state cannot change card height.
+ */
+.showcase-player-card {
   min-width: 0;
+  box-sizing: border-box;
+}
+
+.showcase-player-card .player-status-stack {
+  position: absolute !important;
+  inset: 50% 8px auto auto !important;
+  transform: translateY(-50%) !important;
+  grid-column: auto;
+  grid-row: auto;
+  z-index: 10;
+  width: min(150px, 34%);
+  max-width: calc(100% - 64px);
+  max-height: calc(100% - 8px);
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 4px;
+  overflow: hidden;
+  pointer-events: none;
 }
 
 .showcase-player-card .player-status-stack .streak-ribbon,
 .showcase-player-card .player-status-stack .turn-beacon {
   position: static !important;
+  inset: auto !important;
+  margin: 0 !important;
   transform: none !important;
+  flex: 0 1 auto;
+  min-width: 0;
   max-width: 100% !important;
-  white-space: normal !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
 }
 
-.showcase-player-card.is-turn:is(.is-fire,.is-cold) {
-  padding-right: clamp(10px, 1.1vw, 18px) !important;
+.showcase-player-card .player-status-stack .streak-ribbon > span {
+  flex: 0 0 auto;
+}
+
+.showcase-player-card .player-status-stack .streak-ribbon b,
+.showcase-player-card .player-status-stack .streak-ribbon em,
+.showcase-player-card .player-status-stack .turn-beacon,
+.showcase-player-card .player-status-stack .turn-beacon b {
+  min-width: 0;
+  max-width: 100%;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  overflow-wrap: normal !important;
+  word-break: normal;
+}
+
+.showcase-player-card:is(.is-fire,.is-cold) {
+  padding-right: 112px !important;
+}
+
+/* The standalone Presentation screen uses fixed-height PlayerStrip cards. */
+.presentation-shell .showcase-player-card.player-card {
+  min-height: 116px !important;
+  height: 116px !important;
+  box-sizing: border-box;
+}
+
+.presentation-shell .showcase-player-card:is(.is-fire,.is-cold) {
+  padding-right: 132px !important;
+}
+
+@media (max-width: 900px) {
+  .presentation-shell .showcase-player-card.player-card {
+    min-height: 96px !important;
+    height: 96px !important;
+  }
+}
+
+/* Compact host cards reserve a smaller status lane and drop only secondary streak detail. */
+@media (min-width: 760px) {
+  .showcase-host:not(.host-presentation-mode) .showcase-player-card:is(.is-fire,.is-cold) {
+    padding-right: 84px !important;
+  }
+
+  .showcase-host:not(.host-presentation-mode) .showcase-player-card .player-status-stack {
+    inset: 50% 5px auto auto !important;
+    width: 72px;
+    max-width: 42%;
+    max-height: calc(100% - 4px);
+    gap: 2px;
+  }
+
+  .showcase-host:not(.host-presentation-mode) .showcase-player-card .player-status-stack .streak-ribbon,
+  .showcase-host:not(.host-presentation-mode) .showcase-player-card .player-status-stack .turn-beacon {
+    padding: 1px 4px !important;
+    border-width: 1px !important;
+    font-size: .4rem !important;
+    line-height: 1 !important;
+  }
+
+  .showcase-host:not(.host-presentation-mode) .showcase-player-card .player-status-stack .streak-ribbon em {
+    display: none !important;
+  }
 }
 
 /* Used-result tiles reserve their top row and allow identity/badges to wrap. */
