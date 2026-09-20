@@ -52,7 +52,7 @@ let lastHostStaleSweepAt = Date.now();
 const PLAYER_STALE_MS = 30000;
 const PLAYER_HEALTH_FAIR_MS = 7000;
 const PLAYER_HEALTH_STALE_MS = 15000;
-const HEARTBEAT_TIMEOUT_MS = 7000;
+const HEARTBEAT_TIMEOUT_MS = 9000;
 const HOST_STALE_SWEEP_GRACE_MS = 10000;
 const HOST_STALE_SWEEP_STALL_MS = 6000;
 
@@ -760,7 +760,7 @@ async function clientRequest(event: string, payload: Record<string, unknown>): P
     event,
     payload,
     event === 'player:heartbeat' ? HEARTBEAT_TIMEOUT_MS : 8000,
-    true
+    event !== 'player:heartbeat'
   );
   if (event === 'player:join' || event === 'player:reconnect') {
     const credentials = result as PlayerJoinCredentials;
