@@ -305,6 +305,11 @@ test('Board View star-only turn state keeps the same player-card geometry', asyn
 
 test('avatar remains centered for 2–5 players in the normal-host cascade', async ({ page }) => {
   const panel = await openDevPanel(page);
+  await panel.locator('.dev-stage').evaluate((element) => {
+    if (!(element instanceof HTMLElement)) return;
+    element.style.width = '1200px';
+    element.style.maxWidth = 'none';
+  });
   await setTurnPreview(panel, 'question');
   await setCardState(panel, 'fire');
 
