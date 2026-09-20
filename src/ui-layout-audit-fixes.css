@@ -79,6 +79,13 @@
   box-sizing: border-box;
 }
 
+/* Explicit centering prevents responsive card overrides from nudging the avatar. The 1px lift is optical: the fixed-height card grid can land the circular avatar on a half-pixel boundary. */
+.showcase-player-card .player-avatar-large {
+  align-self: center !important;
+  margin-block: 0 !important;
+  translate: 0 -1px;
+}
+
 .showcase-player-card .player-status-stack {
   position: absolute !important;
   inset: 50% 8px auto auto !important;
@@ -95,7 +102,14 @@
   align-items: flex-end;
   justify-content: center;
   gap: 4px;
-  overflow: hidden;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  filter: none !important;
+  backdrop-filter: none !important;
+  isolation: auto;
+  contain: none !important;
+  overflow: visible;
   pointer-events: none;
 }
 
