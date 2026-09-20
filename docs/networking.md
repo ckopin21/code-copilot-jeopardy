@@ -133,24 +133,58 @@ This is browser-local recovery, not a cloud backup. Clearing site storage or Res
 
 ## NAT/firewall behavior and TURN
 
-Default ICE configuration uses public STUN servers. WebRTC can fail on restrictive networks/NAT combinations that require TURN.
+Default ICE configuration uses public STUN servers. STUN can discover server-reflexive candidates, but it cannot relay traffic when direct NAT traversal is impossible. Restrictive/symmetric NAT combinations therefore require TURN for reliable cross-network operation.
 
-The transport accepts an optional deployment-level override:
+This matters most when the host and phone are on different networks, on carrier/mobile NAT, behind restrictive Wi-Fi/firewalls, or after a device changes network paths. The reconnect lifecycle rebuilds stale WebRTC state after Safari resumes or connectivity returns, but it cannot make an impossible STUN-only route succeed.
+
+### Recommended secure TURN configuration
+
+GitHub Pages is a public static bundle, so long-lived TURN usernames/passwords must never be committed, placed in `VITE_*` secrets, or assigned directly in public JavaScript.
+
+Instead, configure only the URL of an HTTPS endpoint that mints short-lived ICE credentials. The deployed build reads the public repository variable `VITE_ICE_CONFIG_URL`, or a runtime page can set the equivalent global:
+
+```js
+window.BLUE_STAGE_ICE_CONFIG_URL = 'https://relay-config.example.com/ice';
+```
+
+The endpoint should return either an ICE-server array or:
+
+```json
+{
+  "iceServers": [
+    { "urls": ["stun:stun.example.com:3478"] },
+    {
+      "urls": ["turn:turn.example.com:3478?transport=udp", "turns:turn.example.com:5349"],
+      "username": "short-lived-user",
+      "credential": "short-lived-credential"
+    }
+  ]
+}
+```
+
+Requirements for that endpoint:
+
+- mint short-lived TURN credentials server-side; keep the TURN shared secret off GitHub Pages
+- allow CORS from the deployed Blue Stage origin
+- return fresh credentials without relying on browser cookies
+- use HTTPS
+- keep credential lifetime long enough for a game, while allowing a reconnect to fetch a fresh set
+
+Each newly created PeerJS peer fetches the endpoint with `cache: no-store`. If the endpoint is temporarily unavailable, Blue Stage falls back to the normal STUN list and includes that fact in the connection failure message.
+
+The older `window.BLUE_STAGE_ICE_SERVERS` override remains supported for local testing, private deployments, or already-short-lived credentials:
 
 ```js
 window.BLUE_STAGE_ICE_SERVERS = [
-  { urls: 'stun:your-stun.example.com:3478' },
-  {
-    urls: 'turn:your-turn.example.com:3478',
-    username: 'deployment-user',
-    credential: 'deployment-secret'
-  }
+  { urls: 'stun:stun.example.com:3478' }
 ];
 ```
 
-The repository intentionally does not ship public TURN credentials. TURN credentials are deployment secrets and require an external TURN service. Once configured before the game transport initializes, the same PeerJS/WebRTC path uses those ICE servers automatically.
+Do not put a long-lived TURN credential in `BLUE_STAGE_ICE_SERVERS`; anything in the page is visible to every visitor.
 
-For the intended host-computer + phone-controller setup, keeping devices on normal Internet/Wi-Fi with WebRTC allowed remains the expected zero-configuration path.
+### Failure behavior
+
+If no TURN relay is configured, direct WebRTC may still work normally on typical home/Wi-Fi networks. When it cannot establish a route, the player now receives a connection error that explicitly notes the STUN-only limitation instead of hanging indefinitely.
 
 ## Local preview networking
 
