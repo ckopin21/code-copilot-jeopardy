@@ -53,6 +53,21 @@
   width: 100%;
 }
 
+/*
+ * The avatar shell is already geometrically centered by the card grid. Color-emoji
+ * glyphs sit slightly low inside their own square on common emoji fonts, so only the
+ * visible glyph gets a tiny optical lift. Keep the shell itself on the grid centerline.
+ */
+.showcase-player-card .player-avatar-large {
+  align-self: center !important;
+  justify-self: center;
+  margin-block: 0 !important;
+}
+
+.showcase-player-card .player-avatar-large .player-avatar-emoji {
+  transform: translateY(-0.04em);
+}
+
 /* Five-player presentation layouts retain status text without allowing it to add a second row. */
 @media (max-width: 1100px) and (min-width: 760px) {
   .presentation-name-strip[data-player-count="5"] .presentation-player-main small {
@@ -95,7 +110,13 @@
   align-items: flex-end;
   justify-content: center;
   gap: 4px;
-  overflow: hidden;
+  /* Do not clip child pill shadows/glows into a rectangular wrapper silhouette. */
+  overflow: visible;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  filter: none !important;
+  backdrop-filter: none !important;
   pointer-events: none;
 }
 
