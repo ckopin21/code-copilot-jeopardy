@@ -290,4 +290,28 @@ describe('production socket runtime isolation', () => {
     await expect(replacement.emitAck('player:buzz', { roomCode: room.roomCode, ...identity, questionId: state.currentQuestion!.questionId, gameStartedAt: state.gameStartedAt })).resolves.toMatchObject({ accepted: true });
     host.destroy(); original.destroy(); replacement.destroy();
   });
+
+  it('ignores a delayed close from an obsolete client connection after reconnecting', async () => {
+    const { createSocketRuntime } = await import('../src/lib/socket');
+    DeterministicPeer.peers.clear();
+    DeterministicPeer.clientConnections = [];
+    const peerFactory = (id: string | undefined) => new DeterministicPeer(id) as never;
+    const host = createSocketRuntime({ createPeer: peerFactory, createEngine: () => new BrowserGameEngine(), installBrowserHooks: false });
+    location.search = '?mode=host';
+    const room = await host.emitAck<{ roomCode: string }>('room:create', { settings: {} });
+    location.search = '?mode=player';
+    const player = createSocketRuntime({ createPeer: peerFactory, installBrowserHooks: false });
+    await player.emitAck('player:join', { roomCode: room.roomCode, name: 'Generation', avatar: '🚀', accent: '#93c5fd' });
+    const old = DeterministicPeer.clientConnections[0]!;
+    old.close();
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    const current = DeterministicPeer.clientConnections[1]!;
+    expect(player.socket.connected).toBe(true);
+    old.emit('close');
+    old.emit('error', new Error('late'));
+    await settle();
+    expect(current.open).toBe(true);
+    expect(player.socket.connected).toBe(true);
+    host.destroy(); player.destroy();
+  });
 });
