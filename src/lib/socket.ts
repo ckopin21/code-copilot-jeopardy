@@ -33,6 +33,7 @@ const playerConnections = new Map<string, DataConnection>();
 const playerLastSeen = new Map<string, number>();
 const connections = new Set<DataConnection>();
 const pending = new Map<string, PendingRequest>();
+const completedRequests = new Map<DataConnection, Map<string, ResponseMessage>>();
 let hostPeer: Peer | null = null;
 let hostRoomCode = '';
 let hostAuthorityId = '';
@@ -357,6 +358,11 @@ async function dispatchHost(event: string, payload: Record<string, unknown>, con
 }
 
 async function handleHostRequest(connection: DataConnection, message: RequestMessage): Promise<void> {
+  const prior = completedRequests.get(connection)?.get(message.requestId);
+  if (prior) {
+    if (connection.open) connection.send(prior);
+    return;
+  }
   const requestRoomCode = String(message.payload.roomCode ?? '').toUpperCase();
   if (!ownsHostAuthority(requestRoomCode)) {
     if (connection.open) connection.send({ kind: 'response', requestId: message.requestId, ok: false, error: 'Host authority moved to another tab' } satisfies ResponseMessage);
@@ -368,18 +374,28 @@ async function handleHostRequest(connection: DataConnection, message: RequestMes
   try {
     authorizeRemoteEvent(identity, message.event, message.payload);
     const data = await dispatchHost(message.event, message.payload, connection);
-    connection.send({ kind: 'response', requestId: message.requestId, ok: true, data } satisfies ResponseMessage);
+    const response = { kind: 'response', requestId: message.requestId, ok: true, data } satisfies ResponseMessage;
+    const responses = completedRequests.get(connection) ?? new Map<string, ResponseMessage>();
+    responses.set(message.requestId, response);
+    completedRequests.set(connection, responses);
+    if (responses.size > 128) responses.delete(responses.keys().next().value!);
+    connection.send(response);
     const roomCode = String(message.payload.roomCode ?? '').toUpperCase();
     if (roomCode && message.event !== 'player:heartbeat') emitRoom(roomCode);
   } catch (error) {
-    if (connection.open) connection.send({ kind: 'response', requestId: message.requestId, ok: false, error: failMessage(error) } satisfies ResponseMessage);
+    const response = { kind: 'response', requestId: message.requestId, ok: false, error: failMessage(error) } satisfies ResponseMessage;
+    const responses = completedRequests.get(connection) ?? new Map<string, ResponseMessage>();
+    responses.set(message.requestId, response);
+    completedRequests.set(connection, responses);
+    if (responses.size > 128) responses.delete(responses.keys().next().value!);
+    if (connection.open) connection.send(response);
   }
 }
 function attachHostConnection(connection: DataConnection): void {
   connections.add(connection);
   connection.on('data', (data) => { const message = data as WireMessage; if (message?.kind === 'request') void handleHostRequest(connection, message); });
-  connection.on('close', () => handleConnectionClosed(connection));
-  connection.on('error', () => handleConnectionClosed(connection));
+  connection.on('close', () => { completedRequests.delete(connection); handleConnectionClosed(connection); });
+  connection.on('error', () => { completedRequests.delete(connection); handleConnectionClosed(connection); });
 }
 async function createHostPeerOnce(roomCode: string, allowAuthorityTakeover: boolean): Promise<void> {
   const options = await peerOptions();
