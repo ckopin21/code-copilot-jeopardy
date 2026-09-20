@@ -54,9 +54,10 @@
 }
 
 /*
- * The avatar shell is already geometrically centered by the card grid. Color-emoji
- * glyphs sit slightly low inside their own square on common emoji fonts, so only the
- * visible glyph gets a tiny optical lift. Keep the shell itself on the grid centerline.
+ * Keep the avatar shell and artwork box on the card grid centerline. Rendered layout
+ * measurements show the normal-host emoji glyph itself sits 1.5–2.6px right of that
+ * centerline, while the old vertical lift moved it about 1px too high. Correct only
+ * the glyph in normal host views so card geometry and Presentation Mode stay unchanged.
  */
 .showcase-player-card .player-avatar-large {
   align-self: center !important;
@@ -64,8 +65,8 @@
   margin-block: 0 !important;
 }
 
-.showcase-player-card .player-avatar-large .player-avatar-emoji {
-  transform: translateY(-0.04em);
+.showcase-host:not(.host-presentation-mode) .showcase-player-card .player-avatar-large .player-avatar-emoji {
+  transform: translateX(-2px);
 }
 
 /* Five-player presentation layouts retain status text without allowing it to add a second row. */
