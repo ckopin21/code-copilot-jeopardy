@@ -9,7 +9,7 @@ The host has two different player-management actions:
 - **Pause seat** temporarily disconnects the controller while preserving the player, score, statistics, and reconnect token. The phone can reconnect to the same seat.
 - **Remove** permanently deletes the player from the room and invalidates that reconnect seat. A returning phone must join as a new player.
 
-The room stays open throughout the game. There is no host-facing lock-session control.
+The room stays open throughout the game and now also stays live when the host returns to the main menu. That menu transition is in-app navigation, so the active host transport and connected phone controllers are preserved. There is no host-facing lock-session control.
 
 ## Lobby
 
@@ -104,7 +104,7 @@ Final Round flow:
 9. Submission completion or timer expiration does not expose the accepted answer. The host starts the reveal.
 10. A staged tension sequence plays before the accepted answer appears.
 11. Host reviews each player response and awards/rejects it.
-12. When review ends, the staged podium animation plays, then the game transitions to readable per-player statistics.
+12. When review ends, the staged podium animation plays. Once the standings are revealed, the host can start another game immediately with the same party or continue to readable per-player statistics.
 
 Each phone also receives its own final score and statistics: correct, incorrect, accuracy, longest streak, fastest buzz, points gained/lost, and biggest wager.
 
@@ -112,11 +112,15 @@ Each phone also receives its own final score and statistics: correct, incorrect,
 
 Every lobby rule control has a brief desktop hover/focus tooltip describing what the setting changes. Touch devices keep the setup uncluttered and do not render hover-only tooltip bubbles.
 
-## Reset behavior
+## Between-game and reset behavior
 
-Reset Game preserves the room and reserved player seats but clears the current board, scores, streaks, statistics, Final state, timers, and host question history. Connected phones receive the new lobby snapshot immediately and should not require a page reload.
+**Back to Menu** from the host game does not end the room. It returns to the main menu without a full page reload, keeping the host PeerJS/WebRTC endpoint and current phone connections alive.
 
-Reset Instance is the destructive recovery option. It clears saved Blue Stage host/player/game state and reloads the application cleanly.
+If that room is still saved, **Start New Game** resets the existing game instead of creating a replacement room. The same player IDs, seats, reconnect tokens, names, avatars, accents, and customization remain attached to the party. Board progress, scores, streaks, statistics, Final state, timers, and host question history are cleared, and connected phones receive the fresh lobby snapshot immediately.
+
+The completed-game flow also exposes **Start New Game** directly after standings are revealed, providing the same rematch behavior without requiring the host to return to the main menu first.
+
+**Reset Instance** is the destructive recovery option. It clears saved Blue Stage host/player/game state and reloads the application cleanly.
 
 ## Player customization and phone feedback
 
