@@ -134,7 +134,13 @@ Final answer collection has a separate authoritative lock state. When every acti
 
 The host then explicitly transitions to `final-review`. Review tracks the active player by stable player ID rather than by mutable array position, so joins/removals cannot shift the reveal onto the wrong seat. Player/presentation snapshots reveal only the currently reviewed player and already resolved players; future Final answers remain hidden. Recap may expose all Final results.
 
-## Host lifecycle and recovery
+## Host lifecycle, menu persistence, and recovery
+
+Returning from an active host game to the main menu does not reload the document. The React route changes in place, leaving the module-level host `Peer`, room authority, player identity bindings, and existing phone `DataConnection` objects alive. Phones therefore remain connected while the host is on the main menu.
+
+Starting another game from that menu reuses the saved host room and invokes the authoritative game reset rather than creating a replacement room. Player IDs, reconnect tokens, seats, and profile data stay attached to the same connection identities while game-specific state resets and the new lobby snapshot is broadcast. The completed-game **Start New Game** action uses the same reset path.
+
+A true document close/reload, browser suspension that destroys the transport, host-authority takeover, or network failure still follows the normal reconnect path.
 
 The host peer repeatedly attempts to reconnect to PeerJS signaling if signaling drops while the page remains open. Existing WebRTC channels are preserved where possible, and reconnecting phones can reclaim their reserved seats once signaling returns. The primary room authority still lives in the host browser. Closing the host page removes the live WebRTC endpoint until the host page is reopened and its saved room is restored.
 
