@@ -75,12 +75,12 @@
  * normal host Question View so Board and Presentation layouts stay unchanged.
  */
 .showcase-host:not(.host-presentation-mode):has(> .question-stage) > .showcase-player-strip .showcase-player-card .player-avatar-large {
-  transform: translateX(-4px) translateY(-2px);
+  transform: translateX(-6px) translateY(-3px);
 }
 
 /* Lift the complete Question View identity/status composition together without changing card geometry. */
 .showcase-host:not(.host-presentation-mode):has(> .question-stage) > .showcase-player-strip .showcase-player-card .player-card-main {
-  transform: translateY(-2px);
+  transform: translateY(-3px);
 }
 
 .showcase-host:not(.host-presentation-mode):has(> .question-stage) > .showcase-player-strip .showcase-player-card > .streak.neutral,
@@ -89,7 +89,7 @@
 }
 
 .showcase-host:not(.host-presentation-mode):has(> .question-stage) > .showcase-player-strip .showcase-player-card .player-status-stack {
-  transform: translateY(calc(-50% - 2px)) !important;
+  transform: translateY(calc(-50% - 3px)) !important;
 }
 
 /* Five-player presentation layouts retain status text without allowing it to add a second row. */
