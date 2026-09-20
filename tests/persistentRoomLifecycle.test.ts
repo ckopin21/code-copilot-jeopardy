@@ -6,6 +6,7 @@ const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf
 describe('persistent room lifecycle regression', () => {
   it('returns the host to the main menu without reloading the page', () => {
     const host = read('../src/components/HostAppV3.tsx');
+    expect(host).toContain("await perform('host:pause')");
     expect(host).toContain("navigateInApp(menuUrl())");
     expect(host).not.toContain("location.href = menuUrl()");
   });
