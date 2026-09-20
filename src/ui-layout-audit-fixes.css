@@ -208,6 +208,34 @@
   }
 }
 
+/* Narrow host cards need a smaller reserved status lane so score/name text keeps real space. */
+@media (max-width: 680px) {
+  .showcase-host:not(.host-presentation-mode) .showcase-player-card:is(.is-fire,.is-cold),
+  .showcase-host:not(.host-presentation-mode) .showcase-player-card.has-turn-label:not(.is-fire):not(.is-cold) {
+    padding-right: 60px !important;
+  }
+
+  .showcase-host:not(.host-presentation-mode) .showcase-player-card .player-status-stack {
+    inset: 50% 4px auto auto !important;
+    width: 52px;
+    max-width: 32%;
+    max-height: calc(100% - 4px);
+    gap: 2px;
+  }
+
+  .showcase-host:not(.host-presentation-mode) .showcase-player-card .player-status-stack .streak-ribbon,
+  .showcase-host:not(.host-presentation-mode) .showcase-player-card .player-status-stack .turn-beacon {
+    padding: 2px 3px !important;
+    border-width: 1px !important;
+    font-size: .38rem !important;
+    line-height: 1 !important;
+  }
+
+  .showcase-host:not(.host-presentation-mode) .showcase-player-card .player-status-stack .streak-ribbon em {
+    display: none !important;
+  }
+}
+
 /* Used-result tiles reserve their top row and allow identity/badges to wrap. */
 .question-tile.used.has-result .used-tile-result {
   grid-template-rows: auto minmax(0, 1fr) !important;
