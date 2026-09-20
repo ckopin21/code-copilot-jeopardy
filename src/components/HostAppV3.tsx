@@ -439,9 +439,16 @@ export function HostAppV3() {
     revealRunningRef.current = false;
   };
 
-  const goMenu = () => { audio.stop(); navigateInApp(menuUrl()); };
-  const resetGame = async () => {
-    if (!credentials || !confirm('Reset this game? Players stay in the room, but the board, scores, and history will reset.')) return;
+  const goMenu = async () => {
+    if (room && room.phase !== 'lobby' && room.phase !== 'recap' && room.phase !== 'paused') {
+      const paused = await perform('host:pause');
+      if (!paused) return;
+    }
+    audio.stop();
+    navigateInApp(menuUrl());
+  };
+  const resetGame = async (confirmReset = true) => {
+    if (!credentials || (confirmReset && !confirm('Start a new game? Players stay connected with the same seats and profiles, while the board, scores, stats, and question history reset.'))) return;
     localStorage.removeItem(`blue-stage-history-${credentials.roomCode}`);
     setHistoryEntries([]);
     setReviewId(null);
@@ -634,7 +641,7 @@ export function HostAppV3() {
         <div className="room-code">ROOM <strong>{room.code}</strong></div>
         <div className={`connection-pill ${connectionOnline ? 'online' : ''}`} role="status" aria-live="polite">{connectionOnline ? 'LIVE' : 'RECONNECTING'}</div>
         <button className="nav-button" onClick={() => setShowJoin(true)}>Join QR</button>
-        <button className="nav-button danger-ghost" onClick={() => void resetGame()}>Reset Game</button>
+        <button className="nav-button danger-ghost" onClick={() => void resetGame()}>New Game</button>
         <button className="nav-button danger-ghost" onClick={hardReset}>Reset Instance</button>
         <AudioMixer />
       </header>
@@ -784,7 +791,7 @@ export function HostAppV3() {
       {room.phase === 'final-question' && room.finalRound && <section className="question-stage final-stage"><article className="question-card-v2"><div className="section-kicker gold">FINAL QUESTION · {room.finalRound.category}</div><h1>{room.finalRound.question}</h1><Timer timer={room.timer} serverNow={room.serverNow}/><SubmissionStatus players={finalParticipants} field="finalAnswerSubmitted"/><p className="helper-copy">When you are ready, start the reveal. The answer stays hidden until the host triggers it.</p><button className="secondary-button final-reveal-trigger" disabled={busy || revealBeat > 0} onClick={() => void beginFinalReview()}>Build Tension & Reveal</button></article></section>}
       {room.phase === 'final-review' && reviewPlayer && room.finalRound && <section className="question-stage final-stage"><article className="question-card-v2"><div className="section-kicker gold">FINAL REVIEW {room.finalRound.participantIds.findIndex((playerId) => playerId === reviewPlayer.id) + 1}/{room.finalRound.participantIds.length}</div><div className="answer-reveal-v2"><small>CORRECT ANSWER</small><strong>{room.finalRound.acceptedAnswers.join(' / ')}</strong></div><h1 className="review-player-title"><PlayerAvatar avatarId={reviewPlayer.avatarId} fallback={reviewPlayer.avatar} frameStyle={normalizePlayerCustomization(reviewPlayer).frameStyle} accent={reviewPlayer.accent} /> {reviewPlayer.name}</h1><div className="final-response-v2"><span><small>WAGER</small><strong>{reviewPlayer.finalWager ?? 0}</strong></span><span><small>RESPONSE</small><strong>{reviewPlayer.finalAnswer || '(No answer)'}</strong></span></div>{(() => { const suggestion = autoGradeAnswer(reviewPlayer.finalAnswer ?? '', room.finalRound!.acceptedAnswers); return <div className={`auto-grade ${suggestion.correct ? 'suggest-correct' : 'suggest-wrong'}`}>Auto grade: {suggestion.correct ? 'likely correct' : 'likely incorrect'} · {suggestion.confidence} confidence</div>; })()}<p className="helper-copy">Auto grade is a suggestion. The host has final scoring authority.</p><div className="control-row-v2"><button className="correct-button" onClick={()=>void perform('host:resolve-final',{playerId:reviewPlayer.id,correct:true})}>Award</button><button className="wrong-button" onClick={()=>void perform('host:resolve-final',{playerId:reviewPlayer.id,correct:false})}>Reject</button></div></article></section>}
 
-      {room.phase === 'recap' && <EndgameRecap players={recapPlayers} onNewGame={() => void resetGame()} onMenu={goMenu} />}
+      {room.phase === 'recap' && <EndgameRecap players={recapPlayers} onNewGame={() => void resetGame(false)} onMenu={goMenu} />}
 
       {showJoin && <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Join game"><section ref={joinModalRef} className="modal-card join-modal-v2 expanded-qr-modal"><button className="modal-close" onClick={() => setShowJoin(false)} aria-label="Close">×</button><div className="section-kicker">JOIN GAME</div>{qr && <img src={qr} alt="QR code to join or reconnect to the game" />}<strong className="modal-room-code">{room.code}</strong><a href={credentials.joinUrl}>{credentials.joinUrl}</a><p>Returning players reconnect to the same reserved seat on the same phone and browser.</p></section></div>}
 
