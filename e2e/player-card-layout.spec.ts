@@ -196,21 +196,25 @@ async function measurePlayerCard(card: Locator): Promise<CardGeometry> {
   });
 }
 
+async function clickDevSetupButton(button: Locator, label: string) {
+  await expect(button).toBeVisible();
+  await button.evaluate((element, expectedLabel) => {
+    if (!(element instanceof HTMLButtonElement)) throw new Error(`${expectedLabel} is unavailable`);
+    element.click();
+  }, label);
+}
+
 async function openDevPanel(page: Page, viewport = { width: 1440, height: 900 }) {
   await page.setViewportSize(viewport);
   await page.goto('/?mode=host&fresh=1');
   const trigger = page.getByRole('button', { name: 'Open developer mode' });
-  await expect(trigger).toBeVisible();
-  // These tests validate player-card layout, not pointer actionability. WebKit can report
-  // this fixed dev-only trigger as perpetually "unstable" while the host boot UI settles.
-  // A DOM click avoids that unrelated flake without weakening the layout assertions.
-  await trigger.evaluate((button) => {
-    if (!(button instanceof HTMLButtonElement)) throw new Error('Developer mode trigger is unavailable');
-    button.click();
-  });
+  // These tests validate layout, not pointer actionability. WebKit can report fixed/animated
+  // dev-only controls as perpetually "unstable" while the host UI settles, so setup clicks
+  // intentionally use DOM click() and leave all visual/layout assertions unchanged.
+  await clickDevSetupButton(trigger, 'Developer mode trigger');
   const panel = page.locator('.dev-mode-panel');
   await expect(panel).toBeVisible();
-  await panel.getByRole('button', { name: '2P', exact: true }).click();
+  await clickDevSetupButton(panel.getByRole('button', { name: '2P', exact: true }), '2P setup button');
 
   // Exercise the exact normal-host cascade around the production PlayerStrip without
   // changing the game room. Previous coverage only tested the isolated dev-stage cascade.
@@ -219,7 +223,7 @@ async function openDevPanel(page: Page, viewport = { width: 1440, height: 900 })
 }
 
 async function setPlayerCount(panel: Locator, count: 2 | 3 | 4 | 5) {
-  await panel.getByRole('button', { name: `${count}P`, exact: true }).click();
+  await clickDevSetupButton(panel.getByRole('button', { name: `${count}P`, exact: true }), `${count}P setup button`);
 }
 
 async function setCardState(panel: Locator, state: 'ready' | 'active' | 'fire' | 'cold') {
@@ -431,14 +435,14 @@ async function openProductionPresentation(page: Page, multiplier: 2 | 3) {
 
   await page.setViewportSize({ width: 1366, height: 768 });
   await page.goto('/?mode=host&fresh=1');
-  await page.getByRole('button', { name: 'Open developer mode' }).click();
+  await clickDevSetupButton(page.getByRole('button', { name: 'Open developer mode' }), 'Developer mode trigger');
   const panel = page.locator('.dev-mode-panel');
   await expect(panel).toBeVisible();
-  await panel.getByRole('button', { name: '5P', exact: true }).click();
+  await clickDevSetupButton(panel.getByRole('button', { name: '5P', exact: true }), '5P setup button');
   await setBoardMultiplier(panel, multiplier);
 
   const lab = page.locator('.dev-visual-lab-section');
-  await lab.getByRole('button', { name: 'Fullscreen Visual & animation lab' }).click();
+  await clickDevSetupButton(lab.getByRole('button', { name: 'Fullscreen Visual & animation lab' }), 'Visual lab fullscreen button');
   await expect(lab).toHaveAttribute('data-dev-visual-lab-fullscreen', 'true');
   const presentationToggle = lab.getByRole('button', { name: 'Presentation Mode', exact: true });
   await presentationToggle.evaluate((element) => (element as HTMLButtonElement).click());
