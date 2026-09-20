@@ -148,6 +148,25 @@ describe('BrowserGameEngine production state', () => {
     expect(engine.snapshot(host.roomCode).players[0].seat).toBe(originalSeat);
   });
 
+  it('keeps one player record across repeated reconnect attempts', () => {
+    const { engine, host } = setup();
+    const player = addPlayer(engine, host.roomCode, 'Safari');
+    const original = engine.snapshot(host.roomCode).players[0];
+
+    engine.setPlayerConnected(host.roomCode, player.playerId, false);
+    const first = engine.reconnectPlayer(host.roomCode, player.playerId, player.reconnectToken);
+    const second = engine.reconnectPlayer(host.roomCode, player.playerId, player.reconnectToken);
+    const players = engine.snapshot(host.roomCode).players;
+
+    expect(first.playerId).toBe(player.playerId);
+    expect(second.playerId).toBe(player.playerId);
+    expect(players).toHaveLength(1);
+    expect(players[0].id).toBe(original.id);
+    expect(players[0].seat).toBe(original.seat);
+    expect(players[0].name).toBe('Safari');
+    expect(players[0].connected).toBe(true);
+  });
+
   it('reuses only a permanently freed seat and keeps other seat numbers stable', () => {
     const { engine, host } = setup();
     const one = addPlayer(engine, host.roomCode, 'One');
