@@ -358,8 +358,12 @@
 
 .question-tile.used.has-result .used-result-chip > b > span {
   min-width: 0;
+  display: block;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.22;
+  padding-block: .08em .12em;
 }
 
 .presentation-board .question-tile.used.has-result .used-result-chip > b,
