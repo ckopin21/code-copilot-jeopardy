@@ -444,6 +444,17 @@ describe('BrowserGameEngine production state', () => {
     expect(engine.snapshot(host.roomCode).phase).toBe('final-review');
   });
 
+  it('authorizes a player Daily Double wager without exposing the host token', () => {
+    const { engine, host } = setup({ gameLength: 'quick', dailyDoublesEnabled: true, dailyDoubleCount: 16, finalRoundEnabled: false, allowWagerBeyondScore: true });
+    const player = addPlayer(engine, host.roomCode);
+    engine.startGame(host.roomCode, host.hostToken);
+    const daily = engine.snapshot(host.roomCode).board!.questions.find((question) => question.dailyDouble)!;
+    engine.selectQuestion(host.roomCode, host.hostToken, daily.questionId, player.playerId);
+    expect(() => engine.submitDailyDoubleWager(host.roomCode, player.playerId, 'bad-token', 100, daily.questionId, engine.snapshot(host.roomCode).gameStartedAt!)).toThrow(/authorization/i);
+    engine.submitDailyDoubleWager(host.roomCode, player.playerId, player.reconnectToken, 100, daily.questionId, engine.snapshot(host.roomCode).gameStartedAt!);
+    expect(engine.snapshot(host.roomCode).phase).toBe('daily-double-question');
+  });
+
   it('requires a confirmed force-close before Final review can end an active answer window', () => {
     const { engine, host } = setup({ gameLength: 'quick', dailyDoublesEnabled: false, finalRoundEnabled: true });
     const player = addPlayer(engine, host.roomCode);

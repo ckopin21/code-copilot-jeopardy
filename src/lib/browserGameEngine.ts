@@ -776,6 +776,15 @@ export class BrowserGameEngine {
     return this.snapshot(roomCode);
   }
 
+  /** Player-authorized Daily Double path. Keeps host credentials inside the domain. */
+  submitDailyDoubleWager(roomCode: string, playerId: string, reconnectToken: string, wager: number, expectedQuestionId?: string, expectedGameStartedAt?: number): RoomSnapshot {
+    const [room, player] = this.playerRoom(roomCode, playerId, reconnectToken);
+    this.assertQuestionContext(room, expectedQuestionId, expectedGameStartedAt);
+    const current = room.state.currentQuestion;
+    if (room.state.phase !== 'daily-double-wager' || current?.dailyDoublePlayerId !== player.id) throw new Error('This Daily Double belongs to another player');
+    return this.setDailyDoubleWager(roomCode, room.hostToken, wager, expectedQuestionId, expectedGameStartedAt);
+  }
+
   openBuzzers(roomCode: string, hostToken: string): RoomSnapshot {
     const room = this.hostRoom(roomCode, hostToken);
     const current = room.state.currentQuestion;

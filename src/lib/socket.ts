@@ -4,7 +4,7 @@ import type { GameSettings, PlayerJoinCredentials, RoomSnapshot } from '../share
 import { QUESTION_VALUES } from '../shared/types';
 import { playerJoinSchema } from '../shared/validation';
 import { packSummaries } from '../packs';
-import { BrowserGameEngine, type RoomRecord } from './browserGameEngine';
+import { BrowserGameEngine } from './browserGameEngine';
 import { sanitizeRoomSnapshot } from './snapshotSecurity';
 import { authorizeRemoteEvent, type RemoteIdentity } from './remoteAuthorization';
 import { randomId } from './ids';
@@ -131,9 +131,6 @@ export const socket = {
   off(event: string, listener: Listener) { listeners.get(event)?.delete(listener); }
 };
 function failMessage(error: unknown): string { return error instanceof Error ? error.message : 'Unknown error'; }
-function roomRecord(roomCode: string): RoomRecord | undefined {
-  return (engine as unknown as { rooms: Map<string, RoomRecord> }).rooms.get(roomCode.toUpperCase());
-}
 function presetWager(wager: number, includeZero = false): boolean {
   return (includeZero && wager === 0) || QUESTION_VALUES.includes(wager as (typeof QUESTION_VALUES)[number]);
 }
@@ -327,12 +324,7 @@ async function dispatchHost(event: string, payload: Record<string, unknown>, con
       const questionId = requiredQuestionId(payload);
       const gameStartedAt = requiredGameStartedAt(payload);
       if (!presetWager(wager)) throw new Error('Choose one of the preset Daily Double wagers');
-      engine.reconnectPlayer(roomCode, playerId, reconnectToken);
-      const snapshot = engine.snapshot(roomCode);
-      if (snapshot.phase !== 'daily-double-wager' || snapshot.currentQuestion?.dailyDoublePlayerId !== playerId) throw new Error('This Daily Double belongs to another player');
-      const record = roomRecord(roomCode);
-      if (!record) throw new Error('Room not found');
-      return engine.setDailyDoubleWager(roomCode, record.hostToken, wager, questionId, gameStartedAt);
+      return engine.submitDailyDoubleWager(roomCode, playerId, reconnectToken, wager, questionId, gameStartedAt);
     }
     case 'player:final-wager': {
       const playerId = String(payload.playerId ?? '');
