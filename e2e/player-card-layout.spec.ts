@@ -408,7 +408,7 @@ async function openProductionPresentation(page: Page, multiplier: 2 | 3) {
   await expect(lab).toHaveAttribute('data-dev-visual-lab-fullscreen', 'true');
   const presentationToggle = lab.getByRole('button', { name: 'Presentation Mode', exact: true });
   await presentationToggle.evaluate((element) => (element as HTMLButtonElement).click());
-  await expect(presentationToggle).toHaveAttribute('aria-pressed', 'true');
+  await expect(lab.getByRole('button', { name: 'Lab Mode', exact: true })).toHaveAttribute('aria-pressed', 'true');
 
   const presentation = lab.locator('[data-dev-production-presentation="true"] .board-presentation-mode');
   await expect(presentation).toBeVisible();
