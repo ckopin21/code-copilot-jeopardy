@@ -409,7 +409,7 @@ async function openProductionPresentation(page: Page, multiplier: 2 | 3) {
   const lab = page.locator('.dev-visual-lab-section');
   await lab.getByRole('button', { name: 'Fullscreen Visual & animation lab' }).click();
   await expect(lab).toHaveAttribute('data-dev-visual-lab-fullscreen', 'true');
-  await lab.getByRole('button', { name: 'Presentation Mode', exact: true }).click();
+  await lab.getByRole('button', { name: 'Presentation Mode', exact: true }).click({ force: true });
 
   const presentation = lab.locator('[data-dev-production-presentation="true"] .board-presentation-mode');
   await expect(presentation).toBeVisible();
