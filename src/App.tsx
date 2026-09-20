@@ -172,7 +172,7 @@ function Menu({ onNavigate }: { onNavigate: (mode: AppMode, fresh?: boolean, new
   };
 
   const startNewGame = () => {
-    if (hasSavedHost && savedHost) {
+    if (savedHost) {
       if (!confirm('Start a new game with the current players? Scores, board progress, and game history will reset, but everyone stays connected with the same profile.')) return;
       void onNavigate('host', false, true);
       return;
@@ -201,7 +201,7 @@ function Menu({ onNavigate }: { onNavigate: (mode: AppMode, fresh?: boolean, new
         <section className="menu-mode-section host-menu-section">
           <header><span>HOST GAME</span><small>Run the board on this screen</small></header>
           <div className="menu-actions host-menu-actions">
-            <button className={`${hasSavedHost ? 'secondary-button menu-secondary' : 'primary-button menu-primary'} menu-new-game`} onClick={startNewGame}><span>Start New Game</span><small>{hasSavedHost ? 'Keep current players and profiles, reset the game' : 'Fresh room, fresh board, zero scores'}</small></button>
+            <button className={`${savedHost ? 'secondary-button menu-secondary' : 'primary-button menu-primary'} menu-new-game`} onClick={startNewGame}><span>Start New Game</span><small>{savedHost ? 'Keep current players and profiles, reset the game' : 'Fresh room, fresh board, zero scores'}</small></button>
             {hasSavedHost && savedHost && <article
               className="saved-game-preview saved-game-inline"
               role="button"
