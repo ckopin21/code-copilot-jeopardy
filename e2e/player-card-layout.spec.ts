@@ -113,7 +113,15 @@ async function measurePlayerCard(card: Locator): Promise<CardGeometry> {
       range.selectNodeContents(node);
       const rect = range.getBoundingClientRect();
       range.detach();
-      return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height };
+      const raw = { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height };
+      const style = getComputedStyle(node);
+      if (style.overflow !== 'hidden' && style.overflowX !== 'hidden' && style.textOverflow !== 'ellipsis') return raw;
+      const clip = rectOf(node);
+      const left = Math.max(raw.left, clip.left);
+      const top = Math.max(raw.top, clip.top);
+      const right = Math.min(raw.right, clip.right);
+      const bottom = Math.min(raw.bottom, clip.bottom);
+      return { left, top, right, bottom, width: Math.max(0, right - left), height: Math.max(0, bottom - top) };
     };
     const nameTextRect = textRect(name);
     const scoreTextRect = textRect(score);
