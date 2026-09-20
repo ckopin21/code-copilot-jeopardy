@@ -224,6 +224,13 @@ async function openDevPanel(page: Page, viewport = { width: 1440, height: 900 })
 
 async function setPlayerCount(panel: Locator, count: 2 | 3 | 4 | 5) {
   await clickDevSetupButton(panel.getByRole('button', { name: `${count}P`, exact: true }), `${count}P setup button`);
+  const strip = panel.locator(`.dev-stage .showcase-player-strip[data-player-count="${count}"]`);
+  await expect(strip).toBeVisible();
+  // PlayerAvatar recenters from rendered emoji bounds after responsive card-size changes.
+  // Give WebKit's ResizeObserver/requestAnimationFrame cycle time to settle before measuring.
+  await strip.evaluate(() => new Promise<void>((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  }));
 }
 
 async function setCardState(panel: Locator, state: 'ready' | 'active' | 'fire' | 'cold') {
