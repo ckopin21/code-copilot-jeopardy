@@ -115,6 +115,12 @@ The host experience includes short, non-interactive transition moments for:
 
 Existing phase-specific music/cues remain authoritative. These overlays deliberately block accidental host clicks while the short transition is on screen.
 
+## Between-game continuity
+
+The host can leave an active game for the main menu without forcing phones to rejoin. Active play is paused, the room remains live, and the menu can either continue the saved game or start a new one with the same connected roster and customization. New-game carryover intentionally resets competitive state such as scores, streaks, statistics, board history, Final data, and timers.
+
+When recap finishes, **Start New Game** is available from the completed-game flow so a group can immediately return to the lobby without disconnecting controllers.
+
 ## Post-game awards
 
 The recap uses competition ranking for ties and supports multiple co-winners. It can surface awards including:
