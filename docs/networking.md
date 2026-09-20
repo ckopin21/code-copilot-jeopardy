@@ -136,6 +136,14 @@ The host then explicitly transitions to `final-review`. Review tracks the active
 
 ## Host lifecycle and recovery
 
+### Main-menu handoff without disconnecting players
+
+The host's **Menu** action is an in-app route change, not a document navigation. If gameplay is active, the engine first enters `paused`, preserving the current phase/timer state for a possible Continue action. The host PeerJS object and existing player `DataConnection`s stay alive while the menu is shown.
+
+Host-side timer reconciliation, heartbeat/stale-client maintenance, room snapshots, and signaling recovery are keyed to ownership of the active host room rather than to the `?mode=host` React route. This prevents controllers from being dropped merely because the host UI is temporarily on the main menu.
+
+Starting a new game from that menu reconnects to the same authoritative room and resets game progress in place. Player IDs, reconnect tokens, seats, profiles, and open controller channels remain valid. A full browser reload or tab close still destroys the live WebRTC endpoint and requires the documented reconnect path.
+
 The host peer repeatedly attempts to reconnect to PeerJS signaling if signaling drops while the page remains open. Existing WebRTC channels are preserved where possible, and reconnecting phones can reclaim their reserved seats once signaling returns. The primary room authority still lives in the host browser. Closing the host page removes the live WebRTC endpoint until the host page is reopened and its saved room is restored.
 
 Each successfully opened host peer also claims a browser-wide ownership lease. Only one host tab on that browser can own authoritative persistence at a time, matching the intended one-host-device model. Host mutations, timer ticks, stale-phone cleanup, and incoming controller requests are accepted only while that peer still owns the lease. If another host tab becomes active, even for a different room, it replaces the lease; the older tab closes its stale controller channels and can no longer mutate or rewrite persisted room state. This prevents a suspended/older host tab from waking later and writing stale gameplay over the active host.

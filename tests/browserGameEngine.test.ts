@@ -148,6 +148,40 @@ describe('BrowserGameEngine production state', () => {
     expect(engine.snapshot(host.roomCode).players[0].seat).toBe(originalSeat);
   });
 
+  it('starts a new game in the same room while preserving connected player profiles', () => {
+    const { engine, host } = setup({ dailyDoublesEnabled: false, finalRoundEnabled: false });
+    const player = engine.joinPlayer(host.roomCode, {
+      name: 'Carryover',
+      avatar: '🪐',
+      avatarId: 'planet',
+      accent: '#67e8f9',
+      buzzerSound: 'laser',
+      scoreEffect: 'spark',
+      victoryEffect: 'stars'
+    });
+    const before = engine.snapshot(host.roomCode).players[0];
+
+    engine.startGame(host.roomCode, host.hostToken);
+    engine.adjustScore(host.roomCode, host.hostToken, player.playerId, 500);
+    const reset = engine.resetGame(host.roomCode, host.hostToken);
+    const after = reset.players[0];
+
+    expect(reset.code).toBe(host.roomCode);
+    expect(reset.phase).toBe('lobby');
+    expect(after.id).toBe(before.id);
+    expect(after.seat).toBe(before.seat);
+    expect(after.name).toBe('Carryover');
+    expect(after.avatarId).toBe('planet');
+    expect(after.accent).toBe('#67e8f9');
+    expect(after.buzzerSound).toBe('laser');
+    expect(after.scoreEffect).toBe('spark');
+    expect(after.victoryEffect).toBe('stars');
+    expect(after.connected).toBe(true);
+    expect(after.score).toBe(0);
+    expect(after.stats.correct).toBe(0);
+    expect(() => engine.reconnectPlayer(host.roomCode, player.playerId, player.reconnectToken)).not.toThrow();
+  });
+
   it('keeps one player record across repeated reconnect attempts', () => {
     const { engine, host } = setup();
     const player = addPlayer(engine, host.roomCode, 'Safari');

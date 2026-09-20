@@ -14,6 +14,7 @@ https://ckopin21.github.io/code-copilot-jeopardy/
 - Classic mode with buzzers plus Free Response mode where every active player answers simultaneously
 - QR/camera join plus manual room codes and click-to-enlarge host QR
 - stable phone identity with automatic reconnect, heartbeat disconnect detection, and reserved seats
+- host can return to the main menu without dropping controllers; starting a new game reuses the same room, seats, and player profiles while resetting game progress
 - host-selectable board with in-page fullscreen presentation mode
 - first-buzz locking, keyboard/gamepad host buzzers, typed-response questions
 - Daily Doubles with fixed wager choices
@@ -54,7 +55,7 @@ The host page is the live room endpoint. If it closes, phones cannot keep playin
 
 ### Game flow
 
-1. Choose **Start New Game** or **Continue Game**.
+1. Choose **Start New Game** or **Continue Game**. If a saved room exists, Start New Game keeps its players/profiles and resets only game progress.
 2. Select Classic or Free Response, one compatible question pack, and the rules in the lobby.
 3. Choose Quick (16 clues), Standard (25), or Marathon (36, including the 1000-point row).
 4. Players join by QR or room code.
@@ -173,6 +174,6 @@ React renders names/questions as text, avoiding raw HTML injection for normal co
 
 ## Reset behavior
 
-**Reset Game** keeps the room and reserved seats but resets the board, scores, statistics, current phase, and question history. Phones receive the lobby state immediately.
+**New Game / Reset Game** keeps the room, active controller connections, reserved seats, and player profiles, but resets the board, scores, statistics, current phase, and question history. Phones receive the lobby state immediately. Returning the host to the main menu uses in-app navigation; active gameplay is paused first so timers do not continue off-screen.
 
 **Reset Instance** clears saved Blue Stage host/player/game state and reloads the current application build cleanly.

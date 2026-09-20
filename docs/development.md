@@ -115,6 +115,8 @@ Regression tests should target the production browser engine and cover rule/stat
 - room creation and capacity
 - Classic and Free Response mode behavior, including reading delay, simultaneous submissions, missing-response penalties, Group Miss Mercy, and confirm-to-score flow
 - stable reconnect identity and reserved seats
+- host main-menu navigation without page reload, including pause-on-leave and same-room new-game carryover
+- reset/new-game preservation of player IDs, reconnect tokens, seats, connection state, and customization
 - iPhone/WebKit lifecycle recovery across pagehide/pageshow, bfcache restore, background resume, online recovery, and stale Peer/DataConnection replacement
 - timer persistence/restoration
 - board generation and pack validation

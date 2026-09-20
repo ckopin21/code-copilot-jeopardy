@@ -171,7 +171,12 @@ function Menu({ onNavigate }: { onNavigate: (mode: AppMode, fresh?: boolean) => 
   };
 
   const startNewGame = () => {
-    if (hasSavedHost && savedHost && !confirm(`Start a new game? Saved room ${savedHost.roomCode} will be replaced by the new host room.`)) return;
+    if (hasSavedHost && savedHost && preview && preview.phase !== 'lobby') {
+      const playerCopy = preview.totalPlayers
+        ? ` Everyone stays in room ${savedHost.roomCode} with the same seats and profiles.`
+        : '';
+      if (!confirm(`Start a new game? The current board, scores, stats, and question history will reset.${playerCopy}`)) return;
+    }
     void onNavigate('host', true);
   };
 
@@ -196,7 +201,7 @@ function Menu({ onNavigate }: { onNavigate: (mode: AppMode, fresh?: boolean) => 
         <section className="menu-mode-section host-menu-section">
           <header><span>HOST GAME</span><small>Run the board on this screen</small></header>
           <div className="menu-actions host-menu-actions">
-            <button className={`${hasSavedHost ? 'secondary-button menu-secondary' : 'primary-button menu-primary'} menu-new-game`} onClick={startNewGame}><span>Start New Game</span><small>Fresh room, fresh board, zero scores</small></button>
+            <button className={`${hasSavedHost ? 'secondary-button menu-secondary' : 'primary-button menu-primary'} menu-new-game`} onClick={startNewGame}><span>Start New Game</span><small>{hasSavedHost ? 'Keep current players and profiles' : 'Fresh room, fresh board, zero scores'}</small></button>
             {hasSavedHost && savedHost && <article
               className="saved-game-preview saved-game-inline"
               role="button"
