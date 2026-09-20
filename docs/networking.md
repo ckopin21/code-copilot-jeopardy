@@ -47,7 +47,7 @@ Mobile Safari can preserve JavaScript objects while the underlying WebRTC path h
 
 - `pagehide` suspends the client session and tears down the active transport
 - `pageshow` resumes it and forces a clean transport rebuild when the page was restored from bfcache
-- a return from a meaningful hidden/background interval can rebuild the PeerJS signaling peer and data connection
+- a return from a meaningful hidden/background interval can rebuild the PeerJS signaling peer and data connection; brief app switches under five seconds do not force unnecessary transport churn
 - the browser `online` event can trigger the same clean recovery after a network-path change
 - transport generations prevent an older asynchronous reconnect attempt from winning a race against a newer refresh
 - pending requests are rejected when a transport is replaced instead of hanging against a stale connection
@@ -80,6 +80,8 @@ The client reconnect loop:
 4. Reopens the host data connection.
 5. Replays `player:reconnect` automatically using saved credentials.
 6. Resumes live room snapshots without a page reload.
+
+Heartbeat health is intentionally less aggressive than gameplay requests. A single delayed/missed heartbeat no longer destroys an otherwise-open WebRTC path. The phone tolerates one heartbeat failure and only escalates repeated failures into a clean transport rebuild. This reduces visible micro-disconnects from short Wi-Fi/cellular stalls or brief mobile scheduler pauses while still recovering a genuinely stale connection.
 
 The player screen also performs a periodic identity sync while joined. Terminal errors such as expired/not-found/authorization failures stop the retry loop and allow the user to join a new seat.
 
