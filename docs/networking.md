@@ -39,6 +39,21 @@ The phone controller explicitly suspends its client session on component unmount
 
 A phone restored from the browser back/forward cache handles `pageshow` and re-enables its reconnect transport so the existing React tree can reclaim the same reserved seat.
 
+### Safari/WebKit transport refresh
+
+Mobile Safari can preserve JavaScript objects while the underlying WebRTC path has become stale. The client therefore does not trust an old `Peer`/`DataConnection` simply because its in-memory flags still look open.
+
+`src/lib/clientLifecycle.ts` applies a shared recovery policy to player and remote-presentation clients:
+
+- `pagehide` suspends the client session and tears down the active transport
+- `pageshow` resumes it and forces a clean transport rebuild when the page was restored from bfcache
+- a return from a meaningful hidden/background interval can rebuild the PeerJS signaling peer and data connection
+- the browser `online` event can trigger the same clean recovery after a network-path change
+- transport generations prevent an older asynchronous reconnect attempt from winning a race against a newer refresh
+- pending requests are rejected when a transport is replaced instead of hanging against a stale connection
+
+Saved player credentials are retained through this process, so the clean transport reconnect replays `player:reconnect` and reclaims the same reserved seat rather than creating a duplicate player.
+
 ## Heartbeat / stale-phone detection
 
 Mobile browsers do not always deliver a clean WebRTC close event when a tab is killed, backgrounded aggressively, or the browser process disappears. Therefore connection state does not rely on close events alone.

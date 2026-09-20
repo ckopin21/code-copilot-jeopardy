@@ -16,6 +16,18 @@ Seat numbers are used for:
 
 Older persisted games are migrated when `BrowserGameEngine` starts. Missing/duplicate seat values are reassigned to the first available valid seat.
 
+## Player identity and customization
+
+A joined player carries a stable seat plus presentation customization in authoritative room state. The join flow supports:
+
+- 50 avatars across 10 categories
+- 8 accent colors
+- 4 buzzer sounds
+- 3 score-impact effects
+- 3 victory effects
+
+Host, phone, remote presentation, board-result, and recap surfaces normalize the same customization fields instead of maintaining separate visual identities. Older/missing customization values fall back to the current defaults.
+
 ## Host control panel
 
 The floating **HOST** control opens during any game phase. It contains:
@@ -127,4 +139,6 @@ Preferences are stored on that browser/device and applied through root data attr
 
 ## Network relay limitation
 
-The P2P transport supports custom ICE configuration through `window.BLUE_STAGE_ICE_SERVERS`. That is the integration point for a production TURN relay. The repository does not bundle public TURN credentials because relay credentials are deployment secrets and require an external TURN service. Without a configured TURN service, the default remains STUN-only WebRTC with the manual reconnect/reserved-seat protections documented in `networking.md`.
+The default P2P transport uses public STUN and cannot relay traffic through restrictive NAT/firewall combinations. Production TURN support is therefore configured through an HTTPS ICE-credential endpoint, preferably via `VITE_ICE_CONFIG_URL` (or `window.BLUE_STAGE_ICE_CONFIG_URL` at runtime). Each newly created PeerJS peer can fetch fresh short-lived TURN credentials with `cache: no-store`.
+
+`window.BLUE_STAGE_ICE_SERVERS` remains available for local/private testing or already-short-lived credentials. Long-lived TURN secrets must never be embedded in the GitHub Pages bundle. If the credential endpoint fails, the app falls back to STUN-only behavior and surfaces that limitation in connection errors. See `networking.md` for the exact contract.
