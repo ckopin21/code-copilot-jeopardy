@@ -3,8 +3,14 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 type CardGeometry = {
   width: number;
   height: number;
+  avatarCenterDelta: number;
   statusPosition: string | null;
   statusBadgeCount: number;
+  statusBackgroundColor: string | null;
+  statusBoxShadow: string | null;
+  statusFilter: string | null;
+  statusBackdropFilter: string | null;
+  statusOverflow: string | null;
   mainStatusOverlap: boolean;
   avatarStatusOverlap: boolean;
   mainTurnOverlap: boolean;
@@ -53,12 +59,19 @@ async function measurePlayerCard(card: Locator): Promise<CardGeometry> {
       ? Array.from(status.querySelectorAll('.streak-ribbon, .turn-beacon')).filter((node): node is HTMLElement => node instanceof HTMLElement)
       : [];
     const nameStyle = getComputedStyle(name);
+    const statusStyle = status instanceof HTMLElement ? getComputedStyle(status) : null;
 
     return {
       width: element.offsetWidth,
       height: element.offsetHeight,
-      statusPosition: status instanceof HTMLElement ? getComputedStyle(status).position : null,
+      avatarCenterDelta: ((avatarRect.top + avatarRect.bottom) / 2) - ((cardRect.top + cardRect.bottom) / 2),
+      statusPosition: statusStyle?.position ?? null,
       statusBadgeCount: badges.length,
+      statusBackgroundColor: statusStyle?.backgroundColor ?? null,
+      statusBoxShadow: statusStyle?.boxShadow ?? null,
+      statusFilter: statusStyle?.filter ?? null,
+      statusBackdropFilter: statusStyle?.getPropertyValue('backdrop-filter') || null,
+      statusOverflow: statusStyle?.overflow ?? null,
       mainStatusOverlap: statusRect ? overlaps(mainRect, statusRect) : false,
       avatarStatusOverlap: statusRect ? overlaps(avatarRect, statusRect) : false,
       mainTurnOverlap: turnRect ? overlaps(mainRect, turnRect) : false,
@@ -71,8 +84,8 @@ async function measurePlayerCard(card: Locator): Promise<CardGeometry> {
   });
 }
 
-async function openDevPanel(page: Page) {
-  await page.setViewportSize({ width: 1440, height: 900 });
+async function openDevPanel(page: Page, viewport = { width: 1440, height: 900 }) {
+  await page.setViewportSize(viewport);
   await page.goto('/?mode=host&fresh=1');
   await page.getByRole('button', { name: 'Open developer mode' }).click();
   const panel = page.locator('.dev-mode-panel');
@@ -89,6 +102,25 @@ async function setBoardMultiplier(panel: Locator, multiplier: 1 | 2 | 3) {
   await panel.locator('label').filter({ hasText: 'Board modifier' }).locator('select').selectOption(String(multiplier));
 }
 
+function expectCenteredAvatar(geometry: CardGeometry, tolerance = 1.75) {
+  expect(Math.abs(geometry.avatarCenterDelta)).toBeLessThanOrEqual(tolerance);
+}
+
+function expectTransparentStatusSurface(geometry: CardGeometry) {
+  expect(geometry.statusBackgroundColor).toBe('rgba(0, 0, 0, 0)');
+  expect(geometry.statusBoxShadow).toBe('none');
+  expect(geometry.statusFilter).toBe('none');
+  expect(geometry.statusBackdropFilter).toBe('none');
+  expect(geometry.statusOverflow).toBe('visible');
+}
+
+async function removeTurnDecoration(card: Locator) {
+  await card.evaluate((element) => {
+    element.classList.remove('is-turn', 'has-turn-label');
+    element.querySelector('.player-status-stack > .turn-beacon')?.remove();
+  });
+}
+
 test('player cards keep identical geometry across turn, Fire, Cold, 2x, 3x, and long names', async ({ page }) => {
   const panel = await openDevPanel(page);
   const selected = panel.locator('.dev-stage [data-player-id="dev-player-2"]');
@@ -101,6 +133,8 @@ test('player cards keep identical geometry across turn, Fire, Cold, 2x, 3x, and 
   const turnGeometry = await measurePlayerCard(selected);
   closeTo(turnGeometry.width, normalGeometry.width);
   closeTo(turnGeometry.height, normalGeometry.height);
+  expectCenteredAvatar(normalGeometry);
+  expectCenteredAvatar(turnGeometry);
   expect(turnGeometry.mainTurnOverlap).toBe(false);
   expect(turnGeometry.turnContained).toBe(true);
 
@@ -111,10 +145,23 @@ test('player cards keep identical geometry across turn, Fire, Cold, 2x, 3x, and 
   closeTo(fireGeometry.height, turnGeometry.height);
   expect(fireGeometry.statusPosition).toBe('absolute');
   expect(fireGeometry.statusBadgeCount).toBe(2);
+  expectCenteredAvatar(fireGeometry);
+  expectTransparentStatusSurface(fireGeometry);
   expect(fireGeometry.mainStatusOverlap).toBe(false);
   expect(fireGeometry.avatarStatusOverlap).toBe(false);
   expect(fireGeometry.badgesContained).toBe(true);
 
+  await removeTurnDecoration(selected);
+  const fireOnlyGeometry = await measurePlayerCard(selected);
+  closeTo(fireOnlyGeometry.width, turnGeometry.width);
+  closeTo(fireOnlyGeometry.height, turnGeometry.height);
+  expect(fireOnlyGeometry.statusBadgeCount).toBe(1);
+  expectCenteredAvatar(fireOnlyGeometry);
+  expectTransparentStatusSurface(fireOnlyGeometry);
+  expect(fireOnlyGeometry.mainStatusOverlap).toBe(false);
+  expect(fireOnlyGeometry.avatarStatusOverlap).toBe(false);
+
+  await setCardState(panel, 'ready');
   await setCardState(panel, 'cold');
   await expect(selected).toHaveClass(/is-cold/);
   const coldGeometry = await measurePlayerCard(selected);
@@ -122,10 +169,23 @@ test('player cards keep identical geometry across turn, Fire, Cold, 2x, 3x, and 
   closeTo(coldGeometry.height, turnGeometry.height);
   expect(coldGeometry.statusPosition).toBe('absolute');
   expect(coldGeometry.statusBadgeCount).toBe(2);
+  expectCenteredAvatar(coldGeometry);
+  expectTransparentStatusSurface(coldGeometry);
   expect(coldGeometry.mainStatusOverlap).toBe(false);
   expect(coldGeometry.avatarStatusOverlap).toBe(false);
   expect(coldGeometry.badgesContained).toBe(true);
 
+  await removeTurnDecoration(selected);
+  const coldOnlyGeometry = await measurePlayerCard(selected);
+  closeTo(coldOnlyGeometry.width, turnGeometry.width);
+  closeTo(coldOnlyGeometry.height, turnGeometry.height);
+  expect(coldOnlyGeometry.statusBadgeCount).toBe(1);
+  expectCenteredAvatar(coldOnlyGeometry);
+  expectTransparentStatusSurface(coldOnlyGeometry);
+  expect(coldOnlyGeometry.mainStatusOverlap).toBe(false);
+  expect(coldOnlyGeometry.avatarStatusOverlap).toBe(false);
+
+  await setCardState(panel, 'ready');
   await setCardState(panel, 'fire');
   await setBoardMultiplier(panel, 2);
   const doubleGeometry = await measurePlayerCard(selected);
@@ -152,6 +212,29 @@ test('player cards keep identical geometry across turn, Fire, Cold, 2x, 3x, and 
   expect(longNameGeometry.nameTextOverflow).toBe('ellipsis');
   expect(await name.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
   expect(longNameGeometry.mainTurnOverlap).toBe(false);
+});
+
+test('responsive player card keeps avatar centered and the stacked status surface transparent', async ({ page }) => {
+  const panel = await openDevPanel(page, { width: 390, height: 844 });
+  const selected = panel.locator('.dev-stage [data-player-id="dev-player-2"]');
+  await expect(selected).toBeVisible();
+
+  await setCardState(panel, 'fire');
+  const fireGeometry = await measurePlayerCard(selected);
+  expectCenteredAvatar(fireGeometry, 2);
+  expectTransparentStatusSurface(fireGeometry);
+  expect(fireGeometry.mainStatusOverlap).toBe(false);
+  expect(fireGeometry.avatarStatusOverlap).toBe(false);
+  expect(fireGeometry.badgesContained).toBe(true);
+
+  await setCardState(panel, 'ready');
+  await setCardState(panel, 'cold');
+  const coldGeometry = await measurePlayerCard(selected);
+  expectCenteredAvatar(coldGeometry, 2);
+  expectTransparentStatusSurface(coldGeometry);
+  expect(coldGeometry.mainStatusOverlap).toBe(false);
+  expect(coldGeometry.avatarStatusOverlap).toBe(false);
+  expect(coldGeometry.badgesContained).toBe(true);
 });
 
 async function openProductionPresentation(page: Page, multiplier: 2 | 3) {
