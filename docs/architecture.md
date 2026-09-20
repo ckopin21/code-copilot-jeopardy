@@ -6,11 +6,11 @@ Blue Stage is a static React/Vite application. The host browser owns authoritati
 
 There is intentionally one game engine and one multiplayer authority path. The former Node/Express/Socket.IO implementation was removed because maintaining two independent rule engines caused runtime/test drift.
 
-The host page must remain open for the live room to exist. The browser engine persists room snapshots to host `localStorage` so a host refresh can restore the room, subject to the room TTL and browser storage remaining intact. Running timers preserve their absolute `endsAt` value across engine reconstruction and are reconciled on load.
+The host browser tab must remain open for the live room to exist. Returning from the host game view to the main menu is intentionally an in-app route transition rather than a page reload, so the module-level PeerJS host and existing phone data channels remain alive. The browser engine persists room snapshots to host `localStorage` so a true host refresh can restore the room, subject to the room TTL and browser storage remaining intact. Running timers preserve their absolute `endsAt` value across engine reconstruction and are reconciled on load.
 
 ### Main client entry points
 
-- `src/App.tsx` — top-level host/player/presentation routing, global button audio, phone haptics, menu/fullscreen behavior, audio default migration
+- `src/App.tsx` — top-level host/player/presentation routing, transport-preserving host/menu navigation, global button audio, phone haptics, menu/fullscreen behavior, audio default migration
 - `src/components/HostAppV3.tsx` — host controls, board/question flow, presentation overlay, score animations, history
 - `src/components/PlayerApp.tsx` — phone join/reconnect, buzzer, typed answers, Daily Double and Final wagers
 - `src/components/BoardPresentation.tsx` — fullscreen in-page board presentation
@@ -51,7 +51,7 @@ Final responses are private until review. A player may retain their own submitte
 
 Host credentials are stored under `blue-stage-host-room`. Player seat credentials are stored under `blue-stage-player`. A player credential contains a stable player ID, reconnect token, and room code. Leaving the phone UI intentionally does not discard those credentials, allowing the same browser to reclaim the reserved seat.
 
-The browser engine persists active rooms under `blue-stage-p2p-engine-v2`. The hard Reset Instance path clears Blue Stage client state and reloads a clean build. Normal Reset Game keeps the room and player seats but resets board, score, statistics, and game progression.
+The browser engine persists active rooms under `blue-stage-p2p-engine-v2`. The hard Reset Instance path clears Blue Stage client state and reloads a clean build. A normal new-game/rematch reset keeps the same room, player IDs, seats, reconnect tokens, profile customization, and live connection bindings while resetting board, score, statistics, history, and game progression. The one-shot `new-game=1` host route flag requests this reset when the host starts another game from the main menu, then removes itself from the URL.
 
 ## Question flow
 
@@ -85,3 +85,10 @@ Game cues and dynamic phase music are generated with Web Audio; the host can als
 Styling is layered across the base game styles plus focused responsive, mode, presentation, customization, menu, comeback, and regression-fix stylesheets imported by `src/main.tsx`. Later imports intentionally win cascade conflicts for narrowly scoped fixes, so visual changes must be checked against the complete import order rather than only `src/styles.css`.
 
 Rendered layout regressions are covered with Playwright, including fixed player-card geometry, avatar optical centering, status-badge containment, narrow/mobile widths, Presentation Mode, and WebKit-specific checks.
+
+
+## Between-game host lifecycle
+
+The main menu and host view share the same document lifetime. Host **Back to Menu** uses History API navigation and notifies the top-level router without reloading the page. Because `src/lib/socket.ts` owns the host peer at module scope, the active host `Peer`, room authority, player identity bindings, and open `DataConnection` objects survive that route transition.
+
+When the menu starts another game from an existing saved host room, `HostAppV3` restores those credentials and calls the existing authoritative `host:reset-game` transition instead of creating a replacement room. This preserves transport identity and player profiles while clearing game-specific state. The completed-game **Start New Game** button uses that same reset path directly from recap.
