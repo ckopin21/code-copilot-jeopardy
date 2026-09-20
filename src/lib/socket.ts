@@ -37,6 +37,7 @@ let hostPeer: Peer | null = null;
 let hostRoomCode = '';
 let hostAuthorityId = '';
 let clientPeer: Peer | null = null;
+let clientTransportGeneration = 0;
 let clientConnection: DataConnection | null = null;
 let clientRoomCode = '';
 let clientSuspended = false;
@@ -550,13 +551,15 @@ function attachClientConnection(connection: DataConnection): void {
   connection.on('close', closed);
   connection.on('error', closed);
 }
-async function createClientPeer(): Promise<Peer> {
+async function createClientPeer(expectedGeneration: number): Promise<Peer> {
+  if (expectedGeneration !== clientTransportGeneration) throw new Error('Connection refresh superseded');
   if (clientPeer && !clientPeer.destroyed) {
     if (clientPeer.open && !clientPeer.disconnected) return clientPeer;
     try { clientPeer.destroy(); } catch { /* recreate a clean signaling peer */ }
     clientPeer = null;
   }
   const options = await peerOptions();
+  if (expectedGeneration !== clientTransportGeneration) throw new Error('Connection refresh superseded');
   return new Promise((resolve, reject) => {
     const peer = new Peer(options);
     clientPeer = peer;
@@ -580,7 +583,8 @@ async function createClientPeer(): Promise<Peer> {
     window.setTimeout(() => { if (!settled) { settled = true; reject(new Error('Timed out connecting to signaling')); } }, 8000);
   });
 }
-function destroyClientPeer(): void {
+function destroyClientPeer(invalidateTransport = true): void {
+  if (invalidateTransport) clientTransportGeneration += 1;
   const peer = clientPeer;
   clientPeer = null;
   if (!peer) return;
@@ -647,17 +651,21 @@ async function openConnectionToHost(targetRoom: string): Promise<DataConnection>
     authReplay = null;
   }
   clientRoomCode = targetRoom;
-  const peer = await createClientPeer();
+  const generation = clientTransportGeneration;
+  const peer = await createClientPeer(generation);
+  if (generation !== clientTransportGeneration || clientRoomCode !== targetRoom) {
+    throw new Error('Connection refresh superseded');
+  }
   return await new Promise<DataConnection>((resolve, reject) => {
     const connection = peer.connect(hostPeerId(targetRoom), { reliable: true, serialization: 'json' });
     let settled = false;
     attachClientConnection(connection);
     connection.on('open', () => {
       if (settled) return;
-      if (clientSuspended) {
+      if (clientSuspended || generation !== clientTransportGeneration || clientRoomCode !== targetRoom) {
         settled = true;
         try { connection.close(); } catch { /* ignore */ }
-        reject(new Error('Connection is paused'));
+        reject(new Error(clientSuspended ? 'Connection is paused' : 'Connection refresh superseded'));
         return;
       }
       settled = true;
