@@ -16,6 +16,14 @@ Seat numbers are used for:
 
 Older persisted games are migrated when `BrowserGameEngine` starts. Missing/duplicate seat values are reassigned to the first available valid seat.
 
+## Persistent party and rematch flow
+
+A host can leave the active game view for the main menu without tearing down the current multiplayer party. Host menu navigation remains inside the React app, so the PeerJS host and live phone data connections remain in memory.
+
+When the host chooses **Start New Game** while a saved host room exists, Blue Stage resets that same room instead of allocating a new room code. The reset preserves player identity and presentation profile fields, including stable player ID, seat, reconnect token, name, avatar, accent, frame style, buzzer sound, score effect, and victory effect. Game-specific state such as board progress, scores, streaks, statistics, timers, Final state, and host question history is cleared.
+
+After a finished game reveals the standings, **Start New Game** is also available directly from the result screen. This uses the same room-preserving reset path.
+
 ## Player identity and customization
 
 A joined player carries a stable seat plus presentation customization in authoritative room state. The join flow supports:
