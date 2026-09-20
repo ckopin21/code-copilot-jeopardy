@@ -44,7 +44,8 @@ const isTransparent = (value: string | null) =>
 function expectAvatarCentered(geometry: CardGeometry) {
   expect(geometry.avatarCenterDelta).toBeLessThanOrEqual(1);
   expect(geometry.avatarArtCenterDelta).toBeLessThanOrEqual(1);
-  expect(geometry.avatarGlyphTransform).not.toBe('none');
+  expect(Math.abs(geometry.avatarGlyphCenterDeltaX)).toBeLessThanOrEqual(1);
+  expect(Math.abs(geometry.avatarGlyphCenterDeltaY)).toBeLessThanOrEqual(1);
 }
 
 function expectTransparentStatusLane(geometry: CardGeometry, expectedVisiblePills: number) {
@@ -220,11 +221,6 @@ test('Question View keeps player-card geometry stable and the status lane visual
   await setCardState(panel, 'ready');
   const normalGeometry = await measurePlayerCard(normal);
   const baseline = await measurePlayerCard(selected);
-  console.info('AVATAR_DIAGNOSTIC question-desktop', JSON.stringify({
-    x: baseline.avatarGlyphCenterDeltaX,
-    y: baseline.avatarGlyphCenterDeltaY,
-    transform: baseline.avatarGlyphTransform
-  }));
   closeTo(baseline.width, normalGeometry.width);
   closeTo(baseline.height, normalGeometry.height);
   expectAvatarCentered(baseline);
@@ -319,11 +315,6 @@ test('Board View star-only turn state keeps the same player-card geometry', asyn
 
   await setTurnPreview(panel, 'board');
   const boardTurn = await measurePlayerCard(selected);
-  console.info('AVATAR_DIAGNOSTIC board-desktop', JSON.stringify({
-    x: boardTurn.avatarGlyphCenterDeltaX,
-    y: boardTurn.avatarGlyphCenterDeltaY,
-    transform: boardTurn.avatarGlyphTransform
-  }));
   closeTo(boardTurn.width, baseline.width);
   closeTo(boardTurn.height, baseline.height);
   expect(boardTurn.mainTurnOverlap).toBe(false);
@@ -356,13 +347,7 @@ test('avatar remains centered for 2–5 players in the normal-host cascade', asy
     if (count === 5) {
       const cards = panel.locator('.dev-stage .showcase-player-card');
       for (let index = 0; index < await cards.count(); index += 1) {
-        const avatarGeometry = await measurePlayerCard(cards.nth(index));
-        console.info('AVATAR_DIAGNOSTIC host-avatar', JSON.stringify({
-          index,
-          x: avatarGeometry.avatarGlyphCenterDeltaX,
-          y: avatarGeometry.avatarGlyphCenterDeltaY,
-          transform: avatarGeometry.avatarGlyphTransform
-        }));
+        expectAvatarCentered(await measurePlayerCard(cards.nth(index)));
       }
     }
     expect(geometry.textBadgeOverlap).toBe(false);
@@ -382,12 +367,6 @@ for (const viewport of [
     await setTurnPreview(panel, 'none');
     await setCardState(panel, 'ready');
     const baseline = await measurePlayerCard(selected);
-    console.info('AVATAR_DIAGNOSTIC responsive', JSON.stringify({
-      viewport: `${viewport.width}x${viewport.height}`,
-      x: baseline.avatarGlyphCenterDeltaX,
-      y: baseline.avatarGlyphCenterDeltaY,
-      transform: baseline.avatarGlyphTransform
-    }));
 
     await setCardState(panel, 'fire');
     const fireOnly = await measurePlayerCard(selected);
@@ -518,15 +497,10 @@ for (const multiplier of [2, 3] as const) {
 
     for (let index = 0; index < await cards.count(); index += 1) {
       const avatarGeometry = await measurePresentationCard(cards.nth(index));
-      console.info('AVATAR_DIAGNOSTIC presentation-avatar', JSON.stringify({
-        multiplier,
-        index,
-        artX: avatarGeometry.avatarArtCenterDeltaX,
-        artY: avatarGeometry.avatarArtCenterDeltaY,
-        x: avatarGeometry.avatarGlyphCenterDeltaX,
-        y: avatarGeometry.avatarGlyphCenterDeltaY,
-        transform: avatarGeometry.avatarGlyphTransform
-      }));
+      expect(Math.abs(avatarGeometry.avatarArtCenterDeltaX)).toBeLessThanOrEqual(1);
+      expect(Math.abs(avatarGeometry.avatarArtCenterDeltaY)).toBeLessThanOrEqual(1);
+      expect(Math.abs(avatarGeometry.avatarGlyphCenterDeltaX)).toBeLessThanOrEqual(1);
+      expect(Math.abs(avatarGeometry.avatarGlyphCenterDeltaY)).toBeLessThanOrEqual(1);
     }
 
     const fire = presentation.locator('.presentation-name-card.is-fire').first();
