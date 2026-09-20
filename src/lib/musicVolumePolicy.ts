@@ -1,6 +1,8 @@
 import { audio } from './audio';
 
 export const MUSIC_GAIN_MAX = 0.15;
+export const DEFAULT_MUSIC_SLIDER = 0.5;
+export const DEFAULT_MUSIC_GAIN = MUSIC_GAIN_MAX * DEFAULT_MUSIC_SLIDER;
 
 function clamp01(value: number): number {
   return Math.min(1, Math.max(0, Number.isFinite(value) ? value : 0));
