@@ -56,6 +56,15 @@ describe('player card layout regression', () => {
     expect(css).toContain('overflow-wrap: normal !important;');
   });
 
+  it('keeps presentation player-card content vertically centered', () => {
+    const css = read('../src/ui-layout-audit-fixes.css');
+    expect(css).toContain('grid-template-rows: minmax(0, 1fr);');
+    expect(css).toContain('align-items: center !important;');
+    expect(css).toContain('align-content: center !important;');
+    expect(css).toContain('.presentation-name-card:not(.practice) > .presentation-player-avatar');
+    expect(css).toContain('align-self: center !important;');
+  });
+
   it('fixes standalone and board-presentation card heights', () => {
     const css = read('../src/ui-layout-audit-fixes.css');
     expect(css).toContain('height: 116px !important;');
