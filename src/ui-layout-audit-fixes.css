@@ -134,6 +134,10 @@
   padding-right: 112px !important;
 }
 
+.showcase-player-card.has-turn-label:not(.is-fire):not(.is-cold) {
+  padding-right: 96px !important;
+}
+
 /* The standalone Presentation screen uses fixed-height PlayerStrip cards. */
 .presentation-shell .showcase-player-card.player-card {
   min-height: 116px !important;
@@ -156,6 +160,10 @@
 @media (min-width: 760px) {
   .showcase-host:not(.host-presentation-mode) .showcase-player-card:is(.is-fire,.is-cold) {
     padding-right: 84px !important;
+  }
+
+  .showcase-host:not(.host-presentation-mode) .showcase-player-card.has-turn-label:not(.is-fire):not(.is-cold) {
+    padding-right: 62px !important;
   }
 
   .showcase-host:not(.host-presentation-mode) .showcase-player-card .player-status-stack {
