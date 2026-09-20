@@ -16,6 +16,8 @@ type CardGeometry = {
   turnContained: boolean;
   avatarCenterDelta: number;
   avatarArtCenterDelta: number;
+  avatarGlyphCenterDeltaX: number;
+  avatarGlyphCenterDeltaY: number;
   avatarGlyphTransform: string;
   statusBackgroundColor: string | null;
   statusBoxShadow: string | null;
@@ -74,6 +76,7 @@ async function measurePlayerCard(card: Locator): Promise<CardGeometry> {
       inner.right <= outer.right + 1 &&
       inner.top >= outer.top - 1 &&
       inner.bottom <= outer.bottom + 1;
+    const centerX = (rect: ReturnType<typeof rectOf>) => (rect.left + rect.right) / 2;
     const centerY = (rect: ReturnType<typeof rectOf>) => (rect.top + rect.bottom) / 2;
 
     const cardRect = rectOf(element);
@@ -99,6 +102,18 @@ async function measurePlayerCard(card: Locator): Promise<CardGeometry> {
     const mainRect = rectOf(main);
     const avatarRect = rectOf(avatar);
     const avatarArtRect = rectOf(avatarArt);
+    const glyphRange = document.createRange();
+    glyphRange.selectNodeContents(avatarGlyph);
+    const glyphRectRaw = glyphRange.getBoundingClientRect();
+    glyphRange.detach();
+    const glyphRect = {
+      left: glyphRectRaw.left,
+      top: glyphRectRaw.top,
+      right: glyphRectRaw.right,
+      bottom: glyphRectRaw.bottom,
+      width: glyphRectRaw.width,
+      height: glyphRectRaw.height
+    };
     const statusRect = status instanceof HTMLElement ? rectOf(status) : null;
     const turnRect = directTurn instanceof HTMLElement ? rectOf(directTurn) : null;
     const badges = status instanceof HTMLElement
@@ -144,6 +159,8 @@ async function measurePlayerCard(card: Locator): Promise<CardGeometry> {
       turnContained: turnRect && turnRect.width > 0 && turnRect.height > 0 ? contains(cardRect, turnRect) : true,
       avatarCenterDelta: Math.abs(centerY(avatarRect) - centerY(cardRect)),
       avatarArtCenterDelta: Math.abs(centerY(avatarArtRect) - centerY(avatarRect)),
+      avatarGlyphCenterDeltaX: centerX(glyphRect) - centerX(avatarArtRect),
+      avatarGlyphCenterDeltaY: centerY(glyphRect) - centerY(avatarArtRect),
       avatarGlyphTransform: getComputedStyle(avatarGlyph).transform,
       statusBackgroundColor: statusStyle?.backgroundColor ?? null,
       statusBoxShadow: statusStyle?.boxShadow ?? null,
@@ -203,6 +220,11 @@ test('Question View keeps player-card geometry stable and the status lane visual
   await setCardState(panel, 'ready');
   const normalGeometry = await measurePlayerCard(normal);
   const baseline = await measurePlayerCard(selected);
+  console.info('AVATAR_DIAGNOSTIC question-desktop', JSON.stringify({
+    x: baseline.avatarGlyphCenterDeltaX,
+    y: baseline.avatarGlyphCenterDeltaY,
+    transform: baseline.avatarGlyphTransform
+  }));
   closeTo(baseline.width, normalGeometry.width);
   closeTo(baseline.height, normalGeometry.height);
   expectAvatarCentered(baseline);
@@ -297,6 +319,11 @@ test('Board View star-only turn state keeps the same player-card geometry', asyn
 
   await setTurnPreview(panel, 'board');
   const boardTurn = await measurePlayerCard(selected);
+  console.info('AVATAR_DIAGNOSTIC board-desktop', JSON.stringify({
+    x: boardTurn.avatarGlyphCenterDeltaX,
+    y: boardTurn.avatarGlyphCenterDeltaY,
+    transform: boardTurn.avatarGlyphTransform
+  }));
   closeTo(boardTurn.width, baseline.width);
   closeTo(boardTurn.height, baseline.height);
   expect(boardTurn.mainTurnOverlap).toBe(false);
@@ -343,6 +370,12 @@ for (const viewport of [
     await setTurnPreview(panel, 'none');
     await setCardState(panel, 'ready');
     const baseline = await measurePlayerCard(selected);
+    console.info('AVATAR_DIAGNOSTIC responsive', JSON.stringify({
+      viewport: `${viewport.width}x${viewport.height}`,
+      x: baseline.avatarGlyphCenterDeltaX,
+      y: baseline.avatarGlyphCenterDeltaY,
+      transform: baseline.avatarGlyphTransform
+    }));
 
     await setCardState(panel, 'fire');
     const fireOnly = await measurePlayerCard(selected);
