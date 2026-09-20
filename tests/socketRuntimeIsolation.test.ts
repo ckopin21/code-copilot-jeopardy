@@ -164,4 +164,28 @@ describe('production socket runtime isolation', () => {
     expect(responses.every((response) => response.ok && response.data?.accepted)).toBe(true);
     host.destroy(); player.destroy();
   });
+
+  it('restores a disconnected player through a replacement production runtime without duplicating its seat', async () => {
+    const { createSocketRuntime } = await import('../src/lib/socket');
+    DeterministicPeer.peers.clear();
+    const peerFactory = (id: string | undefined) => new DeterministicPeer(id) as never;
+    const engine = new BrowserGameEngine();
+    location.search = '?mode=host';
+    const host = createSocketRuntime({ createPeer: peerFactory, createEngine: () => engine, installBrowserHooks: false });
+    const room = await host.emitAck<{ roomCode: string; hostToken: string }>('room:create', { settings: {} });
+    const first = createSocketRuntime({ createPeer: peerFactory, installBrowserHooks: false });
+    location.search = '?mode=player';
+    const credentials = await first.emitAck<{ playerId: string; reconnectToken: string }>('player:join', { roomCode: room.roomCode, name: 'Reconnect', avatar: '🚀', accent: '#93c5fd' });
+    const seat = engine.snapshot(room.roomCode).players[0]!.seat;
+    first.destroy();
+    await settle();
+    const replacement = createSocketRuntime({ createPeer: peerFactory, installBrowserHooks: false });
+    const restored = await replacement.emitAck<{ playerId: string; reconnectToken: string }>('player:reconnect', { roomCode: room.roomCode, ...credentials });
+    const players = engine.snapshot(room.roomCode).players;
+
+    expect(restored.playerId).toBe(credentials.playerId);
+    expect(players).toHaveLength(1);
+    expect(players[0]).toMatchObject({ id: credentials.playerId, seat, connected: true, name: 'Reconnect' });
+    host.destroy(); replacement.destroy();
+  });
 });
