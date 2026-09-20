@@ -76,6 +76,24 @@
   min-width: min(320px, 72vw);
 }
 
+.podium-action-row {
+  position: relative;
+  z-index: 8;
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: clamp(6px, 1.2vh, 14px);
+}
+
+.podium-action-row .podium-stats-button {
+  margin-top: 0;
+}
+
+.podium-new-game-button {
+  min-width: min(240px, 62vw);
+}
+
 /* Fit awards, standings, and controls inside the host's remaining viewport. */
 .showcase-host .recap-scene-v2.stats-after-podium {
   display: grid !important;
