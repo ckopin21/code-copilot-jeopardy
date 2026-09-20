@@ -13,7 +13,7 @@ https://ckopin21.github.io/code-copilot-jeopardy/
 - 0–5 player seats, including practice mode with no phones
 - Classic mode with buzzers plus Free Response mode where every active player answers simultaneously
 - QR/camera join plus manual room codes and click-to-enlarge host QR
-- stable phone identity with automatic reconnect, heartbeat disconnect detection, and reserved seats
+- stable phone identity with automatic reconnect, heartbeat disconnect detection, reserved seats, and persistent party carry-over between games
 - host-selectable board with in-page fullscreen presentation mode
 - first-buzz locking, keyboard/gamepad host buzzers, typed-response questions
 - Daily Doubles with fixed wager choices
@@ -54,7 +54,7 @@ The host page is the live room endpoint. If it closes, phones cannot keep playin
 
 ### Game flow
 
-1. Choose **Start New Game** or **Continue Game**.
+1. Choose **Start New Game** or **Continue Saved Game**. If a saved room already exists, **Start New Game** reuses that room and current party while resetting game progress.
 2. Select Classic or Free Response, one compatible question pack, and the rules in the lobby.
 3. Choose Quick (16 clues), Standard (25), or Marathon (36, including the 1000-point row).
 4. Players join by QR or room code.
@@ -64,7 +64,7 @@ The host page is the live room endpoint. If it closes, phones cannot keep playin
 8. Correct/incorrect grading returns to the board when complete; unanswered reveals wait for the host to continue.
 9. Late-game multipliers apply to the last six/three questions when enabled.
 10. Final Round collects wagers and phone answers when enabled, then waits for the host's staged reveal.
-11. Podium reveal plays, then host and phone player statistics are shown.
+11. Podium reveal plays, then the host can immediately choose **Start New Game** with the same connected party or view the full game statistics.
 
 See [`docs/gameplay.md`](docs/gameplay.md) for exact behavior.
 
@@ -171,8 +171,12 @@ Snapshots are sanitized by role before being sent. Hidden clue answers/explanati
 
 React renders names/questions as text, avoiding raw HTML injection for normal content paths.
 
-## Reset behavior
+## Between-game and reset behavior
 
-**Reset Game** keeps the room and reserved seats but resets the board, scores, statistics, current phase, and question history. Phones receive the lobby state immediately.
+Returning from the host game to the main menu uses in-app navigation instead of reloading the page. The live PeerJS host remains active, so connected phones stay connected to the same room while the host is on the menu.
 
-**Reset Instance** clears saved Blue Stage host/player/game state and reloads the current application build cleanly.
+When a saved room exists, **Start New Game** reuses that room. Player IDs, seats, reconnect tokens, names, avatars, accents, and other profile customization stay attached to the same players, while the board, scores, streaks, statistics, timers, Final state, and host question history reset. Phones receive the lobby state immediately without rejoining.
+
+After a game fully finishes, the results flow exposes **Start New Game** directly so the same party can continue without returning to the join flow.
+
+**Reset Instance** remains the destructive recovery option. It clears saved Blue Stage host/player/game state and reloads the current application build cleanly.
