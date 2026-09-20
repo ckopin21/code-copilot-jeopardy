@@ -11,6 +11,7 @@ import { useOutsideDismiss } from '../lib/useOutsideDismiss';
 import { DevPresentationLab, buildDevPresentationRoom } from './DevPresentationLab';
 
 type CardState = 'ready' | 'active' | 'fire' | 'cold';
+type TurnPreview = 'none' | 'board' | 'question';
 type RevealBeat = 0 | 1 | 2 | 3 | 4;
 type TransitionPreview = { eyebrow: string; title: string; detail?: string; categories?: string[] } | null;
 
@@ -43,6 +44,7 @@ export function DevModeOverlay() {
   const [doubleBoostsSpent, setDoubleBoostsSpent] = useState<0 | 1 | 2>(0);
   const [tripleBoostsSpent, setTripleBoostsSpent] = useState<0 | 1>(0);
   const [cardState, setCardState] = useState<CardState>('ready');
+  const [turnPreview, setTurnPreview] = useState<TurnPreview>('question');
   const [flight, setFlight] = useState<ScoreFlightState | null>(null);
   const [modifierPreview, setModifierPreview] = useState<2 | 3 | null>(null);
   const [transition, setTransition] = useState<TransitionPreview>(null);
@@ -269,6 +271,7 @@ export function DevModeOverlay() {
     setDoubleBoostsSpent(0);
     setTripleBoostsSpent(0);
     setCardState('ready');
+    setTurnPreview('question');
   };
 
   const enterVisualFullscreen = async () => {
@@ -309,7 +312,8 @@ export function DevModeOverlay() {
   if (!hostMode) return null;
 
   const selectedActive = cardState === 'active' ? analysis.player.id : null;
-  const selectedTurn = analysis.player.id;
+  const selectedTurn = turnPreview === 'none' ? null : analysis.player.id;
+  const selectedTurnLabel = turnPreview === 'question' ? 'ON TURN' : '';
   const comebackActive = analysis.comeback.multiplier > 1;
   const spectacleText = revealBeat === 1 ? 'LOCK IT IN' : revealBeat === 2 ? 'NO MORE CHANGES' : revealBeat === 3 ? 'THE ANSWER IS…' : 'REVEALED';
   const renderAnimationButtons = () => <>
@@ -360,6 +364,7 @@ export function DevModeOverlay() {
           <label>2× uses already spent<select value={doubleBoostsSpent} onChange={(event) => setDoubleBoostsSpent(Number(event.target.value) as 0 | 1 | 2)}><option value="0">0 of 2</option><option value="1">1 of 2</option><option value="2">2 of 2</option></select></label>
           <label>3× uses already spent<select value={tripleBoostsSpent} onChange={(event) => setTripleBoostsSpent(Number(event.target.value) as 0 | 1)}><option value="0">0 of 1</option><option value="1">1 of 1</option></select></label>
           <label>Selected card state<select value={cardState} onChange={(event) => setCardState(event.target.value as CardState)}><option value="ready">Ready</option><option value="active">Buzz winner / active</option><option value="fire">On Fire</option><option value="cold">Cold Streak</option></select></label>
+          <label>Turn preview<select value={turnPreview} onChange={(event) => setTurnPreview(event.target.value as TurnPreview)}><option value="none">No turn</option><option value="board">Board · star only</option><option value="question">Question · ON TURN</option></select></label>
         </div>
       </section>
 
@@ -398,7 +403,7 @@ export function DevModeOverlay() {
             <button type="button" className="dev-visual-fullscreen-button" onClick={() => void enterVisualFullscreen()} aria-label="Fullscreen Visual & animation lab">Fullscreen</button>
           </div>
           <div className="dev-stage">
-            <PlayerStrip players={displayPlayers} activeId={selectedActive} turnId={selectedTurn} turnLabel="ON TURN" />
+            <PlayerStrip players={displayPlayers} activeId={selectedActive} turnId={selectedTurn} turnLabel={selectedTurnLabel} />
             <div className="dev-question-source" data-question-id="dev-question"><small>DEV QUESTION</small><strong>{analysis.normalValue.toLocaleString()}</strong><span>{comebackActive ? `${analysis.normalValue.toLocaleString()} → ${analysis.correctValue.toLocaleString()} for ${analysis.player.name}` : 'Normal scoring'}</span></div>
           </div>
           <div className="dev-animation-grid">{renderAnimationButtons()}</div>
