@@ -163,7 +163,20 @@ describe('production socket runtime isolation', () => {
     expect(engine.snapshot(room.roomCode).currentQuestion?.buzzWinnerId).toBe(credentials.playerId);
     expect(responses).toHaveLength(3);
     expect(responses.every((response) => response.ok && response.data?.accepted)).toBe(true);
-    host.destroy(); player.destroy();
+    player.destroy();
+    await settle();
+    const retryingPlayer = createSocketRuntime({ createPeer: peerFactory, installBrowserHooks: false });
+    location.search = '?mode=player';
+    await retryingPlayer.emitAck('player:reconnect', { roomCode: room.roomCode, ...credentials });
+    const retryWire = DeterministicPeer.clientConnections.at(-1)!;
+    const retried: Array<{ ok: boolean; data?: { accepted?: boolean } }> = [];
+    retryWire.on('data', (message: { kind?: string; requestId?: string; ok?: boolean; data?: { accepted?: boolean } }) => {
+      if (message.kind === 'response' && message.requestId === 'same-buzz') retried.push(message);
+    });
+    retryWire.send(packet);
+    await settle();
+    expect(retried).toEqual([expect.objectContaining({ ok: true, data: expect.objectContaining({ accepted: true }) })]);
+    host.destroy(); retryingPlayer.destroy();
   });
 
   it('restores a disconnected player through a replacement production runtime without duplicating its seat', async () => {
