@@ -38,6 +38,7 @@ https://ckopin21.github.io/code-copilot-jeopardy/
 The maintained documentation index is [`docs/README.md`](docs/README.md).
 
 - [`docs/gameplay.md`](docs/gameplay.md) — complete game/rule flow
+- [`docs/experience.md`](docs/experience.md) — player customization, host controls, presets, undo, recovery, awards, accessibility
 - [`docs/architecture.md`](docs/architecture.md) — runtime, state ownership, storage, UI architecture
 - [`docs/networking.md`](docs/networking.md) — WebRTC/PeerJS, reconnects, reserved seats, failure behavior
 - [`docs/question-packs.md`](docs/question-packs.md) — easiest way to add questions and packs
