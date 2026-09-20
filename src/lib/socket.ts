@@ -9,7 +9,7 @@ import { sanitizeRoomSnapshot } from './snapshotSecurity';
 import { authorizeRemoteEvent, type RemoteIdentity } from './remoteAuthorization';
 import { randomId } from './ids';
 import { finalWagerRules } from './finalWagerRules';
-import { claimHostAuthority, hasHostAuthority, hostAuthorityKey, releaseHostAuthority } from './hostTabAuthority';
+import { canClaimHostAuthority, claimHostAuthority, hasHostAuthority, hostAuthorityKey, releaseHostAuthority } from './hostTabAuthority';
 
 type Listener = (data: any) => void;
 type Identity = RemoteIdentity;
@@ -389,7 +389,7 @@ function attachHostConnection(connection: DataConnection): void {
   connection.on('close', () => handleConnectionClosed(connection));
   connection.on('error', () => handleConnectionClosed(connection));
 }
-async function createHostPeerOnce(roomCode: string): Promise<void> {
+async function createHostPeerOnce(roomCode: string, allowAuthorityTakeover: boolean): Promise<void> {
   const options = await peerOptions();
   return new Promise((resolve, reject) => {
     const peer = new Peer(hostPeerId(roomCode), options);
@@ -415,13 +415,17 @@ async function createHostPeerOnce(roomCode: string): Promise<void> {
         window.clearTimeout(hostSignalRetryTimer);
         hostSignalRetryTimer = null;
       }
-      hostStaleSweepBlockedUntil = Date.now() + HOST_STALE_SWEEP_GRACE_MS;
-      socket.connected = true;
-      emitLocal('connect');
       if (settled) {
         if (hostRoomCode === roomCode) emitRoom(roomCode);
         return;
       }
+      if (!canClaimHostAuthority(roomCode, hostAuthorityId, allowAuthorityTakeover)) {
+        finishError(new Error('Another host screen is active in this browser'));
+        return;
+      }
+      hostStaleSweepBlockedUntil = Date.now() + HOST_STALE_SWEEP_GRACE_MS;
+      socket.connected = true;
+      emitLocal('connect');
       settled = true;
       const previousPeer = hostPeer;
       const authorityId = randomId('host-authority');
@@ -447,6 +451,13 @@ async function createHostPeerOnce(roomCode: string): Promise<void> {
         hostAuthorityId = '';
         socket.connected = false;
         emitLocal('disconnect');
+        window.setTimeout(() => {
+          if (currentMode() !== 'host' || hostRoomCode !== roomCode || hostPeer) return;
+          void startHostPeer(roomCode, true, false).catch(() => {
+            // Keep the persisted room intact. The host UI remains in recovery mode
+            // and another retry will occur on the regular host keepalive.
+          });
+        }, 500);
       });
       peer.on('error', () => { if (peer.disconnected && !peer.destroyed) scheduleHostSignalReconnect(); });
       resolve();
@@ -461,8 +472,25 @@ function hostPeerIdIsTaken(error: unknown): boolean {
     : '';
   return type === 'unavailable-id' || /ID .+ is taken/i.test(failMessage(error));
 }
+function bodyAllowsHostTakeover(payload: Record<string, unknown>): boolean {
+  return payload.allowAuthorityTakeover === true;
+}
 
-async function startHostPeer(roomCode: string, retryUnavailable: boolean): Promise<void> {
+async function startHostPeer(roomCode: string, retryUnavailable: boolean, allowAuthorityTakeover: boolean): Promise<void> {
+  if (!canClaimHostAuthority(roomCode, hostAuthorityId, allowAuthorityTakeover)) {
+    if (hostPeer && hostRoomCode === roomCode) {
+      const stalePeer = hostPeer;
+      hostPeer = null;
+      hostAuthorityId = '';
+      socket.connected = false;
+      for (const connection of connections) {
+        try { connection.close(); } catch { /* stale connection */ }
+      }
+      try { stalePeer.destroy(); } catch { /* stale peer */ }
+      emitLocal('disconnect');
+    }
+    throw new Error('Another host screen is active in this browser');
+  }
   if (hostPeer && hostRoomCode === roomCode && !hostPeer.destroyed) {
     if (ownsHostAuthority(roomCode)) {
       if (hostPeer.disconnected) { try { hostPeer.reconnect(); } catch { /* keep existing connections */ } }
@@ -483,7 +511,7 @@ async function startHostPeer(roomCode: string, retryUnavailable: boolean): Promi
   try {
     for (let attempt = 0; attempt < attempts; attempt += 1) {
       try {
-        await createHostPeerOnce(roomCode);
+        await createHostPeerOnce(roomCode, allowAuthorityTakeover);
         return;
       } catch (error) {
         lastError = error instanceof Error ? error : new Error('Could not start host connection');
@@ -491,7 +519,7 @@ async function startHostPeer(roomCode: string, retryUnavailable: boolean): Promi
         sawPeerIdTaken ||= peerIdTaken;
         if (!retryUnavailable) break;
 
-        if (peerIdTaken && !takeoverAuthorityId) {
+        if (peerIdTaken && allowAuthorityTakeover && !takeoverAuthorityId) {
           // A saved room opened in a second tab can legitimately collide with the first tab's
           // PeerJS id. Claiming local authority tells the old tab to release that peer so the
           // saved room can move to this tab instead of getting stuck in an "ID is taken" loop.
@@ -771,7 +799,7 @@ async function createHostRoom(payload: Record<string, unknown>): Promise<unknown
     const settings = (payload.settings ?? {}) as Partial<GameSettings>;
     const credentials = engine.createRoom(String(payload.baseUrl ?? baseUrl()), settings);
     try {
-      await startHostPeer(credentials.roomCode, false);
+      await startHostPeer(credentials.roomCode, false, true);
       engine.setHostConnected(credentials.roomCode, true);
       emitRoom(credentials.roomCode);
       return credentials;
@@ -785,7 +813,7 @@ async function hostRequest(event: string, payload: Record<string, unknown>): Pro
   if (event === 'room:create') return createHostRoom(payload);
   const roomCode = String(payload.roomCode ?? '').toUpperCase();
   if (event === 'host:reconnect') {
-    await startHostPeer(roomCode, true);
+    await startHostPeer(roomCode, true, bodyAllowsHostTakeover(payload));
     requireHostAuthority(roomCode);
   } else if (event.startsWith('host:')) {
     requireHostAuthority(roomCode);

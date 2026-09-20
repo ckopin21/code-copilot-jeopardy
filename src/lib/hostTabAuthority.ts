@@ -7,6 +7,22 @@ export function hostAuthorityKey(roomCode?: string): string {
   return HOST_AUTHORITY_KEY;
 }
 
+export function readHostAuthorityOwner(roomCode: string, storage: Storage = localStorage): string | null {
+  const key = hostAuthorityKey(roomCode);
+  try { return storage.getItem(key); }
+  catch { return fallbackOwners.get(key) ?? null; }
+}
+
+export function canClaimHostAuthority(
+  roomCode: string,
+  ownerId: string,
+  allowTakeover: boolean,
+  storage: Storage = localStorage
+): boolean {
+  const activeOwner = readHostAuthorityOwner(roomCode, storage);
+  return allowTakeover || activeOwner === null || activeOwner === ownerId;
+}
+
 export function claimHostAuthority(roomCode: string, ownerId: string, storage: Storage = localStorage): void {
   const key = hostAuthorityKey(roomCode);
   fallbackOwners.set(key, ownerId);
@@ -14,9 +30,7 @@ export function claimHostAuthority(roomCode: string, ownerId: string, storage: S
 }
 
 export function hasHostAuthority(roomCode: string, ownerId: string, storage: Storage = localStorage): boolean {
-  const key = hostAuthorityKey(roomCode);
-  try { return storage.getItem(key) === ownerId; }
-  catch { return fallbackOwners.get(key) === ownerId; }
+  return readHostAuthorityOwner(roomCode, storage) === ownerId;
 }
 
 export function releaseHostAuthority(roomCode: string, ownerId: string, storage: Storage = localStorage): void {
