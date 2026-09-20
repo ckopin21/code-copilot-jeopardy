@@ -215,8 +215,8 @@ async function setQuestionViewSurface(panel: Locator, enabled: boolean) {
 }
 
 function expectQuestionAvatarOpticalOffset(geometry: CardGeometry) {
-  expect(geometry.avatarGridOffsetX).toBeGreaterThanOrEqual(-2.5);
-  expect(geometry.avatarGridOffsetX).toBeLessThanOrEqual(-1.5);
+  expect(geometry.avatarGridOffsetX).toBeGreaterThanOrEqual(-4.5);
+  expect(geometry.avatarGridOffsetX).toBeLessThanOrEqual(-3.5);
 }
 
 test('Question View keeps player-card geometry stable and the status lane visually transparent', async ({ page }) => {
