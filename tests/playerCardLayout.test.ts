@@ -28,15 +28,24 @@ describe('player card layout regression', () => {
     expect(statusRules).not.toContain('position: static !important;\n  inset: auto !important;\n  transform: none !important;\n  grid-column: 3;');
   });
 
-  it('keeps the avatar shell centered and corrects only the normal-host glyph', () => {
+  it('keeps the avatar shell centered and uses rendered glyph metrics instead of a platform-specific offset', () => {
     const css = read('../src/ui-layout-audit-fixes.css');
+    const avatar = read('../src/components/PlayerAvatar.tsx');
+    const playerStrip = read('../src/components/PlayerStrip.tsx');
+    const board = read('../src/components/Board.tsx');
+
     expect(css).toContain('.showcase-player-card .player-avatar-large {');
     expect(css).toContain('align-self: center !important;');
     expect(css).toContain('justify-self: center;');
-    expect(css).toContain('.showcase-host:not(.host-presentation-mode) .showcase-player-card .player-avatar-large .player-avatar-emoji {');
-    expect(css).toContain('transform: translateX(-2px);');
-    expect(css).not.toContain('.player-avatar-large {\n  transform:');
+    expect(css).not.toContain('transform: translateX(-2px);');
     expect(css).not.toContain('translateY(-0.04em)');
+
+    expect(avatar).toContain('autoCenter = false');
+    expect(avatar).toContain('document.createRange()');
+    expect(avatar).toContain('new ResizeObserver(scheduleMeasure)');
+    expect(avatar).toContain('translate3d(');
+    expect(playerStrip).toContain('autoCenter />');
+    expect(board).toContain('className="used-result-avatar-art" autoCenter');
   });
 
   it('uses single-line overflow handling instead of allowing names to resize scorecards', () => {
@@ -56,10 +65,13 @@ describe('player card layout regression', () => {
     expect(css).toContain('height: 72px;');
   });
 
-  it('keeps compact host badges readable without changing card height', () => {
+  it('keeps compact host streak pills readable without changing card height', () => {
     const css = read('../src/ui-layout-audit-fixes.css');
     expect(css).toContain('.showcase-host:not(.host-presentation-mode) .showcase-player-card .player-status-stack');
     expect(css).toContain('width: 72px;');
     expect(css).toContain('.streak-ribbon em {\n    display: none !important;');
+    expect(css).toContain('min-width: max-content;');
+    expect(css).toContain('overflow: visible !important;');
+    expect(css).toContain('text-overflow: clip !important;');
   });
 });
