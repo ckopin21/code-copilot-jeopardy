@@ -20,7 +20,27 @@ describe('player card layout regression', () => {
     expect(statusRules).toContain('position: absolute !important;');
     expect(statusRules).toContain('transform: translateY(-50%) !important;');
     expect(statusRules).toContain('padding-right: 112px !important;');
+    expect(statusRules).toContain('background: transparent !important;');
+    expect(statusRules).toContain('box-shadow: none !important;');
+    expect(statusRules).toContain('filter: none !important;');
+    expect(statusRules).toContain('backdrop-filter: none !important;');
+    expect(statusRules).toContain('overflow: visible;');
     expect(statusRules).not.toContain('position: static !important;\n  inset: auto !important;\n  transform: none !important;\n  grid-column: 3;');
+  });
+
+  it('keeps the card avatar optically centered without changing card geometry', () => {
+    const css = read('../src/ui-layout-audit-fixes.css');
+    expect(css).toContain('.showcase-player-card .player-avatar-large');
+    expect(css).toContain('align-self: center !important;');
+    expect(css).toContain('translate: 0 -1px;');
+  });
+
+  it('avoids filter-based compositing on stacked status pills', () => {
+    const css = read('../src/game-ui-polish-v2.css');
+    const animationStart = css.indexOf('@keyframes stackedStreakRibbonPulse');
+    const animationEnd = css.indexOf('@media (max-width: 760px)', animationStart);
+    const animation = css.slice(animationStart, animationEnd);
+    expect(animation).not.toContain('filter:');
   });
 
   it('uses single-line overflow handling instead of allowing names to resize scorecards', () => {
