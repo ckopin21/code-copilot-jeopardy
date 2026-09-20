@@ -17,7 +17,9 @@ class FixedRandom implements RandomSource {
   next(): number { this.value = (this.value * 6.17 + 0.11) % 1; return this.value; }
 }
 
-const room = (code: string, expiresAt: number, marker: string) => ({ state: { code, createdAt: 100, expiresAt }, marker });
+const room = (code: string, expiresAt: number, marker: string) => ({
+  state: { code, createdAt: 100, expiresAt }, marker, hostToken: `host-${code}`, playerTokens: {}, questions: {}, finalQuestionId: null
+});
 const PRIMARY_KEY = 'blue-stage-p2p-engine-v2';
 const BACKUP_KEY = 'blue-stage-p2p-engine-v2-backup';
 
@@ -83,6 +85,20 @@ describe('room storage recovery', () => {
     expect(after.players[0].id).toBe(player.playerId);
     expect(after.players[0].seat).toBe(before.players[0].seat);
     expect(after.players[0].connected).toBe(true);
+  });
+
+  it('quarantines a malformed newer primary record and restores the valid backup', () => {
+    const engine = new BrowserGameEngine(new FixedRandom(), 60_000);
+    const host = engine.createRoom('https://example.test/game');
+    const valid = localStorage.getItem(PRIMARY_KEY)!;
+    const damaged = JSON.parse(valid) as Array<Record<string, unknown>>;
+    damaged[0] = { state: { code: host.roomCode, createdAt: Date.now(), expiresAt: Date.now() + 60_000, revision: 999 } };
+    localStorage.setItem(PRIMARY_KEY, JSON.stringify(damaged));
+    localStorage.setItem(BACKUP_KEY, valid);
+
+    const restored = new BrowserGameEngine(new FixedRandom(), 60_000);
+    expect(restored.reconnectHost(host.roomCode, host.hostToken).code).toBe(host.roomCode);
+    expect(JSON.parse(localStorage.getItem(PRIMARY_KEY) ?? '[]')[0].hostToken).toBe(host.hostToken);
   });
 
   it('prefers the higher state revision when timestamps tie', () => {

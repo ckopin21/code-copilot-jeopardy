@@ -21,6 +21,20 @@ function parseRooms(raw: string | null): StoredRoom[] {
   }
 }
 
+/** Reject records that could win freshness selection but cannot restore a room. */
+export function isRecoverableStoredRoom(room: StoredRoom): boolean {
+  const state = room.state;
+  return Boolean(
+    state &&
+    typeof state.code === 'string' && state.code.trim() &&
+    Number.isFinite(Number(state.createdAt)) &&
+    Number.isFinite(Number(state.expiresAt)) &&
+    typeof room.hostToken === 'string' && room.hostToken &&
+    room.playerTokens && typeof room.playerTokens === 'object' &&
+    room.questions && typeof room.questions === 'object'
+  );
+}
+
 function roomFreshness(room: StoredRoom): [number, number] {
   const revision = Number(room.state?.revision ?? 0);
   const expiresAt = Number(room.state?.expiresAt ?? 0);
@@ -65,8 +79,8 @@ function safeSetItem(storage: Storage, key: string, value: string): void {
 export function recoverRoomStorage(storage: Storage = localStorage): StoredRoom[] {
   const primaryRaw = safeGetItem(storage, PRIMARY_KEY);
   const backupRaw = safeGetItem(storage, BACKUP_KEY);
-  const primary = parseRooms(primaryRaw);
-  const backup = parseRooms(backupRaw);
+  const primary = parseRooms(primaryRaw).filter(isRecoverableStoredRoom);
+  const backup = parseRooms(backupRaw).filter(isRecoverableStoredRoom);
   const merged = mergeStoredRooms(primary, backup);
   const serialized = JSON.stringify(merged);
   if (primaryRaw !== serialized) safeSetItem(storage, PRIMARY_KEY, serialized);

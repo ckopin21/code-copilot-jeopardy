@@ -8,6 +8,7 @@ import { finalWagerRules } from './finalWagerRules';
 import { gameModeAllowsDailyDoubles, gameModePenalizesTypedTimeout, isGameMode, responseModeForGameMode } from '../shared/gameModes';
 import { randomId } from './ids';
 import { normalizePlayerCustomization, type PlayerCustomizationFields } from '../shared/playerCustomization';
+import { recoverRoomStorage } from './roomStorageRecovery';
 
 export interface RoomRecord {
   state: RoomState;
@@ -45,18 +46,9 @@ function defaultStats() {
   return { correct: 0, incorrect: 0, longestStreak: 0, longestColdStreak: 0, dailyDoublesFound: 0, biggestWager: 0, fastestBuzzMs: null, pointsGained: 0, pointsLost: 0 };
 }
 function loadRooms(): { rooms: RoomRecord[]; readable: boolean } {
-  const parse = (raw: string | null): RoomRecord[] | null => {
-    if (!raw) return null;
-    try {
-      const parsed = JSON.parse(raw) as RoomRecord[];
-      return Array.isArray(parsed) ? parsed : null;
-    } catch {
-      return null;
-    }
-  };
   try {
     return {
-      rooms: parse(localStorage.getItem(STORAGE_KEY)) ?? parse(localStorage.getItem(STORAGE_BACKUP_KEY)) ?? [],
+      rooms: recoverRoomStorage(localStorage) as unknown as RoomRecord[],
       readable: true
     };
   } catch {
