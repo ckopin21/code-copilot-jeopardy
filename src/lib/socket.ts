@@ -34,6 +34,7 @@ const playerLastSeen = new Map<string, number>();
 const connections = new Set<DataConnection>();
 const pending = new Map<string, PendingRequest>();
 const completedRequests = new Map<DataConnection, Map<string, ResponseMessage>>();
+const inFlightRequests = new Map<DataConnection, Map<string, Promise<void>>>();
 let hostPeer: Peer | null = null;
 let hostRoomCode = '';
 let hostAuthorityId = '';
@@ -363,6 +364,18 @@ async function handleHostRequest(connection: DataConnection, message: RequestMes
     if (connection.open) connection.send(prior);
     return;
   }
+  const active = inFlightRequests.get(connection)?.get(message.requestId);
+  if (active) {
+    await active;
+    const completed = completedRequests.get(connection)?.get(message.requestId);
+    if (completed && connection.open) connection.send(completed);
+    return;
+  }
+  let finishRequest: () => void = () => {};
+  const work = new Promise<void>((resolve) => { finishRequest = resolve; });
+  const activeRequests = inFlightRequests.get(connection) ?? new Map<string, Promise<void>>();
+  activeRequests.set(message.requestId, work);
+  inFlightRequests.set(connection, activeRequests);
   const requestRoomCode = String(message.payload.roomCode ?? '').toUpperCase();
   if (!ownsHostAuthority(requestRoomCode)) {
     if (connection.open) connection.send({ kind: 'response', requestId: message.requestId, ok: false, error: 'Host authority moved to another tab' } satisfies ResponseMessage);
@@ -389,13 +402,17 @@ async function handleHostRequest(connection: DataConnection, message: RequestMes
     completedRequests.set(connection, responses);
     if (responses.size > 128) responses.delete(responses.keys().next().value!);
     if (connection.open) connection.send(response);
+  } finally {
+    activeRequests.delete(message.requestId);
+    if (!activeRequests.size) inFlightRequests.delete(connection);
+    finishRequest();
   }
 }
 function attachHostConnection(connection: DataConnection): void {
   connections.add(connection);
   connection.on('data', (data) => { const message = data as WireMessage; if (message?.kind === 'request') void handleHostRequest(connection, message); });
-  connection.on('close', () => { completedRequests.delete(connection); handleConnectionClosed(connection); });
-  connection.on('error', () => { completedRequests.delete(connection); handleConnectionClosed(connection); });
+  connection.on('close', () => { completedRequests.delete(connection); inFlightRequests.delete(connection); handleConnectionClosed(connection); });
+  connection.on('error', () => { completedRequests.delete(connection); inFlightRequests.delete(connection); handleConnectionClosed(connection); });
 }
 async function createHostPeerOnce(roomCode: string, allowAuthorityTakeover: boolean): Promise<void> {
   const options = await peerOptions();
