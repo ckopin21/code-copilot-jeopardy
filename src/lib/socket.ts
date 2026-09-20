@@ -70,6 +70,32 @@ const DEFAULT_ICE_SERVERS: RTCIceServer[] = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' }
 ];
+
+/**
+ * A complete socket protocol runtime.  The application uses the default runtime
+ * exported below; tests and embedders can construct additional real runtimes
+ * without sharing peers, request caches, identities, or reconnect state.
+ */
+export interface SocketRuntime {
+  socket: { connected: boolean; on(event: string, listener: Listener): void; off(event: string, listener: Listener): void };
+  emitAck<T = unknown>(event: string, payload: unknown): Promise<T>;
+  suspendClientSession(): void;
+  resumeClientSession(forceHostPause?: boolean, forceTransportReset?: boolean): void;
+  getPlayerConnectionHealth(roomCode: string): PlayerConnectionHealth[];
+  testPlayerControllers(roomCode: string): string[];
+  destroy(): void;
+}
+
+export interface SocketRuntimeOptions {
+  /** Supplies the real PeerJS constructor in production or a deterministic peer in tests. */
+  createPeer?: (id: string | undefined, options: { debug: number; config: { iceServers: RTCIceServer[] } }) => Peer;
+  /** Extra runtimes normally do not need duplicate global browser lifecycle hooks. */
+  installBrowserHooks?: boolean;
+}
+
+export function createSocketRuntime(options: SocketRuntimeOptions = {}): SocketRuntime {
+const makePeer = options.createPeer ?? ((id, peerOptions) => id === undefined ? new Peer(peerOptions) : new Peer(id, peerOptions));
+const installBrowserHooks = options.installBrowserHooks ?? true;
 let activeIceServers: RTCIceServer[] = DEFAULT_ICE_SERVERS;
 let iceConfigWarning = '';
 
@@ -127,7 +153,7 @@ async function peerOptions() {
   return { debug: 0, config: { iceServers } };
 }
 function emitLocal(event: string, data?: unknown): void { for (const listener of listeners.get(event) ?? []) listener(data); }
-export const socket = {
+const socket = {
   connected: false,
   on(event: string, listener: Listener) { const set = listeners.get(event) ?? new Set<Listener>(); set.add(listener); listeners.set(event, set); },
   off(event: string, listener: Listener) { listeners.get(event)?.delete(listener); }
@@ -197,7 +223,7 @@ function closePlayerConnection(playerId: string, event?: 'player:suspended' | 'p
 }
 
 /** Host-only connection freshness. Phones refresh lastSeen on their regular reconnect heartbeat. */
-export function getPlayerConnectionHealth(roomCode: string): PlayerConnectionHealth[] {
+function getPlayerConnectionHealth(roomCode: string): PlayerConnectionHealth[] {
   let snapshot: RoomSnapshot;
   try { snapshot = engine.snapshot(roomCode); } catch { return []; }
   const now = Date.now();
@@ -212,7 +238,7 @@ export function getPlayerConnectionHealth(roomCode: string): PlayerConnectionHea
 }
 
 /** Sends an immediate controller-test event to every live phone. Returns the player ids reached. */
-export function testPlayerControllers(roomCode: string): string[] {
+function testPlayerControllers(roomCode: string): string[] {
   const reached: string[] = [];
   const sentAt = Date.now();
   for (const [playerId, connection] of playerConnections) {
@@ -417,7 +443,7 @@ function attachHostConnection(connection: DataConnection): void {
 async function createHostPeerOnce(roomCode: string, allowAuthorityTakeover: boolean): Promise<void> {
   const options = await peerOptions();
   return new Promise((resolve, reject) => {
-    const peer = new Peer(hostPeerId(roomCode), options);
+    const peer = makePeer(hostPeerId(roomCode), options);
     let settled = false;
     let hostSignalRetryTimer: number | null = null;
     const scheduleHostSignalReconnect = () => {
@@ -614,7 +640,7 @@ async function createClientPeer(expectedGeneration: number): Promise<Peer> {
   const options = await peerOptions();
   if (expectedGeneration !== clientTransportGeneration) throw new Error('Connection refresh superseded');
   return new Promise((resolve, reject) => {
-    const peer = new Peer(options);
+    const peer = makePeer(undefined, options);
     clientPeer = peer;
     let settled = false;
     peer.on('open', () => {
@@ -795,7 +821,7 @@ async function clientRequest(event: string, payload: Record<string, unknown>): P
   }
   return result;
 }
-export function suspendClientSession(): void {
+function suspendClientSession(): void {
   clientSuspended = true;
   clientConnectPromise = null;
   if (reconnectTimer !== null) {
@@ -811,7 +837,7 @@ export function suspendClientSession(): void {
   destroyClientPeer();
   if (wasConnected) emitLocal('disconnect');
 }
-export function resumeClientSession(forceHostPause = false, forceTransportReset = false): void {
+function resumeClientSession(forceHostPause = false, forceTransportReset = false): void {
   if (clientHostPaused && !forceHostPause) return;
   if (forceHostPause) clientHostPaused = false;
   clientSuspended = false;
@@ -847,7 +873,7 @@ async function hostRequest(event: string, payload: Record<string, unknown>): Pro
   if (roomCode) emitRoom(roomCode);
   return result;
 }
-export async function emitAck<T = unknown>(event: string, payload: unknown): Promise<T> {
+async function emitAck<T = unknown>(event: string, payload: unknown): Promise<T> {
   const body = (payload ?? {}) as Record<string, unknown>;
   const result = currentMode() === 'host' ? await hostRequest(event, body) : await clientRequest(event, body);
   return result as T;
@@ -884,6 +910,7 @@ function installVirtualApi(): void {
     return nativeFetch(input, init);
   };
 }
+if (installBrowserHooks) {
 installHistoryBaseGuard();
 installVirtualApi();
 document.addEventListener('visibilitychange', () => {
@@ -933,3 +960,45 @@ window.setInterval(() => {
 window.setInterval(() => {
   if (hostRoomCode && ownsHostAuthority(hostRoomCode)) emitRoom(hostRoomCode);
 }, 1500);
+}
+
+  return {
+    socket,
+    emitAck,
+    suspendClientSession,
+    resumeClientSession,
+    getPlayerConnectionHealth,
+    testPlayerControllers,
+    destroy() {
+      suspendClientSession();
+      if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+      for (const connection of connections) {
+        try { connection.close(); } catch { /* best-effort runtime teardown */ }
+      }
+      connections.clear();
+      identities.clear();
+      playerConnections.clear();
+      playerLastSeen.clear();
+      completedRequests.clear();
+      inFlightRequests.clear();
+      listeners.clear();
+      if (hostRoomCode && hostAuthorityId) releaseHostAuthority(hostRoomCode, hostAuthorityId);
+      try { hostPeer?.destroy(); } catch { /* best-effort runtime teardown */ }
+      hostPeer = null;
+      hostRoomCode = '';
+      hostAuthorityId = '';
+      socket.connected = false;
+    }
+  };
+}
+
+// Preserve the original application-facing singleton API.  It is deliberately
+// just one instance of the same production runtime used by concurrent tests.
+const defaultRuntime = createSocketRuntime();
+export const socket = defaultRuntime.socket;
+export const emitAck = defaultRuntime.emitAck;
+export const suspendClientSession = defaultRuntime.suspendClientSession;
+export const resumeClientSession = defaultRuntime.resumeClientSession;
+export const getPlayerConnectionHealth = defaultRuntime.getPlayerConnectionHealth;
+export const testPlayerControllers = defaultRuntime.testPlayerControllers;
