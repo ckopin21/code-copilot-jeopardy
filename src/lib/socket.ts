@@ -263,9 +263,20 @@ async function dispatchHost(event: string, payload: Record<string, unknown>, con
       return sanitizeRoomSnapshot(engine.snapshot(roomCode), 'host');
     }
     case 'presentation:join': {
-      const snapshot = engine.snapshot(roomCode);
+      const snapshot = engine.presentationSnapshot(roomCode, String(payload.presentationToken ?? ''));
       if (connection) bindIdentity(connection, { roomCode: snapshot.code, role: 'presentation' });
       return sanitizeRoomSnapshot(snapshot, 'presentation');
+    }
+    case 'host:rotate-presentation-capability': {
+      const presentationToken = engine.rotatePresentationCapability(roomCode, hostToken);
+      for (const connection of connections) {
+        const identity = identities.get(connection);
+        if (identity?.roomCode === roomCode && identity.role === 'presentation') {
+          identities.delete(connection);
+          try { connection.close(); } catch { /* revoked display */ }
+        }
+      }
+      return { presentationToken };
     }
     case 'player:join': {
       if (!connection) throw new Error('Player join requires a phone connection');
@@ -834,7 +845,7 @@ async function clientRequest(event: string, payload: Record<string, unknown>): P
     const credentials = result as PlayerJoinCredentials;
     authReplay = { event: 'player:reconnect', payload: { roomCode: credentials.roomCode, playerId: credentials.playerId, reconnectToken: credentials.reconnectToken } };
   } else if (event === 'presentation:join') {
-    authReplay = { event: 'presentation:join', payload: { roomCode } };
+    authReplay = { event: 'presentation:join', payload };
   }
   return result;
 }

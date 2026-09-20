@@ -18,6 +18,8 @@ export interface RoomRecord {
   finalQuestionId: string | null;
   /** One-level scoring checkpoint used by the host Undo control. */
   undoState?: RoomState | null;
+  /** Persisted outside RoomSnapshot; never broadcast to players or displays. */
+  presentationToken: string;
 }
 export interface RandomSource { next(): number }
 class MathRandomSource implements RandomSource { next(): number { return Math.random(); } }
@@ -118,6 +120,7 @@ export class BrowserGameEngine {
         }
       }
       record.undoState ??= null;
+      record.presentationToken ??= randomToken();
       const previouslyConnected = record.state.players.filter((player) => player.connected).map((player) => player.id);
       record.state.hostConnected = false;
       record.state.players.forEach((player) => { player.connected = false; });
@@ -297,6 +300,7 @@ export class BrowserGameEngine {
     if (!fallbackPack && !requestedPacksCompatible) throw new Error(`No question packs are available for ${gameMode}`);
     const selectedPackIds = requestedPacksCompatible ? requestedPackIds : [fallbackPack!.id];
     const freeResponseReadSeconds = normalizeFreeResponseReadSeconds(settings?.freeResponseReadSeconds ?? DEFAULT_SETTINGS.freeResponseReadSeconds);
+    const presentationToken = randomToken();
     const state: RoomState = {
       code,
       phase: 'lobby',
@@ -320,10 +324,21 @@ export class BrowserGameEngine {
       gameStartedAt: null,
       gameEndedAt: null
     };
-    this.rooms.set(code, { state, hostToken, playerTokens: {}, questions: {}, finalQuestionId: null, undoState: null });
+    this.rooms.set(code, { state, hostToken, playerTokens: {}, questions: {}, finalQuestionId: null, undoState: null, presentationToken });
     this.persist();
     const root = baseUrl.replace(/\/$/, '');
-    return { roomCode: code, hostToken, joinUrl: `${root}/?mode=player&room=${code}`, presentationUrl: `${root}/?mode=presentation&room=${code}` };
+    return { roomCode: code, hostToken, joinUrl: `${root}/?mode=player&room=${code}`, presentationUrl: `${root}/?mode=presentation&room=${code}&display=${presentationToken}` };
+  }
+  presentationSnapshot(roomCode: string, presentationToken: string): RoomSnapshot {
+    const room = this.room(roomCode);
+    if (!presentationToken || !secureEqual(room.presentationToken, presentationToken)) throw new Error('Invalid presentation capability');
+    return this.snapshot(roomCode);
+  }
+  rotatePresentationCapability(roomCode: string, hostToken: string): string {
+    const room = this.hostRoom(roomCode, hostToken);
+    room.presentationToken = randomToken();
+    this.persist();
+    return room.presentationToken;
   }
 
   deleteRoom(roomCode: string): void { this.rooms.delete(roomCode.toUpperCase()); this.persist(); }

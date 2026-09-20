@@ -25,6 +25,7 @@ function musicFor(room: RoomSnapshot) {
 
 export function PresentationApp() {
   const roomCode = new URLSearchParams(location.search).get('room')?.toUpperCase() ?? '';
+  const presentationToken = new URLSearchParams(location.search).get('display') ?? '';
   const [room, setRoom] = useState<RoomSnapshot | null>(null);
   const [error, setError] = useState('');
   const [audioReady, setAudioReady] = useState(false);
@@ -74,7 +75,7 @@ export function PresentationApp() {
     resumeClientSession();
     const onState = (snapshot: RoomSnapshot) => applySnapshot(snapshot);
     socket.on('room:state', onState);
-    void emitAck<RoomSnapshot>('presentation:join', { roomCode }).then(applySnapshot).catch((err) => setError(err instanceof Error ? err.message : 'Could not join game'));
+    void emitAck<RoomSnapshot>('presentation:join', { roomCode, presentationToken }).then(applySnapshot).catch((err) => setError(err instanceof Error ? err.message : 'Could not join game'));
     return () => {
       socket.off('room:state', onState);
       suspendClientSession();
