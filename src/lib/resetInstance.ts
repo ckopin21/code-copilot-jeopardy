@@ -17,6 +17,11 @@ export function menuUrl(extra?: Record<string, string>): string {
   return url.toString();
 }
 
+export function navigateInApp(url: string): void {
+  history.pushState(null, '', url);
+  window.dispatchEvent(new PopStateEvent('popstate'));
+}
+
 export async function resetInstance(): Promise<never> {
   clearPrefixedStorage(localStorage);
   clearPrefixedStorage(sessionStorage);
