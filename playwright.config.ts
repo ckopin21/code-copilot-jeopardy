@@ -7,6 +7,10 @@ export default defineConfig({
     baseURL: 'http://127.0.0.1:4173',
     headless: true
   },
+  projects: [
+    { name: 'chromium', use: { browserName: 'chromium' } },
+    { name: 'webkit', use: { browserName: 'webkit' } }
+  ],
   webServer: {
     command: 'npm run dev -- --port 4173',
     url: 'http://127.0.0.1:4173',
