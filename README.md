@@ -11,6 +11,7 @@ https://ckopin21.github.io/code-copilot-jeopardy/
 ## Current features
 
 - 0–5 player seats, including practice mode with no phones
+- Classic mode with buzzers plus Free Response mode where every active player answers simultaneously
 - QR/camera join plus manual room codes and click-to-enlarge host QR
 - stable phone identity with automatic reconnect, heartbeat disconnect detection, and reserved seats
 - host-selectable board with in-page fullscreen presentation mode
@@ -25,10 +26,12 @@ https://ckopin21.github.io/code-copilot-jeopardy/
 - host-controlled Final reveal with a staged tension sequence
 - staged end podium followed by readable host statistics and individual phone statistics
 - temporary seat pause versus permanent player removal controls
-- procedural Web Audio music/effects with Master, Music, and Effects starting at 75%
+- host audio mixer with generated game cues/music plus selectable background tracks; fresh instances start at Master 75%, Music 50%, Effects 75%
 - short haptic pulse on phone button presses when the browser supports the Vibration API
-- reduced-motion support
-- three built-in question packs with automatic pack registration and validation; one pack is selected per game
+- player customization for avatar, accent, buzzer sound, score effect, and victory effect
+- reduced-motion, larger-text, increased-contrast, and sound-caption accessibility support
+- seven built-in question packs with automatic pack registration and validation; pack availability is filtered by game mode and one pack is selected per game
+- mobile/WebKit recovery that rebuilds stale PeerJS/WebRTC transports after bfcache restore, meaningful background resume, or network return
 
 ## Documentation
 
@@ -51,7 +54,7 @@ The host page is the live room endpoint. If it closes, phones cannot keep playin
 ### Game flow
 
 1. Choose **Start New Game** or **Continue Game**.
-2. Select one question pack and the rules in the lobby.
+2. Select Classic or Free Response, one compatible question pack, and the rules in the lobby.
 3. Choose Quick (16 clues), Standard (25), or Marathon (36, including the 1000-point row).
 4. Players join by QR or room code.
 5. Host starts the game.
@@ -74,9 +77,9 @@ See [`docs/networking.md`](docs/networking.md).
 
 ## Audio
 
-Audio is generated with Web Audio rather than external copyrighted game-show audio. Master, Music, and Sound Effects start at 75% for the current audio-default version and can be changed through the host audio drawer.
+Game cues and dynamic phase music use Web Audio, and the host can also select bundled background tracks. On a fresh instance, the visible audio controls start at Master 75%, Music 50%, and Sound Effects 75%. The Music control is intentionally gain-limited internally, so its 0–100% slider maps to a lower music-gain range than Master/Effects.
 
-Presentation mode does not create a second audio surface.
+Audio settings persist locally. Player phones are effects-focused, while host/presentation audio follows the active game phase. In-page Presentation Mode does not create an independent host audio system.
 
 ## Daily Double
 
@@ -153,11 +156,11 @@ Dependencies are pinned and `package-lock.json` is committed so local and CI ins
 
 ## Testing and CI
 
-Tests exercise the production `BrowserGameEngine`, multiplayer snapshot privacy, answer normalization, pack loading, pack validation, and game-length board sizes. Regression coverage includes reconnect identity, timer restoration, practice-mode Daily Doubles, Final participants, Final timeout locking, disconnected Final players, and hidden multiplayer answers.
+Tests exercise the production `BrowserGameEngine`, multiplayer snapshot privacy, answer normalization, game modes, pack loading/validation, game-length boards, reconnect identity, timer restoration, Daily Doubles, Free Response grading/rejoin behavior, Final participation/privacy, customization/layout regressions, and mobile recovery policies.
 
-GitHub Actions uses the committed lockfile, then runs typecheck, lint, tests, production build, and GitHub Pages deployment checks.
+GitHub Actions uses the committed lockfile, runs typecheck, lint, Vitest, and a production build, then runs Playwright in Chromium. Selected Safari/mobile and player-card regressions also run in WebKit.
 
-DOM geometry, camera scanning, haptics, Web Audio, and real WebRTC connectivity still require browser/device smoke testing because those behaviors cannot be fully proven by unit tests alone.
+Real device/network behavior still needs smoke testing for camera scanning, haptics, audio unlock behavior, and WebRTC routes that depend on the user's NAT/firewall/TURN environment.
 
 ## Security/authority model
 
