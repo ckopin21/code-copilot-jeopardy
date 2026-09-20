@@ -2,9 +2,19 @@
 import { booksWordsPack } from './booksWords';
 import { disneyPack } from './disney';
 import { foodTravelPack } from './foodTravel';
+import { freeResponseGeneral1Pack } from './freeResponseGeneral1';
+import { freeResponseGenreDisneyPack } from './freeResponseGenreDisney';
+import { freeResponseGenreHistoryGeographyPack } from './freeResponseGenreHistoryGeography';
+import { freeResponseGenreMoviesTvPack } from './freeResponseGenreMoviesTv';
+import { freeResponseGenreMusicPack } from './freeResponseGenreMusic';
+import { freeResponseGenreSportsGamesPack } from './freeResponseGenreSportsGames';
 import { historyGeographyPack } from './historyGeography';
+import { historyGeography2Pack } from './historyGeography2';
+import { historyGeography3Pack } from './historyGeography3';
 import { moviesTvPack } from './moviesTv';
+import { moviesTv2Pack } from './moviesTv2';
+import { musicPack } from './music';
 import { scienceNaturePack } from './scienceNature';
 import { sportsGamesPack } from './sportsGames';
 
-export const generatedBuiltInPacks = [booksWordsPack, disneyPack, foodTravelPack, historyGeographyPack, moviesTvPack, scienceNaturePack, sportsGamesPack];
+export const generatedBuiltInPacks = [booksWordsPack, disneyPack, foodTravelPack, freeResponseGeneral1Pack, freeResponseGenreDisneyPack, freeResponseGenreHistoryGeographyPack, freeResponseGenreMoviesTvPack, freeResponseGenreMusicPack, freeResponseGenreSportsGamesPack, historyGeographyPack, historyGeography2Pack, historyGeography3Pack, moviesTvPack, moviesTv2Pack, musicPack, scienceNaturePack, sportsGamesPack];
