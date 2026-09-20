@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { claimHostAuthority, hasHostAuthority, hostAuthorityKey, releaseHostAuthority } from '../src/lib/hostTabAuthority';
+import { canClaimHostAuthority, claimHostAuthority, hasHostAuthority, hostAuthorityKey, releaseHostAuthority } from '../src/lib/hostTabAuthority';
 
 class MemoryStorage implements Storage {
   private values = new Map<string, string>();
@@ -37,6 +37,22 @@ describe('host tab authority', () => {
     expect(hasHostAuthority('ROOM2', 'tab-b', storage)).toBe(true);
     expect(hostAuthorityKey('ROOM1')).toBe(hostAuthorityKey('ROOM2'));
   });
+
+  it('does not let a stale host keepalive reclaim authority from the active host', () => {
+    claimHostAuthority('ROOM1', 'active-tab', storage);
+
+    expect(canClaimHostAuthority('ROOM2', 'stale-tab', false, storage)).toBe(false);
+    expect(hasHostAuthority('ROOM1', 'active-tab', storage)).toBe(true);
+  });
+
+  it('allows deliberate host takeover and recovery when no owner exists', () => {
+    claimHostAuthority('ROOM1', 'old-tab', storage);
+    expect(canClaimHostAuthority('ROOM1', 'new-tab', true, storage)).toBe(true);
+
+    releaseHostAuthority('ROOM1', 'old-tab', storage);
+    expect(canClaimHostAuthority('ROOM1', 'new-tab', false, storage)).toBe(true);
+  });
+
 
   it('does not let an old owner release the new owner lease', () => {
     claimHostAuthority('ABCDE', 'tab-a', storage);
