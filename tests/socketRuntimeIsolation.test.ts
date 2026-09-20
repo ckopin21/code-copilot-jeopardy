@@ -261,4 +261,33 @@ describe('production socket runtime isolation', () => {
     expect(after.phase).toBe(before.phase);
     recoveredHost.destroy(); recoveredPlayer.destroy();
   });
+
+  it('removes a replaced connection authority before its delayed packet can mutate the current question', async () => {
+    const { createSocketRuntime } = await import('../src/lib/socket');
+    DeterministicPeer.peers.clear();
+    DeterministicPeer.clientConnections = [];
+    const peerFactory = (id: string | undefined) => new DeterministicPeer(id) as never;
+    const engine = new BrowserGameEngine();
+    location.search = '?mode=host';
+    const host = createSocketRuntime({ createPeer: peerFactory, createEngine: () => engine, installBrowserHooks: false });
+    const room = await host.emitAck<{ roomCode: string; hostToken: string }>('room:create', { settings: { dailyDoublesEnabled: false, finalRoundEnabled: false } });
+    const original = createSocketRuntime({ createPeer: peerFactory, installBrowserHooks: false });
+    location.search = '?mode=player';
+    const identity = await original.emitAck<{ playerId: string; reconnectToken: string }>('player:join', { roomCode: room.roomCode, name: 'Replace', avatar: '🚀', accent: '#93c5fd' });
+    const staleWire = DeterministicPeer.clientConnections[0]!;
+    const replacement = createSocketRuntime({ createPeer: peerFactory, installBrowserHooks: false });
+    await replacement.emitAck('player:reconnect', { roomCode: room.roomCode, ...identity });
+    location.search = '?mode=host';
+    await host.emitAck('host:start-game', { roomCode: room.roomCode, hostToken: room.hostToken });
+    const question = engine.snapshot(room.roomCode).board!.questions.find((entry) => !entry.used)!;
+    await host.emitAck('host:select-question', { roomCode: room.roomCode, hostToken: room.hostToken, questionId: question.questionId });
+    await host.emitAck('host:open-buzzers', { roomCode: room.roomCode, hostToken: room.hostToken });
+    const state = engine.snapshot(room.roomCode);
+    staleWire.send({ kind: 'request', requestId: 'stale-connection', event: 'player:buzz', payload: { roomCode: room.roomCode, ...identity, questionId: state.currentQuestion!.questionId, gameStartedAt: state.gameStartedAt } });
+    await settle();
+    expect(engine.snapshot(room.roomCode).currentQuestion?.buzzWinnerId).toBeNull();
+    location.search = '?mode=player';
+    await expect(replacement.emitAck('player:buzz', { roomCode: room.roomCode, ...identity, questionId: state.currentQuestion!.questionId, gameStartedAt: state.gameStartedAt })).resolves.toMatchObject({ accepted: true });
+    host.destroy(); original.destroy(); replacement.destroy();
+  });
 });
