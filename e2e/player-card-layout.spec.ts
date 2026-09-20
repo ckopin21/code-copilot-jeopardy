@@ -55,8 +55,8 @@ async function measurePlayerCard(card: Locator): Promise<CardGeometry> {
     const nameStyle = getComputedStyle(name);
 
     return {
-      width: cardRect.width,
-      height: cardRect.height,
+      width: element.offsetWidth,
+      height: element.offsetHeight,
       statusPosition: status instanceof HTMLElement ? getComputedStyle(status).position : null,
       statusBadgeCount: badges.length,
       mainStatusOverlap: statusRect ? overlaps(mainRect, statusRect) : false,
@@ -216,8 +216,8 @@ async function measurePresentationCard(card: Locator) {
     const statusStyle = getComputedStyle(status);
 
     return {
-      width: cardRect.width,
-      height: cardRect.height,
+      width: element.offsetWidth,
+      height: element.offsetHeight,
       avatarMainOverlap: overlaps(avatarRect, mainRect),
       mainScoreOverlap: overlaps(mainRect, scoreRect),
       childrenContained: [avatar, main, name, status, score].every((node) => contains(cardRect, rectOf(node))),
@@ -237,7 +237,7 @@ for (const multiplier of [2, 3] as const) {
     const cards = presentation.locator('.presentation-name-card:not(.practice)');
     await expect(cards).toHaveCount(5);
 
-    const heights = await cards.evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().height));
+    const heights = await cards.evaluateAll((nodes) => nodes.map((node) => node instanceof HTMLElement ? node.offsetHeight : node.getBoundingClientRect().height));
     for (const height of heights) closeTo(height, heights[0]);
 
     const fire = presentation.locator('.presentation-name-card.is-fire').first();
