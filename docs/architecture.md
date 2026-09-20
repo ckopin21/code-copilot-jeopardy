@@ -21,7 +21,7 @@ The host page must remain open for the live room to exist. The browser engine pe
 - `src/lib/audio.ts` — generated Web Audio cues/dynamic phase music plus bundled selectable background tracks
 - `src/lib/musicVolumePolicy.ts` — maps the visible Music slider to the intentionally lower internal music-gain range and enforces the fresh-instance default
 - `src/shared/gameModes.ts` — Classic versus Free Response behavior and mode capabilities
-- `src/shared/playerCustomization.ts` — avatar catalog, accents, buzzer sounds, score effects, and victory effects
+- `src/shared/playerCustomization.ts` — avatar catalog, accents, buzzer sounds, score/victory effects, and compatibility defaults for persisted player customization
 - `src/packs/` — built-in question data and pack builder
 
 ## State model
