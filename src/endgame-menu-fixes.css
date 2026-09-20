@@ -231,3 +231,31 @@
   .endgame-hold-pulse i { animation: none !important; }
   .saved-game-preview[role="button"] { transition: none !important; }
 }
+
+
+.podium-finish-actions {
+  position: relative;
+  z-index: 8;
+  align-self: center;
+  justify-self: center;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: clamp(6px, 1.2vh, 14px);
+}
+
+.podium-finish-actions > button {
+  min-width: min(240px, 68vw);
+}
+
+@media (max-width: 620px) {
+  .podium-finish-actions {
+    width: min(92vw, 420px);
+  }
+
+  .podium-finish-actions > button {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+}
