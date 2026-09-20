@@ -15,7 +15,7 @@ describe('persistent room lifecycle regression', () => {
     const host = read('../src/components/HostAppV3.tsx');
     expect(host).toContain("let snapshot = await emitAck<RoomSnapshot>('host:reconnect'");
     expect(host).toContain("snapshot = await emitAck<RoomSnapshot>('host:reset-game'");
-    expect(host).toContain("localStorage.removeItem(\`blue-stage-history-\${parsed.roomCode}\`)");
+    expect(host).toContain("localStorage.removeItem(`blue-stage-history-${parsed.roomCode}`)");
   });
 
   it('keeps host authority maintenance active while the host is on the menu route', () => {
