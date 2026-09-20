@@ -8,6 +8,8 @@ type CardGeometry = {
   visibleStatusBadgeCount: number;
   mainStatusOverlap: boolean;
   avatarStatusOverlap: boolean;
+  mainBadgeOverlap: boolean;
+  avatarBadgeOverlap: boolean;
   mainTurnOverlap: boolean;
   badgesContained: boolean;
   turnContained: boolean;
@@ -114,6 +116,8 @@ async function measurePlayerCard(card: Locator): Promise<CardGeometry> {
       visibleStatusBadgeCount: visibleBadges.length,
       mainStatusOverlap: statusRect ? overlaps(mainRect, statusRect) : false,
       avatarStatusOverlap: statusRect ? overlaps(avatarRect, statusRect) : false,
+      mainBadgeOverlap: visibleBadges.some((badge) => overlaps(mainRect, rectOf(badge))),
+      avatarBadgeOverlap: visibleBadges.some((badge) => overlaps(avatarRect, rectOf(badge))),
       mainTurnOverlap: turnRect && turnRect.width > 0 && turnRect.height > 0 ? overlaps(mainRect, turnRect) : false,
       badgesContained: visibleBadges.every((badge) => contains(cardRect, rectOf(badge))),
       turnContained: turnRect && turnRect.width > 0 && turnRect.height > 0 ? contains(cardRect, turnRect) : true,
@@ -196,8 +200,8 @@ test('Question View keeps player-card geometry stable and the status lane visual
   closeTo(fireOnly.width, baseline.width);
   closeTo(fireOnly.height, baseline.height);
   expect(fireOnly.statusBadgeCount).toBe(1);
-  expect(fireOnly.mainStatusOverlap).toBe(false);
-  expect(fireOnly.avatarStatusOverlap).toBe(false);
+  expect(fireOnly.mainBadgeOverlap).toBe(false);
+  expect(fireOnly.avatarBadgeOverlap).toBe(false);
   expect(fireOnly.badgesContained).toBe(true);
   expectTransparentStatusLane(fireOnly, 1);
   expectAvatarCentered(fireOnly);
@@ -207,8 +211,8 @@ test('Question View keeps player-card geometry stable and the status lane visual
   closeTo(coldOnly.width, baseline.width);
   closeTo(coldOnly.height, baseline.height);
   expect(coldOnly.statusBadgeCount).toBe(1);
-  expect(coldOnly.mainStatusOverlap).toBe(false);
-  expect(coldOnly.avatarStatusOverlap).toBe(false);
+  expect(coldOnly.mainBadgeOverlap).toBe(false);
+  expect(coldOnly.avatarBadgeOverlap).toBe(false);
   expectTransparentStatusLane(coldOnly, 1);
 
   await setTurnPreview(panel, 'question');
@@ -217,8 +221,8 @@ test('Question View keeps player-card geometry stable and the status lane visual
   closeTo(fireTurn.width, baseline.width);
   closeTo(fireTurn.height, baseline.height);
   expect(fireTurn.statusBadgeCount).toBe(2);
-  expect(fireTurn.mainStatusOverlap).toBe(false);
-  expect(fireTurn.avatarStatusOverlap).toBe(false);
+  expect(fireTurn.mainBadgeOverlap).toBe(false);
+  expect(fireTurn.avatarBadgeOverlap).toBe(false);
   expect(fireTurn.badgesContained).toBe(true);
   expectTransparentStatusLane(fireTurn, 2);
 
@@ -227,8 +231,8 @@ test('Question View keeps player-card geometry stable and the status lane visual
   closeTo(coldTurn.width, baseline.width);
   closeTo(coldTurn.height, baseline.height);
   expect(coldTurn.statusBadgeCount).toBe(2);
-  expect(coldTurn.mainStatusOverlap).toBe(false);
-  expect(coldTurn.avatarStatusOverlap).toBe(false);
+  expect(coldTurn.mainBadgeOverlap).toBe(false);
+  expect(coldTurn.avatarBadgeOverlap).toBe(false);
   expectTransparentStatusLane(coldTurn, 2);
 
   await setCardState(panel, 'fire');
@@ -236,14 +240,14 @@ test('Question View keeps player-card geometry stable and the status lane visual
   const doubleGeometry = await measurePlayerCard(selected);
   closeTo(doubleGeometry.width, baseline.width);
   closeTo(doubleGeometry.height, baseline.height);
-  expect(doubleGeometry.mainStatusOverlap).toBe(false);
+  expect(doubleGeometry.mainBadgeOverlap).toBe(false);
   expectTransparentStatusLane(doubleGeometry, 2);
 
   await setBoardMultiplier(panel, 3);
   const tripleGeometry = await measurePlayerCard(selected);
   closeTo(tripleGeometry.width, baseline.width);
   closeTo(tripleGeometry.height, baseline.height);
-  expect(tripleGeometry.mainStatusOverlap).toBe(false);
+  expect(tripleGeometry.mainBadgeOverlap).toBe(false);
   expectTransparentStatusLane(tripleGeometry, 2);
 
   await setTurnPreview(panel, 'question');
@@ -281,8 +285,8 @@ test('Board View star-only turn state keeps the same player-card geometry', asyn
   const boardFire = await measurePlayerCard(selected);
   closeTo(boardFire.width, baseline.width);
   closeTo(boardFire.height, baseline.height);
-  expect(boardFire.mainStatusOverlap).toBe(false);
-  expect(boardFire.avatarStatusOverlap).toBe(false);
+  expect(boardFire.mainBadgeOverlap).toBe(false);
+  expect(boardFire.avatarBadgeOverlap).toBe(false);
   expectTransparentStatusLane(boardFire, 1);
 });
 
@@ -296,8 +300,8 @@ test('avatar remains centered for 2–5 players in the normal-host cascade', asy
     const selected = panel.locator('.dev-stage [data-player-id="dev-player-2"]');
     const geometry = await measurePlayerCard(selected);
     expectAvatarCentered(geometry);
-    expect(geometry.mainStatusOverlap).toBe(false);
-    expect(geometry.avatarStatusOverlap).toBe(false);
+    expect(geometry.mainBadgeOverlap).toBe(false);
+    expect(geometry.avatarBadgeOverlap).toBe(false);
     expectTransparentStatusLane(geometry, 2);
   }
 });
@@ -319,16 +323,16 @@ for (const viewport of [
     closeTo(fireOnly.width, baseline.width);
     closeTo(fireOnly.height, baseline.height);
     expectAvatarCentered(fireOnly);
-    expect(fireOnly.mainStatusOverlap).toBe(false);
-    expect(fireOnly.avatarStatusOverlap).toBe(false);
+    expect(fireOnly.mainBadgeOverlap).toBe(false);
+    expect(fireOnly.avatarBadgeOverlap).toBe(false);
     expectTransparentStatusLane(fireOnly, 1);
 
     await setTurnPreview(panel, 'question');
     const fireTurn = await measurePlayerCard(selected);
     closeTo(fireTurn.width, baseline.width);
     closeTo(fireTurn.height, baseline.height);
-    expect(fireTurn.mainStatusOverlap).toBe(false);
-    expect(fireTurn.avatarStatusOverlap).toBe(false);
+    expect(fireTurn.mainBadgeOverlap).toBe(false);
+    expect(fireTurn.avatarBadgeOverlap).toBe(false);
     expectTransparentStatusLane(fireTurn, 2);
   });
 }
