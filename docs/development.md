@@ -92,7 +92,9 @@ There is no second server engine to keep in sync. Production and tests should ta
 - Host is the authority for correctness and manual score resolution.
 - Phone UI should derive state from room snapshots, not invent local game phases.
 - A network action should be idempotent or safely reject duplicate/stale actions where possible.
-- Reset Game must propagate through a room snapshot; phones should not require reload.
+- Host-to-menu navigation must remain an in-app transition when the party should stay connected. A full document reload destroys the in-memory host peer and drops live controller channels.
+- Starting a new game from an existing saved room must reset that room rather than silently create a replacement room, preserving player IDs, seats, reconnect tokens, profiles, and live connection bindings.
+- Rematch/reset must propagate through a room snapshot; phones should not require reload or rejoin.
 - Disconnected reserved players must not block active connected players.
 - Hidden answers/explanations and unrevealed player responses must not cross the snapshot privacy boundary.
 - Presentation mode is an in-page overlay and must use the same board selection callback as the normal board.
@@ -127,7 +129,7 @@ Regression tests should target the production browser engine and cover rule/stat
 - Final participant selection, wager fairness/protection rules, answer lock, timeout, disconnects, privacy, review, recap
 - player customization consistency across host, phone, presentation, score effects, and recap
 - rendered player-card geometry/status/avatar regressions in Chromium and WebKit
-- reset behavior
+- reset/rematch behavior, including preserved identity/profile fields and connected-party carry-over
 
 Visual interaction changes that depend on DOM geometry, WebRTC, camera APIs, vibration, or Web Audio still require browser/device smoke testing in addition to unit tests.
 
