@@ -62,6 +62,32 @@ describe('BrowserGameEngine production state', () => {
     expect(engine.snapshot(host.roomCode).turnPlayerId).toBe(two.playerId);
   });
 
+  it('applies the first Daily Double scoring action in a fresh game', () => {
+    const { engine, host } = setup({
+      gameLength: 'quick',
+      dailyDoublesEnabled: true,
+      dailyDoubleCount: 16,
+      finalRoundEnabled: false,
+      allowNegativeScores: true,
+      allowWagerBeyondScore: true,
+      lateGameModifiers: false
+    });
+    const player = addPlayer(engine, host.roomCode, 'First Score');
+    engine.startGame(host.roomCode, host.hostToken);
+    const daily = engine.snapshot(host.roomCode).board!.questions.find((question) => question.dailyDouble)!;
+
+    engine.selectQuestion(host.roomCode, host.hostToken, daily.questionId, player.playerId);
+    engine.setDailyDoubleWager(host.roomCode, host.hostToken, 100);
+    engine.revealAnswer(host.roomCode, host.hostToken);
+    engine.resolveAnswer(host.roomCode, host.hostToken, player.playerId, true);
+
+    const scored = engine.snapshot(host.roomCode);
+    expect(scored.players.find((candidate) => candidate.id === player.playerId)?.score).toBe(100);
+    expect(scored.board?.questions.find((question) => question.questionId === daily.questionId)?.results).toEqual(
+      expect.arrayContaining([expect.objectContaining({ playerId: player.playerId, correct: true, delta: 100 })])
+    );
+  });
+
   it('penalizes the turn owner when a buzzer question expires unanswered', () => {
     const { engine, host } = setup({ dailyDoublesEnabled: false, finalRoundEnabled: false, timerSeconds: 5, allowNegativeScores: true });
     const one = addPlayer(engine, host.roomCode, 'One');
