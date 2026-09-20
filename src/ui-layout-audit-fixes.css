@@ -217,10 +217,15 @@
     line-height: 1 !important;
   }
 
-  .showcase-host:not(.host-presentation-mode) .showcase-player-card .player-status-stack .streak-ribbon em {
+   .showcase-host:not(.host-presentation-mode) .showcase-player-card .player-status-stack .streak-ribbon em {
+     display: none !important;
+   }
+
+   /* Compact desktop host cards intentionally suppress the secondary streak label. */
+   .streak-ribbon em {
     display: none !important;
-  }
-}
+   }
+ }
 
 /* Narrow host cards need a smaller reserved status lane so score/name text keeps real space. */
 @media (max-width: 680px) {
