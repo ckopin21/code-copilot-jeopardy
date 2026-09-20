@@ -24,11 +24,12 @@ class DeterministicConnection {
 class DeterministicPeer {
   static peers = new Map<string, DeterministicPeer>();
   static clientConnections: DeterministicConnection[] = [];
+  static instances: DeterministicPeer[] = [];
   open = false;
   disconnected = false;
   destroyed = false;
   private handlers = new Map<string, Handler[]>();
-  constructor(private readonly id?: string) { queueMicrotask(() => { this.open = true; if (this.id) DeterministicPeer.peers.set(this.id, this); this.emit('open', this.id); }); }
+  constructor(private readonly id?: string) { DeterministicPeer.instances.push(this); queueMicrotask(() => { this.open = true; if (this.id) DeterministicPeer.peers.set(this.id, this); this.emit('open', this.id); }); }
   on(event: string, handler: Handler) { this.handlers.set(event, [...(this.handlers.get(event) ?? []), handler]); return this; }
   connect(peerId: string) {
     const target = DeterministicPeer.peers.get(peerId);
@@ -41,7 +42,7 @@ class DeterministicPeer {
   }
   reconnect() { this.disconnected = false; }
   destroy() { this.destroyed = true; this.disconnected = true; if (this.id) DeterministicPeer.peers.delete(this.id); this.emit('close'); }
-  private emit(event: string, ...args: unknown[]) { for (const handler of this.handlers.get(event) ?? []) handler(...args); }
+  emit(event: string, ...args: unknown[]) { for (const handler of this.handlers.get(event) ?? []) handler(...args); }
 }
 
 const settle = async () => { await Promise.resolve(); await Promise.resolve(); await new Promise((resolve) => setTimeout(resolve, 0)); };
@@ -311,6 +312,35 @@ describe('production socket runtime isolation', () => {
     old.emit('error', new Error('late'));
     await settle();
     expect(current.open).toBe(true);
+    expect(player.socket.connected).toBe(true);
+    host.destroy(); player.destroy();
+  });
+
+  it('coalesces overlapping reconnect triggers and ignores stale peer-generation events', async () => {
+    const { createSocketRuntime } = await import('../src/lib/socket');
+    DeterministicPeer.peers.clear();
+    DeterministicPeer.clientConnections = [];
+    DeterministicPeer.instances = [];
+    const peerFactory = (id: string | undefined) => new DeterministicPeer(id) as never;
+    location.search = '?mode=host';
+    const host = createSocketRuntime({ createPeer: peerFactory, createEngine: () => new BrowserGameEngine(), installBrowserHooks: false });
+    const room = await host.emitAck<{ roomCode: string }>('room:create', { settings: {} });
+    location.search = '?mode=player';
+    const player = createSocketRuntime({ createPeer: peerFactory, installBrowserHooks: false });
+    await player.emitAck('player:join', { roomCode: room.roomCode, name: 'Peer generation', avatar: '🚀', accent: '#93c5fd' });
+    const oldPeer = DeterministicPeer.instances.find((candidate) => !candidate['id'])!;
+    player.resumeClientSession(false, true);
+    player.resumeClientSession(false, true);
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    const liveConnection = DeterministicPeer.clientConnections.at(-1)!;
+    const peersAfterReconnect = DeterministicPeer.instances.filter((candidate) => !candidate['id']);
+    expect(peersAfterReconnect).toHaveLength(2);
+    expect(player.socket.connected).toBe(true);
+    oldPeer.emit('disconnected');
+    oldPeer.emit('close');
+    oldPeer.emit('error', new Error('stale peer'));
+    await settle();
+    expect(liveConnection.open).toBe(true);
     expect(player.socket.connected).toBe(true);
     host.destroy(); player.destroy();
   });
