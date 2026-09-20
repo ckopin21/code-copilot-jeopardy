@@ -94,23 +94,6 @@ export function PlayerApp() {
   }, []);
 
   useEffect(() => {
-    const onPageHide = () => suspendClientSession();
-    const onPageShow = () => resumeClientSession();
-    const onVisibilityChange = () => {
-      if (document.visibilityState === 'visible') resumeClientSession();
-    };
-    window.addEventListener('pagehide', onPageHide);
-    window.addEventListener('pageshow', onPageShow);
-    document.addEventListener('visibilitychange', onVisibilityChange);
-    return () => {
-      window.removeEventListener('pagehide', onPageHide);
-      window.removeEventListener('pageshow', onPageShow);
-      document.removeEventListener('visibilitychange', onVisibilityChange);
-      suspendClientSession();
-    };
-  }, []);
-
-  useEffect(() => {
     const saved = localStorage.getItem(PLAYER_KEY);
     if (!saved) return;
     let parsed: PlayerJoinCredentials;
