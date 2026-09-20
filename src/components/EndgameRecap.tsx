@@ -66,7 +66,7 @@ export function EndgameRecap({ players, onReset, onMenu }: { players: Player[]; 
     <div className="section-kicker gold">PRACTICE COMPLETE</div>
     <h1>Board complete</h1>
     <p className="helper-copy">Practice mode has no player standings. Reset for another board or return to the menu.</p>
-    <div className="control-row-v2"><button className="primary-button" onClick={onReset}>Reset Game</button><button className="secondary-button" onClick={onMenu}>Back to Menu</button></div>
+    <div className="control-row-v2"><button className="primary-button" onClick={onReset}>Start New Game</button><button className="secondary-button" onClick={onMenu}>Back to Menu</button></div>
   </section>;
 
   if (!showPodium) return <section className="podium-scene endgame-hold" aria-live="polite">
@@ -95,7 +95,7 @@ export function EndgameRecap({ players, onReset, onMenu }: { players: Player[]; 
         <dl className="recap-stats-list"><dt>Correct</dt><dd>{player.stats.correct}</dd><dt>Incorrect</dt><dd>{player.stats.incorrect}</dd><dt>Accuracy</dt><dd>{Math.round(player.stats.correct / Math.max(1, player.stats.correct + player.stats.incorrect) * 100)}%</dd><dt>Longest streak</dt><dd>{player.stats.longestStreak}</dd><dt>Fastest buzz</dt><dd>{player.stats.fastestBuzzMs == null ? '—' : `${player.stats.fastestBuzzMs}ms`}</dd><dt>Points gained</dt><dd>{player.stats.pointsGained.toLocaleString()}</dd><dt>Points lost</dt><dd>{player.stats.pointsLost.toLocaleString()}</dd><dt>Biggest wager</dt><dd>{player.stats.biggestWager.toLocaleString()}</dd></dl>
       </article>;
     })}</div>
-    <div className="control-row-v2"><button className="primary-button" onClick={onReset}>Reset Game</button><button className="secondary-button" onClick={onMenu}>Back to Menu</button></div>
+    <div className="control-row-v2"><button className="primary-button" onClick={onReset}>Start New Game</button><button className="secondary-button" onClick={onMenu}>Back to Menu</button></div>
   </section>;
 
   const places = new Map(standings.map((player) => [player.id, competitionPlace(standings, player)]));
@@ -126,7 +126,10 @@ export function EndgameRecap({ players, onReset, onMenu }: { players: Player[]; 
     })}</div>
     {revealed >= standings.length && <>
       <div className="podium-confetti" aria-hidden="true">{Array.from({ length: 28 }, (_, index) => <i key={index} style={{ '--i': index } as React.CSSProperties} />)}</div>
-      <button className="primary-button podium-stats-button" onClick={() => setShowStats(true)}>View Game Stats</button>
+      <div className="podium-finish-actions">
+        <button className="primary-button" onClick={onReset}>Start New Game</button>
+        <button className="secondary-button" onClick={() => setShowStats(true)}>View Game Stats</button>
+      </div>
     </>}
   </section>;
 }
