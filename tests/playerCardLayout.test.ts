@@ -83,4 +83,19 @@ describe('player card layout regression', () => {
     expect(css).toContain('overflow: visible !important;');
     expect(css).toContain('text-overflow: clip !important;');
   });
+
+  it('gives used-result player names enough line box for descenders in presentation mode', () => {
+    const css = read('../src/ui-layout-audit-fixes.css');
+    const selector = '.question-tile.used.has-result .used-result-chip > b > span {';
+    const start = css.indexOf(selector);
+    const end = css.indexOf('}', start);
+    const rule = css.slice(start, end);
+
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(rule).toContain('display: block;');
+    expect(rule).toContain('white-space: nowrap;');
+    expect(rule).toContain('line-height: 1.22;');
+    expect(rule).toContain('padding-block: .08em .12em;');
+  });
+
 });
