@@ -1,10 +1,11 @@
-const HOST_AUTHORITY_KEY = 'blue-stage-host-owner';
+const HOST_AUTHORITY_KEY_PREFIX = 'blue-stage-host-owner';
 
 const fallbackOwners = new Map<string, string>();
 
 export function hostAuthorityKey(roomCode?: string): string {
-  void roomCode;
-  return HOST_AUTHORITY_KEY;
+  const normalized = roomCode?.trim().toUpperCase();
+  if (!normalized) throw new Error('A room code is required for host authority');
+  return `${HOST_AUTHORITY_KEY_PREFIX}:${normalized}`;
 }
 
 export function readHostAuthorityOwner(roomCode: string, storage: Storage = localStorage): string | null {
