@@ -207,6 +207,16 @@ async function openDevPresentationHarness(page, { playerCount = 5, multiplier = 
   return lab;
 }
 
+test('fresh instances start music volume at 50 percent', async ({ page }) => {
+  await page.goto('/');
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+
+  const slider = page.locator('.menu-music-volume input[type="range"]');
+  await expect(slider).toHaveValue('0.5');
+  await expect(page.locator('.menu-music-volume b')).toHaveText('50%');
+});
+
 for (const viewport of menuViewports) {
   test(`desktop menu panels stay compact and centered at ${viewport.width}x${viewport.height}`, async ({ page }) => {
     await page.setViewportSize(viewport);

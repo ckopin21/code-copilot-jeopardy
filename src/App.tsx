@@ -6,6 +6,7 @@ import { PlayerEnhancements } from './components/PlayerEnhancements';
 import { PresentationApp } from './components/PresentationApp';
 import { MusicTrackSelect } from './components/BackgroundMusicPicker';
 import { audio } from './lib/audio';
+import { DEFAULT_MUSIC_GAIN } from './lib/musicVolumePolicy';
 import { applySavedAccessibility } from './lib/accessibility';
 import { hostPhaseLabel, readHostPreview } from './lib/hostPreview';
 import { resetInstance } from './lib/resetInstance';
@@ -30,10 +31,10 @@ type WebkitElement = HTMLElement & { webkitRequestFullscreen?: () => Promise<voi
 function applyAudioDefaults(): void {
   try {
     if (localStorage.getItem(AUDIO_75_MIGRATION_KEY)) return;
-    audio.setSettings({ master: 0.75, music: 0.75, effects: 0.75 });
+    audio.setSettings({ master: 0.75, music: DEFAULT_MUSIC_GAIN, effects: 0.75 });
     localStorage.setItem(AUDIO_75_MIGRATION_KEY, '1');
   } catch {
-    audio.settings = { ...audio.settings, master: 0.75, music: 0.75, effects: 0.75 };
+    audio.settings = { ...audio.settings, master: 0.75, music: DEFAULT_MUSIC_GAIN, effects: 0.75 };
   }
 }
 
