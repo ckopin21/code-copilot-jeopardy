@@ -10,14 +10,18 @@ The host page must remain open for the live room to exist. The browser engine pe
 
 ### Main client entry points
 
-- `src/App.tsx` — top-level mode routing, global button audio, phone haptics, audio default migration
+- `src/App.tsx` — top-level host/player/presentation routing, global button audio, phone haptics, menu/fullscreen behavior, audio default migration
 - `src/components/HostAppV3.tsx` — host controls, board/question flow, presentation overlay, score animations, history
 - `src/components/PlayerApp.tsx` — phone join/reconnect, buzzer, typed answers, Daily Double and Final wagers
 - `src/components/BoardPresentation.tsx` — fullscreen in-page board presentation
 - `src/lib/browserGameEngine.ts` — authoritative game rules and state transitions
-- `src/lib/socket.ts` — PeerJS transport, identity binding, request/response protocol, reconnect loop
+- `src/lib/socket.ts` — PeerJS/WebRTC transport, host authority lease, identity binding, request/response protocol, heartbeat/stale cleanup, ICE/TURN configuration, reconnect loop
+- `src/lib/clientLifecycle.ts` — pagehide/pageshow, visibility, online, and bfcache recovery that rebuilds stale mobile/WebKit transports when needed
 - `src/lib/snapshotSecurity.ts` — role-based snapshot sanitization and hidden-answer privacy
-- `src/lib/audio.ts` — procedural Web Audio music and cues
+- `src/lib/audio.ts` — generated Web Audio cues/dynamic phase music plus bundled selectable background tracks
+- `src/lib/musicVolumePolicy.ts` — maps the visible Music slider to the intentionally lower internal music-gain range and enforces the fresh-instance default
+- `src/shared/gameModes.ts` — Classic versus Free Response behavior and mode capabilities
+- `src/shared/playerCustomization.ts` — avatar catalog, accents, buzzer sounds, score effects, and victory effects
 - `src/packs/` — built-in question data and pack builder
 
 ## State model
@@ -28,7 +32,7 @@ The host page must remain open for the live room to exist. The browser engine pe
 - connected/reserved players and stable player IDs
 - scores, streaks, buzzer eligibility, player statistics
 - generated board and used question state
-- current question, accepted answers, responses, Daily Double owner/wager
+- game mode, current question, participant roster, accepted answers, typed responses/grades, Daily Double owner/wager
 - timer state and host-relative `serverNow`
 - current 1x/2x/3x multiplier
 - Final Round category/question, participant IDs, response-lock state, wagers, answers, review position
@@ -51,10 +55,10 @@ The browser engine persists active rooms under `blue-stage-p2p-engine-v2`. The h
 
 ## Question flow
 
-The host selects a board tile. The browser engine creates `currentQuestion`, marks the tile used, calculates the effective multiplier, and changes phase. UI behavior is driven by the resulting phase:
+The host selects a board tile. The browser engine creates `currentQuestion`, captures the applicable participant/turn context, marks the tile used, calculates the effective multiplier, and changes phase. UI behavior is driven by the resulting phase:
 
-- normal spoken question: question -> buzz -> reveal -> host grading -> board
-- typed response: question -> submissions -> reveal -> per-player grading -> board
+- Classic spoken question: question -> buzz -> reveal -> host grading -> board
+- typed/Free Response: optional reading delay -> simultaneous submissions -> reveal/review -> one authoritative confirm-and-score step -> board
 - Daily Double: wager -> question -> reveal -> grading -> board
 - Final Round: category -> wagers -> answer collection/lock -> host review -> recap
 
@@ -74,15 +78,10 @@ A separate `?mode=presentation` client is also supported by the transport for a 
 
 ## Audio
 
-Audio is generated with Web Audio oscillators; no external game-show audio files are required. Master, Music, and Sound Effects begin at 75% after the current audio-default migration and remain user-adjustable. Preferences persist in local storage.
+Game cues and dynamic phase music are generated with Web Audio; the host can also select bundled background tracks. Fresh instances expose Master 75%, Music 50%, and Sound Effects 75% in the mixer. The Music slider maps 0–100% to an internal gain range capped at 0.15, while Master and Effects use their normal 0–1 ranges. Preferences persist in local storage.
 
 ## Styling
 
-Core styling is split across:
+Styling is layered across the base game styles plus focused responsive, mode, presentation, customization, menu, comeback, and regression-fix stylesheets imported by `src/main.tsx`. Later imports intentionally win cascade conflicts for narrowly scoped fixes, so visual changes must be checked against the complete import order rather than only `src/styles.css`.
 
-- `src/styles.css`
-- `src/showcase.css`
-- `src/stage-polish.css`
-- `src/interaction-polish.css`
-
-`interaction-polish.css` is intentionally last and contains small behavior-adjacent visual overrides such as score-card impact motion.
+Rendered layout regressions are covered with Playwright, including fixed player-card geometry, avatar optical centering, status-badge containment, narrow/mobile widths, Presentation Mode, and WebKit-specific checks.
