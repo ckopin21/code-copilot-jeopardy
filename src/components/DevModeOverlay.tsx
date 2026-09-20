@@ -126,7 +126,10 @@ export function DevModeOverlay() {
     setFallbackVisualFullscreen(false);
     setVisualPresentationMode(false);
     setVisualToolbarOpen(true);
-    if (document.fullscreenElement === visualLabRef.current) void document.exitFullscreen();
+    const visualLab = visualLabRef.current;
+    if (visualLab && document.fullscreenElement === visualLab && document.exitFullscreen) {
+      void document.exitFullscreen().catch(() => {});
+    }
   }, [open]);
 
   const scenarioInput = useMemo(() => ({
