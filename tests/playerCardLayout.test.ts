@@ -36,7 +36,7 @@ describe('player card layout regression', () => {
     expect(css).toContain('.showcase-player-card .player-avatar-large .player-avatar-emoji {');
     expect(css).toContain('transform: translateY(-0.04em);');
     expect(css).toContain('.showcase-host:not(.host-presentation-mode):has(> .question-stage) > .showcase-player-strip .showcase-player-card .player-avatar-large');
-    expect(css).toContain('transform: translateX(2px);');
+    expect(css).toContain('transform: translateX(-2px);');
   });
 
   it('uses single-line overflow handling instead of allowing names to resize scorecards', () => {

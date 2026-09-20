@@ -70,12 +70,12 @@
 
 /*
  * Question View has a strong inset accent rail on the card's left edge. The avatar
- * shell is mathematically centered in its grid track, but that rail makes it read
- * slightly left-heavy. Apply a tiny horizontal optical correction only on the
+ * shell is mathematically centered in its grid track, but the visible avatar still reads
+ * slightly right-heavy. Apply a tiny horizontal optical correction only on the
  * normal host Question View so Board and Presentation layouts stay unchanged.
  */
 .showcase-host:not(.host-presentation-mode):has(> .question-stage) > .showcase-player-strip .showcase-player-card .player-avatar-large {
-  transform: translateX(2px);
+  transform: translateX(-2px);
 }
 
 /* Five-player presentation layouts retain status text without allowing it to add a second row. */
