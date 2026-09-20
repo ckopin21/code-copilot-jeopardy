@@ -496,6 +496,9 @@ async function measurePresentationCard(card: Locator) {
       avatarMainOverlap: overlaps(avatarRect, mainRect),
       mainScoreOverlap: overlaps(mainRect, scoreRect),
       childrenContained: [avatar, main, name, status, score].every((node) => contains(cardRect, rectOf(node))),
+      avatarCenterDeltaY: centerY(avatarRect) - centerY(cardRect),
+      mainCenterDeltaY: centerY(mainRect) - centerY(cardRect),
+      scoreCenterDeltaY: centerY(scoreRect) - centerY(cardRect),
       avatarArtCenterDeltaX: centerX(avatarArtRect) - centerX(avatarRect),
       avatarArtCenterDeltaY: centerY(avatarArtRect) - centerY(avatarRect),
       avatarGlyphCenterDeltaX: centerX(glyphRect) - centerX(avatarRect),
@@ -522,6 +525,9 @@ for (const multiplier of [2, 3] as const) {
 
     for (let index = 0; index < await cards.count(); index += 1) {
       const avatarGeometry = await measurePresentationCard(cards.nth(index));
+      expect(Math.abs(avatarGeometry.avatarCenterDeltaY)).toBeLessThanOrEqual(1);
+      expect(Math.abs(avatarGeometry.mainCenterDeltaY)).toBeLessThanOrEqual(1);
+      expect(Math.abs(avatarGeometry.scoreCenterDeltaY)).toBeLessThanOrEqual(1);
       expect(Math.abs(avatarGeometry.avatarArtCenterDeltaX)).toBeLessThanOrEqual(1);
       expect(Math.abs(avatarGeometry.avatarArtCenterDeltaY)).toBeLessThanOrEqual(1);
       expect(Math.abs(avatarGeometry.avatarGlyphCenterDeltaX)).toBeLessThanOrEqual(1);
