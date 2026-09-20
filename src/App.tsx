@@ -41,10 +41,11 @@ function applyAudioDefaults(): void {
 applyAudioDefaults();
 applySavedAccessibility();
 
-function modeUrl(mode: AppMode, fresh = false): URL {
+function modeUrl(mode: AppMode, fresh = false, newGame = false): URL {
   const url = new URL('./', location.href);
   url.searchParams.set('mode', mode);
   if (fresh) url.searchParams.set('fresh', '1');
+  if (newGame) url.searchParams.set('new-game', '1');
   return url;
 }
 
@@ -100,8 +101,8 @@ export default function App() {
     };
   }, []);
 
-  const navigate = useCallback(async (mode: AppMode, fresh = false) => {
-    const url = modeUrl(mode, fresh);
+  const navigate = useCallback(async (mode: AppMode, fresh = false, newGame = false) => {
+    const url = modeUrl(mode, fresh, newGame);
     history.pushState(null, '', url);
     setRouteHref(url.href);
 
@@ -120,7 +121,7 @@ export default function App() {
   return <Menu onNavigate={navigate}/>;
 }
 
-function Menu({ onNavigate }: { onNavigate: (mode: AppMode, fresh?: boolean) => Promise<void> }) {
+function Menu({ onNavigate }: { onNavigate: (mode: AppMode, fresh?: boolean, newGame?: boolean) => Promise<void> }) {
   const [resetting, setResetting] = useState(false);
   const [modal, setModal] = useState<MenuModal>(null);
   const modalRef = useRef<HTMLElement | null>(null);
@@ -171,7 +172,11 @@ function Menu({ onNavigate }: { onNavigate: (mode: AppMode, fresh?: boolean) => 
   };
 
   const startNewGame = () => {
-    if (hasSavedHost && savedHost && !confirm(`Start a new game? Saved room ${savedHost.roomCode} will be replaced by the new host room.`)) return;
+    if (hasSavedHost && savedHost) {
+      if (!confirm('Start a new game with the current players? Scores, board progress, and game history will reset, but everyone stays connected with the same profile.')) return;
+      void onNavigate('host', false, true);
+      return;
+    }
     void onNavigate('host', true);
   };
 
@@ -196,7 +201,7 @@ function Menu({ onNavigate }: { onNavigate: (mode: AppMode, fresh?: boolean) => 
         <section className="menu-mode-section host-menu-section">
           <header><span>HOST GAME</span><small>Run the board on this screen</small></header>
           <div className="menu-actions host-menu-actions">
-            <button className={`${hasSavedHost ? 'secondary-button menu-secondary' : 'primary-button menu-primary'} menu-new-game`} onClick={startNewGame}><span>Start New Game</span><small>Fresh room, fresh board, zero scores</small></button>
+            <button className={`${hasSavedHost ? 'secondary-button menu-secondary' : 'primary-button menu-primary'} menu-new-game`} onClick={startNewGame}><span>Start New Game</span><small>{hasSavedHost ? 'Keep current players and profiles, reset the game' : 'Fresh room, fresh board, zero scores'}</small></button>
             {hasSavedHost && savedHost && <article
               className="saved-game-preview saved-game-inline"
               role="button"
