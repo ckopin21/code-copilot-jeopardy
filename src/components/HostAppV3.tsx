@@ -451,7 +451,7 @@ export function HostAppV3() {
     window.dispatchEvent(new PopStateEvent('popstate'));
   };
   const resetGame = async () => {
-    if (!credentials || !confirm('Reset this game? Players stay in the room, but the board, scores, and history will reset.')) return;
+    if (!credentials || !confirm('Start a new game? Players stay connected with the same profiles, while the board, scores, and history reset.')) return;
     localStorage.removeItem(`blue-stage-history-${credentials.roomCode}`);
     setHistoryEntries([]);
     setReviewId(null);
