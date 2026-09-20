@@ -22,6 +22,7 @@ type CardGeometry = {
   statusBeforeContent: string | null;
   statusAfterContent: string | null;
   visiblePillBackgrounds: string[];
+  visiblePillBackgroundImages: string[];
   visiblePillShadows: string[];
   nameWhiteSpace: string;
   nameOverflow: string;
@@ -51,7 +52,7 @@ function expectTransparentStatusLane(geometry: CardGeometry, expectedVisiblePill
   expect(['none', 'normal', '""']).toContain(geometry.statusBeforeContent ?? 'none');
   expect(['none', 'normal', '""']).toContain(geometry.statusAfterContent ?? 'none');
   expect(geometry.visibleStatusBadgeCount).toBe(expectedVisiblePills);
-  expect(geometry.visiblePillBackgrounds.every((value) => !isTransparent(value))).toBe(true);
+  expect(geometry.visiblePillBackgrounds.every((value, index) => !isTransparent(value) || geometry.visiblePillBackgroundImages[index] !== 'none')).toBe(true);
   expect(geometry.visiblePillShadows.every((value) => value !== 'none')).toBe(true);
 }
 
@@ -127,6 +128,7 @@ async function measurePlayerCard(card: Locator): Promise<CardGeometry> {
       statusBeforeContent: status instanceof HTMLElement ? getComputedStyle(status, '::before').content : null,
       statusAfterContent: status instanceof HTMLElement ? getComputedStyle(status, '::after').content : null,
       visiblePillBackgrounds: visibleBadges.map((badge) => getComputedStyle(badge).backgroundColor),
+      visiblePillBackgroundImages: visibleBadges.map((badge) => getComputedStyle(badge).backgroundImage),
       visiblePillShadows: visibleBadges.map((badge) => getComputedStyle(badge).boxShadow),
       nameWhiteSpace: nameStyle.whiteSpace,
       nameOverflow: nameStyle.overflow,
