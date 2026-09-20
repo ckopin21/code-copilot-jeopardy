@@ -171,7 +171,7 @@ function Menu({ onNavigate }: { onNavigate: (mode: AppMode, fresh?: boolean) => 
   };
 
   const startNewGame = () => {
-    if (hasSavedHost && savedHost && preview?.phase !== 'lobby') {
+    if (hasSavedHost && savedHost && preview && preview.phase !== 'lobby') {
       const playerCopy = preview.totalPlayers
         ? ` Everyone stays in room ${savedHost.roomCode} with the same seats and profiles.`
         : '';
