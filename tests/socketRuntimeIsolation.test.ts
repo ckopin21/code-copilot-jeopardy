@@ -357,4 +357,31 @@ describe('production socket runtime isolation', () => {
     expect(player.socket.connected).toBe(true);
     host.destroy(); player.destroy();
   });
+
+  it('enforces and rotates presentation capabilities through the production socket protocol', async () => {
+    const { createSocketRuntime } = await import('../src/lib/socket');
+    DeterministicPeer.peers.clear();
+    const peerFactory = (id: string | undefined) => new DeterministicPeer(id) as never;
+    const engine = new BrowserGameEngine();
+    location.search = '?mode=host';
+    const host = createSocketRuntime({ createPeer: peerFactory, createEngine: () => engine, installBrowserHooks: false });
+    const room = await host.emitAck<{ roomCode: string; hostToken: string; presentationUrl: string }>('room:create', { settings: {} });
+    const token = new URL(room.presentationUrl).searchParams.get('display')!;
+    location.search = '?mode=presentation';
+    const rejected = createSocketRuntime({ createPeer: peerFactory, installBrowserHooks: false });
+    await expect(rejected.emitAck('presentation:join', { roomCode: room.roomCode, presentationToken: 'invalid' })).rejects.toThrow(/capability/i);
+    const display = createSocketRuntime({ createPeer: peerFactory, installBrowserHooks: false });
+    await expect(display.emitAck<{ code: string }>('presentation:join', { roomCode: room.roomCode, presentationToken: token })).resolves.toMatchObject({ code: room.roomCode });
+    expect(display.socket.connected).toBe(true);
+    location.search = '?mode=host';
+    const rotated = await host.emitAck<{ presentationToken: string }>('host:rotate-presentation-capability', { roomCode: room.roomCode, hostToken: room.hostToken });
+    await settle();
+    expect(rotated.presentationToken).not.toBe(token);
+    expect(display.socket.connected).toBe(false);
+    const currentDisplay = createSocketRuntime({ createPeer: peerFactory, installBrowserHooks: false });
+    location.search = '?mode=presentation';
+    await expect(currentDisplay.emitAck('presentation:join', { roomCode: room.roomCode, presentationToken: token })).rejects.toThrow(/capability/i);
+    await expect(currentDisplay.emitAck<{ code: string }>('presentation:join', { roomCode: room.roomCode, presentationToken: rotated.presentationToken })).resolves.toMatchObject({ code: room.roomCode });
+    host.destroy(); rejected.destroy(); display.destroy(); currentDisplay.destroy();
+  });
 });
