@@ -452,7 +452,7 @@ async function createHostPeerOnce(roomCode: string, allowAuthorityTakeover: bool
         socket.connected = false;
         emitLocal('disconnect');
         window.setTimeout(() => {
-          if (currentMode() !== 'host' || hostRoomCode !== roomCode || hostPeer) return;
+          if (hostRoomCode !== roomCode || hostPeer) return;
           void startHostPeer(roomCode, true, false).catch(() => {
             // Keep the persisted room intact. The host UI remains in recovery mode
             // and another retry will occur on the regular host keepalive.
@@ -862,11 +862,11 @@ function installVirtualApi(): void {
 installHistoryBaseGuard();
 installVirtualApi();
 document.addEventListener('visibilitychange', () => {
-  if (currentMode() !== 'host') return;
+  if (!hostRoomCode || !ownsHostAuthority(hostRoomCode)) return;
   if (document.visibilityState === 'visible') hostStaleSweepBlockedUntil = Date.now() + HOST_STALE_SWEEP_GRACE_MS;
 });
 window.addEventListener('focus', () => {
-  if (currentMode() === 'host') hostStaleSweepBlockedUntil = Date.now() + HOST_STALE_SWEEP_GRACE_MS;
+  if (hostRoomCode && ownsHostAuthority(hostRoomCode)) hostStaleSweepBlockedUntil = Date.now() + HOST_STALE_SWEEP_GRACE_MS;
 });
 window.addEventListener('storage', (event) => {
   if (!hostRoomCode || !hostAuthorityId || event.key !== hostAuthorityKey(hostRoomCode) || ownsHostAuthority(hostRoomCode)) return;
@@ -881,13 +881,13 @@ window.addEventListener('storage', (event) => {
   try { stalePeer?.destroy(); } catch { /* stale peer */ }
 });
 window.setInterval(() => {
-  if (currentMode() !== 'host' || !hostRoomCode || !ownsHostAuthority(hostRoomCode)) return;
+  if (!hostRoomCode || !ownsHostAuthority(hostRoomCode)) return;
   for (const changedRoom of engine.tick()) {
     if (changedRoom === hostRoomCode) emitRoom(changedRoom);
   }
 }, 250);
 window.setInterval(() => {
-  if (currentMode() !== 'host' || !hostRoomCode || !ownsHostAuthority(hostRoomCode)) return;
+  if (!hostRoomCode || !ownsHostAuthority(hostRoomCode)) return;
   const now = Date.now();
   const sweepWasDelayed = now - lastHostStaleSweepAt > HOST_STALE_SWEEP_STALL_MS;
   lastHostStaleSweepAt = now;
@@ -906,5 +906,5 @@ window.setInterval(() => {
   emitRoom(hostRoomCode);
 }, 2000);
 window.setInterval(() => {
-  if (currentMode() === 'host' && hostRoomCode && ownsHostAuthority(hostRoomCode)) emitRoom(hostRoomCode);
+  if (hostRoomCode && ownsHostAuthority(hostRoomCode)) emitRoom(hostRoomCode);
 }, 1500);
