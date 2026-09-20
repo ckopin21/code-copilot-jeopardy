@@ -7,7 +7,8 @@ src/
   App.tsx                    top-level routing/global interaction hooks
   components/                host, phone, board, presentation, recap UI
   lib/browserGameEngine.ts   authoritative game engine
-  lib/socket.ts              PeerJS/WebRTC transport
+  lib/socket.ts              PeerJS/WebRTC transport, host authority, ICE/reconnect logic
+  lib/clientLifecycle.ts     mobile/WebKit lifecycle recovery
   lib/snapshotSecurity.ts    role-based snapshot privacy
   lib/audio.ts               procedural music and cues
   packs/                     built-in question packs + builder/registry
@@ -59,7 +60,7 @@ npm run build
 
 `npm run dev`, `npm run typecheck`, `npm test`, and `npm run build` automatically regenerate the built-in pack registry first.
 
-A change is ready to deploy only after typecheck, lint, tests, and production build pass. GitHub Actions installs with `npm ci`, runs these checks, and the Pages workflow builds/deploys the static site.
+A change is ready to deploy only after typecheck, lint, Vitest, production build, and applicable browser regressions pass. The main CI workflow installs the locked dependencies, runs typecheck/lint/unit tests/build, installs Playwright Chromium + WebKit, runs the complete Playwright suite in Chromium, then reruns the Safari/mobile smoke and player-card layout suites in WebKit. The Pages workflow builds/deploys the static site.
 
 ## GitHub Pages deployment
 
@@ -101,7 +102,7 @@ There is no second server engine to keep in sync. Production and tests should ta
 
 ## Audio rules
 
-`src/lib/audio.ts` uses generated Web Audio tones. `src/App.tsx` owns global click cues and the current default-volume migration. Master/Music/Effects default to 75% for this version. Do not add overlapping independent audio players for presentation mode.
+`src/lib/audio.ts` owns generated cues/dynamic phase music and selectable bundled background tracks. `src/App.tsx` owns global click cues and the audio-default migration, while `src/lib/musicVolumePolicy.ts` maps the visible Music slider to its intentionally lower internal gain range. Fresh instances show Master 75%, Music 50%, and Effects 75%. Do not add overlapping independent audio systems for host/presentation surfaces.
 
 ## Question pack workflow
 
@@ -112,7 +113,9 @@ Do not hand-edit `src/packs/generatedRegistry.ts`. Add/copy a pack file and let 
 Regression tests should target the production browser engine and cover rule/state behavior rather than only visual markup. Important areas include:
 
 - room creation and capacity
+- Classic and Free Response mode behavior, including reading delay, simultaneous submissions, missing-response penalties, Group Miss Mercy, and confirm-to-score flow
 - stable reconnect identity and reserved seats
+- iPhone/WebKit lifecycle recovery across pagehide/pageshow, bfcache restore, background resume, online recovery, and stale Peer/DataConnection replacement
 - timer persistence/restoration
 - board generation and pack validation
 - first-buzz acceptance and buzzer eligibility
@@ -121,7 +124,9 @@ Regression tests should target the production browser engine and cover rule/stat
 - late-game multipliers
 - typed responses and grading
 - snapshot privacy for answers/explanations/responses
-- Final participant selection, wagers, answer lock, timeout, disconnects, privacy, review, recap
+- Final participant selection, wager fairness/protection rules, answer lock, timeout, disconnects, privacy, review, recap
+- player customization consistency across host, phone, presentation, score effects, and recap
+- rendered player-card geometry/status/avatar regressions in Chromium and WebKit
 - reset behavior
 
 Visual interaction changes that depend on DOM geometry, WebRTC, camera APIs, vibration, or Web Audio still require browser/device smoke testing in addition to unit tests.
