@@ -20,7 +20,21 @@ describe('player card layout regression', () => {
     expect(statusRules).toContain('position: absolute !important;');
     expect(statusRules).toContain('transform: translateY(-50%) !important;');
     expect(statusRules).toContain('padding-right: 112px !important;');
+    expect(statusRules).toContain('overflow: visible;');
+    expect(statusRules).toContain('background: transparent !important;');
+    expect(statusRules).toContain('box-shadow: none !important;');
+    expect(statusRules).toContain('filter: none !important;');
+    expect(statusRules).toContain('backdrop-filter: none !important;');
     expect(statusRules).not.toContain('position: static !important;\n  inset: auto !important;\n  transform: none !important;\n  grid-column: 3;');
+  });
+
+  it('keeps the avatar shell centered and applies only a tiny glyph-level optical correction', () => {
+    const css = read('../src/ui-layout-audit-fixes.css');
+    expect(css).toContain('.showcase-player-card .player-avatar-large {');
+    expect(css).toContain('align-self: center !important;');
+    expect(css).toContain('justify-self: center;');
+    expect(css).toContain('.showcase-player-card .player-avatar-large .player-avatar-emoji {');
+    expect(css).toContain('transform: translateY(-0.04em);');
   });
 
   it('uses single-line overflow handling instead of allowing names to resize scorecards', () => {

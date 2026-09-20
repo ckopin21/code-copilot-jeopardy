@@ -53,6 +53,21 @@
   width: 100%;
 }
 
+/*
+ * The avatar shell is already geometrically centered by the card grid. Color-emoji
+ * glyphs sit slightly low inside their own square on common emoji fonts, so only the
+ * visible glyph gets a tiny optical lift. Keep the shell itself on the grid centerline.
+ */
+.showcase-player-card .player-avatar-large {
+  align-self: center !important;
+  justify-self: center;
+  margin-block: 0 !important;
+}
+
+.showcase-player-card .player-avatar-large .player-avatar-emoji {
+  transform: translateY(-0.04em);
+}
+
 /* Five-player presentation layouts retain status text without allowing it to add a second row. */
 @media (max-width: 1100px) and (min-width: 760px) {
   .presentation-name-strip[data-player-count="5"] .presentation-player-main small {
@@ -95,7 +110,13 @@
   align-items: flex-end;
   justify-content: center;
   gap: 4px;
-  overflow: hidden;
+  /* Do not clip child pill shadows/glows into a rectangular wrapper silhouette. */
+  overflow: visible;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  filter: none !important;
+  backdrop-filter: none !important;
   pointer-events: none;
 }
 
@@ -179,6 +200,34 @@
     padding: 1px 4px !important;
     border-width: 1px !important;
     font-size: .4rem !important;
+    line-height: 1 !important;
+  }
+
+  .showcase-host:not(.host-presentation-mode) .showcase-player-card .player-status-stack .streak-ribbon em {
+    display: none !important;
+  }
+}
+
+/* Narrow host cards need a smaller reserved status lane so score/name text keeps real space. */
+@media (max-width: 680px) {
+  .showcase-host:not(.host-presentation-mode) .showcase-player-card:is(.is-fire,.is-cold),
+  .showcase-host:not(.host-presentation-mode) .showcase-player-card.has-turn-label:not(.is-fire):not(.is-cold) {
+    padding-right: 60px !important;
+  }
+
+  .showcase-host:not(.host-presentation-mode) .showcase-player-card .player-status-stack {
+    inset: 50% 4px auto auto !important;
+    width: 52px;
+    max-width: 32%;
+    max-height: calc(100% - 4px);
+    gap: 2px;
+  }
+
+  .showcase-host:not(.host-presentation-mode) .showcase-player-card .player-status-stack .streak-ribbon,
+  .showcase-host:not(.host-presentation-mode) .showcase-player-card .player-status-stack .turn-beacon {
+    padding: 2px 3px !important;
+    border-width: 1px !important;
+    font-size: .38rem !important;
     line-height: 1 !important;
   }
 
