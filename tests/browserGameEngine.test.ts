@@ -46,6 +46,20 @@ beforeEach(() => {
 
 describe('BrowserGameEngine production state', () => {
 
+  it('requires a rotatable high-entropy capability for presentation snapshots', () => {
+    const { engine, host } = setup();
+    const initialToken = new URL(host.presentationUrl).searchParams.get('display')!;
+    expect(initialToken.length).toBeGreaterThan(20);
+    expect(() => engine.presentationSnapshot(host.roomCode, '')).toThrow(/capability/i);
+    expect(() => engine.presentationSnapshot(host.roomCode, 'incorrect')).toThrow(/capability/i);
+    expect(engine.presentationSnapshot(host.roomCode, initialToken).code).toBe(host.roomCode);
+
+    const nextToken = engine.rotatePresentationCapability(host.roomCode, host.hostToken);
+    expect(nextToken).not.toBe(initialToken);
+    expect(() => engine.presentationSnapshot(host.roomCode, initialToken)).toThrow(/capability/i);
+    expect(engine.presentationSnapshot(host.roomCode, nextToken).code).toBe(host.roomCode);
+  });
+
   it('rotates question ownership in join order and assigns Daily Double to the turn owner', () => {
     const { engine, host } = setup({ gameLength: 'quick', dailyDoublesEnabled: true, dailyDoubleCount: 16, finalRoundEnabled: false });
     const one = addPlayer(engine, host.roomCode, 'One');
