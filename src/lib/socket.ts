@@ -58,9 +58,70 @@ const HOST_STALE_SWEEP_STALL_MS = 6000;
 function currentMode(): string | null { return new URLSearchParams(location.search).get('mode'); }
 function baseUrl(): string { const url = new URL('.', location.href); url.search = ''; url.hash = ''; return url.href.replace(/\/$/, ''); }
 function hostPeerId(roomCode: string): string { return `blue-stage-trivia-${roomCode.toLowerCase()}`; }
-function peerOptions() {
-  const custom = (window as typeof window & { BLUE_STAGE_ICE_SERVERS?: RTCIceServer[] }).BLUE_STAGE_ICE_SERVERS;
-  return { debug: 0, config: { iceServers: custom?.length ? custom : [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] } };
+type IceConfigWindow = typeof window & {
+  BLUE_STAGE_ICE_SERVERS?: RTCIceServer[];
+  BLUE_STAGE_ICE_CONFIG_URL?: string;
+};
+
+const DEFAULT_ICE_SERVERS: RTCIceServer[] = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' }
+];
+let activeIceServers: RTCIceServer[] = DEFAULT_ICE_SERVERS;
+let iceConfigWarning = '';
+
+function turnConfigured(servers: RTCIceServer[]): boolean {
+  return servers.some((server) => {
+    const urls = Array.isArray(server.urls) ? server.urls : [server.urls];
+    return urls.some((url) => /^turns?:/i.test(url));
+  });
+}
+
+function connectionFailureHint(): string {
+  if (iceConfigWarning) return ` ${iceConfigWarning}`;
+  if (!turnConfigured(activeIceServers)) return ' This deployment is using STUN only; restrictive or mobile networks may require a TURN relay.';
+  return '';
+}
+
+async function resolveIceServers(): Promise<RTCIceServer[]> {
+  const runtime = window as IceConfigWindow;
+  const custom = runtime.BLUE_STAGE_ICE_SERVERS;
+  if (custom?.length) {
+    activeIceServers = custom;
+    iceConfigWarning = '';
+    return custom;
+  }
+
+  const endpoint = runtime.BLUE_STAGE_ICE_CONFIG_URL || import.meta.env.VITE_ICE_CONFIG_URL;
+  if (!endpoint) {
+    activeIceServers = DEFAULT_ICE_SERVERS;
+    iceConfigWarning = '';
+    return DEFAULT_ICE_SERVERS;
+  }
+
+  try {
+    const response = await fetch(endpoint, {
+      cache: 'no-store',
+      credentials: 'omit',
+      headers: { accept: 'application/json' }
+    });
+    if (!response.ok) throw new Error(`ICE config request failed with ${response.status}`);
+    const body = await response.json() as { iceServers?: RTCIceServer[] } | RTCIceServer[];
+    const servers = Array.isArray(body) ? body : body.iceServers;
+    if (!servers?.length) throw new Error('ICE config response did not include iceServers');
+    activeIceServers = servers;
+    iceConfigWarning = '';
+    return servers;
+  } catch {
+    activeIceServers = DEFAULT_ICE_SERVERS;
+    iceConfigWarning = 'The secure relay configuration could not be loaded; retrying with STUN only.';
+    return DEFAULT_ICE_SERVERS;
+  }
+}
+
+async function peerOptions() {
+  const iceServers = await resolveIceServers();
+  return { debug: 0, config: { iceServers } };
 }
 function emitLocal(event: string, data?: unknown): void { for (const listener of listeners.get(event) ?? []) listener(data); }
 export const socket = {
@@ -327,9 +388,10 @@ function attachHostConnection(connection: DataConnection): void {
   connection.on('close', () => handleConnectionClosed(connection));
   connection.on('error', () => handleConnectionClosed(connection));
 }
-function createHostPeerOnce(roomCode: string): Promise<void> {
+async function createHostPeerOnce(roomCode: string): Promise<void> {
+  const options = await peerOptions();
   return new Promise((resolve, reject) => {
-    const peer = new Peer(hostPeerId(roomCode), peerOptions());
+    const peer = new Peer(hostPeerId(roomCode), options);
     let settled = false;
     let hostSignalRetryTimer: number | null = null;
     const scheduleHostSignalReconnect = () => {
@@ -488,14 +550,15 @@ function attachClientConnection(connection: DataConnection): void {
   connection.on('close', closed);
   connection.on('error', closed);
 }
-function createClientPeer(): Promise<Peer> {
+async function createClientPeer(): Promise<Peer> {
   if (clientPeer && !clientPeer.destroyed) {
-    if (clientPeer.open) return Promise.resolve(clientPeer);
+    if (clientPeer.open && !clientPeer.disconnected) return clientPeer;
     try { clientPeer.destroy(); } catch { /* recreate a clean signaling peer */ }
     clientPeer = null;
   }
+  const options = await peerOptions();
   return new Promise((resolve, reject) => {
-    const peer = new Peer(peerOptions());
+    const peer = new Peer(options);
     clientPeer = peer;
     let settled = false;
     peer.on('open', () => {
@@ -517,13 +580,46 @@ function createClientPeer(): Promise<Peer> {
     window.setTimeout(() => { if (!settled) { settled = true; reject(new Error('Timed out connecting to signaling')); } }, 8000);
   });
 }
-function dropClientConnection(connection: DataConnection): void {
+function destroyClientPeer(): void {
+  const peer = clientPeer;
+  clientPeer = null;
+  if (!peer) return;
+  try { peer.destroy(); } catch { /* stale signaling peer */ }
+}
+
+function rejectPendingRequests(message: string): void {
+  for (const [requestId, request] of pending) {
+    pending.delete(requestId);
+    window.clearTimeout(request.timeoutId);
+    request.reject(new Error(message));
+  }
+}
+
+function dropClientConnection(connection: DataConnection, resetSignaling = false): void {
   if (clientConnection !== connection) return;
   clientConnection = null;
   socket.connected = false;
   emitLocal('disconnect');
+  rejectPendingRequests('Connection interrupted');
   try { connection.close(); } catch { /* ignore stale close */ }
+  if (resetSignaling) destroyClientPeer();
   scheduleClientReconnect();
+}
+
+function forceClientTransportRefresh(): void {
+  const connection = clientConnection;
+  const wasConnected = socket.connected || Boolean(connection?.open);
+  clientConnection = null;
+  clientConnectPromise = null;
+  if (reconnectTimer !== null) {
+    window.clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+  socket.connected = false;
+  rejectPendingRequests('Connection refreshing');
+  try { connection?.close(); } catch { /* stale data connection */ }
+  destroyClientPeer();
+  if (wasConnected) emitLocal('disconnect');
 }
 function sendRequestOn(connection: DataConnection, event: string, payload: Record<string, unknown>, timeoutMs = 8000, dropOnTimeout = true): Promise<unknown> {
   return new Promise((resolve, reject) => {
@@ -532,7 +628,7 @@ function sendRequestOn(connection: DataConnection, event: string, payload: Recor
     const timeoutId = window.setTimeout(() => {
       pending.delete(requestId);
       reject(new Error('Host did not respond'));
-      if (dropOnTimeout) dropClientConnection(connection);
+      if (dropOnTimeout) dropClientConnection(connection, true);
     }, timeoutMs);
     pending.set(requestId, { resolve, reject, timeoutId });
     connection.send({ kind: 'request', requestId, event, payload } satisfies RequestMessage);
@@ -583,12 +679,17 @@ async function openConnectionToHost(targetRoom: string): Promise<DataConnection>
       };
       void finish();
     });
-    connection.on('error', (error) => { if (settled) return; settled = true; reject(error instanceof Error ? error : new Error('Could not connect to host')); });
+    connection.on('error', (error) => {
+      if (settled) return;
+      settled = true;
+      try { connection.close(); } catch { /* ignore failed connection */ }
+      reject(error instanceof Error ? error : new Error(`Could not connect to host.${connectionFailureHint()}`));
+    });
     window.setTimeout(() => {
       if (settled) return;
       settled = true;
       try { connection.close(); } catch { /* ignore */ }
-      reject(new Error('Could not find that game. Confirm the host page is open.'));
+      reject(new Error(`Could not find that game. Confirm the host page is open.${connectionFailureHint()}`));
     }, 6500);
   });
 }
@@ -622,7 +723,7 @@ async function clientRequest(event: string, payload: Record<string, unknown>): P
     event,
     payload,
     event === 'player:heartbeat' ? HEARTBEAT_TIMEOUT_MS : 8000,
-    event !== 'player:heartbeat'
+    true
   );
   if (event === 'player:join' || event === 'player:reconnect') {
     const credentials = result as PlayerJoinCredentials;
@@ -641,20 +742,19 @@ export function suspendClientSession(): void {
   }
   const connection = clientConnection;
   clientConnection = null;
+  const wasConnected = socket.connected || Boolean(connection?.open);
   socket.connected = false;
-  emitLocal('disconnect');
-  for (const [requestId, request] of pending) {
-    pending.delete(requestId);
-    window.clearTimeout(request.timeoutId);
-    request.reject(new Error('Connection closed'));
-  }
+  rejectPendingRequests('Connection closed');
   try { connection?.close(); } catch { /* already closed */ }
+  destroyClientPeer();
+  if (wasConnected) emitLocal('disconnect');
 }
-export function resumeClientSession(forceHostPause = false): void {
+export function resumeClientSession(forceHostPause = false, forceTransportReset = false): void {
   if (clientHostPaused && !forceHostPause) return;
   if (forceHostPause) clientHostPaused = false;
   clientSuspended = false;
   reconnectDelayMs = 400;
+  if (forceTransportReset && clientRoomCode) forceClientTransportRefresh();
   if (clientRoomCode && !clientConnection?.open) scheduleClientReconnect();
 }
 async function createHostRoom(payload: Record<string, unknown>): Promise<unknown> {
@@ -724,7 +824,6 @@ function installVirtualApi(): void {
 }
 installHistoryBaseGuard();
 installVirtualApi();
-window.addEventListener('online', () => { if (currentMode() !== 'host' && clientRoomCode) scheduleClientReconnect(); });
 document.addEventListener('visibilitychange', () => {
   if (currentMode() !== 'host') return;
   if (document.visibilityState === 'visible') hostStaleSweepBlockedUntil = Date.now() + HOST_STALE_SWEEP_GRACE_MS;
