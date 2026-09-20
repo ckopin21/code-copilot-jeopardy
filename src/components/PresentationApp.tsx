@@ -110,7 +110,9 @@ export function PresentationApp() {
     : connectedPlayers;
   const responseCount = activeQuestionPlayers.filter((player) => Boolean(current?.textResponses?.[player.id])).length;
   const readingTimer = freeResponseReadingTimer(current, room.settings, room.serverNow);
-  const finalPlayers = room.finalRound ? connectedPlayers.filter((player) => room.finalRound!.participantIds.includes(player.id)) : connectedPlayers;
+  // Final's roster is frozen at Final entry. A temporarily disconnected player
+  // must remain in the wager/answer denominator until the round closes.
+  const finalPlayers = room.finalRound ? room.players.filter((player) => room.finalRound!.participantIds.includes(player.id)) : connectedPlayers;
   const reviewPlayerId = room.phase === 'final-review' && room.finalRound
     ? room.finalRound.reviewPlayerId ?? room.finalRound.participantIds[room.finalRound.reviewPlayerIndex]
     : null;

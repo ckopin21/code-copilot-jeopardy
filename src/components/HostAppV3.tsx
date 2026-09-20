@@ -517,7 +517,7 @@ export function HostAppV3() {
   const readingTimer = freeResponseReadingTimer(current, settings, room.serverNow);
   const questionMultiplier = current ? Math.max(1, Math.round(current.effectiveValue / Math.max(1, current.baseValue))) : 1;
   const finalParticipants = room.finalRound
-    ? connectedPlayers.filter((player) => room.finalRound!.participantIds.includes(player.id))
+    ? room.players.filter((player) => room.finalRound!.participantIds.includes(player.id))
     : connectedPlayers;
   const pendingFinalWagers = finalParticipants.filter((player) => !player.finalWagerSubmitted).length;
   const resultIds = room.resultPlayerIds ? new Set(room.resultPlayerIds) : null;
