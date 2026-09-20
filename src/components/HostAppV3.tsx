@@ -17,7 +17,7 @@ import { BoardPresentation } from './BoardPresentation';
 import { EndgameRecap } from './EndgameRecap';
 import { ScoreFlight, type ScoreFlightState } from './ScoreFlight';
 import { clearHostCredentials, readActiveHostCredentials, writeHostCredentials } from '../lib/hostCredentials';
-import { stripFreshHostFlag } from '../lib/hostSession';
+import { isNewGameHostUrl, stripFreshHostFlag, stripNewGameHostFlag } from '../lib/hostSession';
 import { randomId } from '../lib/ids';
 import { readAccessibility } from '../lib/accessibility';
 import { PlayerAvatar } from './PlayerAvatar';
@@ -128,6 +128,7 @@ export function HostAppV3() {
       };
       try {
         const forceFresh = new URLSearchParams(location.search).get('fresh') === '1';
+        const startNewGame = isNewGameHostUrl(location.href);
         if (!forceFresh) {
           const parsed = readActiveHostCredentials();
           if (parsed) {
@@ -135,7 +136,14 @@ export function HostAppV3() {
               const snapshot = await emitAck<RoomSnapshot>('host:reconnect', { roomCode: parsed.roomCode, hostToken: parsed.hostToken, allowAuthorityTakeover: true });
               writeHostCredentials(parsed);
               setCredentials(parsed);
-              setRoom(snapshot);
+              if (startNewGame) {
+                localStorage.removeItem(`blue-stage-history-${parsed.roomCode}`);
+                const resetSnapshot = await emitAck<RoomSnapshot>('host:reset-game', { roomCode: parsed.roomCode, hostToken: parsed.hostToken });
+                history.replaceState(null, '', stripNewGameHostFlag(location.href));
+                setRoom(resetSnapshot);
+              } else {
+                setRoom(snapshot);
+              }
               return;
             } catch (reconnectError) {
               const message = reconnectError instanceof Error ? reconnectError.message : 'Could not restore saved room';
@@ -436,7 +444,11 @@ export function HostAppV3() {
     revealRunningRef.current = false;
   };
 
-  const goMenu = () => { audio.stop(); location.href = menuUrl(); };
+  const goMenu = () => {
+    audio.stop();
+    history.pushState(null, '', menuUrl());
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  };
   const resetGame = async () => {
     if (!credentials || !confirm('Reset this game? Players stay in the room, but the board, scores, and history will reset.')) return;
     localStorage.removeItem(`blue-stage-history-${credentials.roomCode}`);
