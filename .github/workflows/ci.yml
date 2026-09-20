@@ -25,4 +25,4 @@ jobs:
       - run: npm run build
       - run: npx playwright install --with-deps chromium webkit
       - run: npx playwright test --project=chromium
-      - run: npx playwright test e2e/safari-smoke.spec.ts --project=webkit
+      - run: npx playwright test e2e/safari-smoke.spec.ts e2e/player-card-layout.spec.ts --project=webkit
