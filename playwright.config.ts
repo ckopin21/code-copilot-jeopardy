@@ -1,4 +1,4 @@
-import { defineConfig, devices } from '@playwright/test';
+import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
   testDir: './e2e',
@@ -8,14 +8,8 @@ export default defineConfig({
     headless: true
   },
   projects: [
-    {
-      name: 'chromium',
-      use: { ...devices['Desktop Chrome'] }
-    },
-    {
-      name: 'webkit',
-      use: { ...devices['Desktop Safari'] }
-    }
+    { name: 'chromium', use: { browserName: 'chromium' } },
+    { name: 'webkit', use: { browserName: 'webkit' } }
   ],
   webServer: {
     command: 'npm run dev -- --port 4173',
