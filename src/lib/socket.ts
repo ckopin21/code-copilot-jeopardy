@@ -474,11 +474,20 @@ async function createHostPeerOnce(roomCode: string, allowAuthorityTakeover: bool
     const peer = makePeer(hostPeerId(roomCode), options);
     let settled = false;
     let hostSignalRetryTimer: number | null = null;
+    let hostSignalReconnectAttempts = 0;
     const scheduleHostSignalReconnect = () => {
       if (hostSignalRetryTimer !== null || peer.destroyed || hostPeer !== peer) return;
       hostSignalRetryTimer = window.setTimeout(() => {
         hostSignalRetryTimer = null;
         if (peer.destroyed || hostPeer !== peer || !peer.disconnected) return;
+        hostSignalReconnectAttempts += 1;
+        // PeerJS can remain permanently disconnected after a signaling socket
+        // failure. Recreating the deterministic room Peer is safer than leaving
+        // a valid persisted room registered to an unusable Peer object.
+        if (hostSignalReconnectAttempts >= 3) {
+          try { peer.destroy(); } catch { /* close handler starts replacement */ }
+          return;
+        }
         try { peer.reconnect(); } catch { /* retry below */ }
         if (peer.disconnected && !peer.destroyed) scheduleHostSignalReconnect();
       }, 1000);
@@ -1004,6 +1013,7 @@ window.setInterval(() => {
       for (const connection of connections) {
         try { connection.close(); } catch { /* best-effort runtime teardown */ }
       }
+      hostSignalReconnectAttempts = 0;
       connections.clear();
       identities.clear();
       playerConnections.clear();
