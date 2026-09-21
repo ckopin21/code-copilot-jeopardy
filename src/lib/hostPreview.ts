@@ -14,13 +14,22 @@ export interface HostPreview {
 }
 
 type PersistedRoomRecord = { state?: RoomState };
+type PersistedRoomEnvelope = { version?: unknown; rooms?: unknown };
+
+function readRecords(raw: string): PersistedRoomRecord[] {
+  const parsed = JSON.parse(raw) as PersistedRoomRecord[] | PersistedRoomEnvelope;
+  // Legacy arrays remain readable until the normal persistence cycle upgrades
+  // them to the explicit versioned envelope.
+  if (Array.isArray(parsed)) return parsed;
+  if (parsed?.version === 1 && Array.isArray(parsed.rooms)) return parsed.rooms as PersistedRoomRecord[];
+  return [];
+}
 
 export function readHostPreview(roomCode: string): HostPreview | null {
   try {
     const raw = localStorage.getItem(ENGINE_STORAGE_KEY);
     if (!raw) return null;
-    const records = JSON.parse(raw) as PersistedRoomRecord[];
-    if (!Array.isArray(records)) return null;
+    const records = readRecords(raw);
     const state = records.find((record) => record.state?.code === roomCode)?.state;
     if (!state) return null;
 

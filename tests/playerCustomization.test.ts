@@ -127,8 +127,8 @@ describe('player customization', () => {
       victoryEffect: 'confetti'
     });
 
-    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY)!) as Array<{ state: { players: Array<Record<string, unknown>> } }>;
-    stored[0].state.players[0].title = 'professor';
+    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY)!) as { rooms: Array<{ state: { players: Array<Record<string, unknown>> } }> };
+    stored.rooms[0].state.players[0].title = 'professor';
     localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
 
     const restored = new BrowserGameEngine(random, 60_000);
@@ -137,8 +137,8 @@ describe('player customization', () => {
     expect(player.scoreEffect).toBe('spark');
     expect(player).not.toHaveProperty('title');
 
-    const migrated = JSON.parse(localStorage.getItem(STORAGE_KEY)!) as Array<{ state: { players: Array<Record<string, unknown>> } }>;
-    expect(migrated[0].state.players[0]).not.toHaveProperty('title');
+    const migrated = JSON.parse(localStorage.getItem(STORAGE_KEY)!) as { rooms: Array<{ state: { players: Array<Record<string, unknown>> } }> };
+    expect(migrated.rooms[0].state.players[0]).not.toHaveProperty('title');
   });
 
   it.each(SCORE_EFFECTS.map((effect) => effect.id))('persists the %s score effect', (scoreEffect) => {

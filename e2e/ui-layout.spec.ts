@@ -418,6 +418,24 @@ test('dismissible host panels preserve inside clicks and close outside', async (
   await expect(drawer).toHaveCount(0);
 });
 
+test('menu dialogs trap focus and restore it to their trigger', async ({ page }) => {
+  await page.goto('/');
+  const trigger = page.getByRole('button', { name: 'How to Play' });
+  await trigger.click();
+
+  const dialog = page.getByRole('dialog', { name: 'Three steps. Then play.' });
+  const close = dialog.getByRole('button', { name: 'Close How to Play' });
+  const done = dialog.getByRole('button', { name: 'Got It' });
+  await expect(close).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(done).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(close).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+});
+
 
 const phoneViewports = [
   { width: 360, height: 640 },

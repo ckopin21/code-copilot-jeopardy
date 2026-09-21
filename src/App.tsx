@@ -129,6 +129,7 @@ function Menu({ onNavigate }: { onNavigate: (mode: AppMode, fresh?: boolean) => 
   const [resetting, setResetting] = useState(false);
   const [modal, setModal] = useState<MenuModal>(null);
   const modalRef = useRef<HTMLElement | null>(null);
+  const modalTriggerRef = useRef<HTMLButtonElement | null>(null);
   const [fullscreen, setFullscreen] = useState(() => fullscreenActive());
   const [now, setNow] = useState(() => Date.now());
   const savedHost = useMemo(() => readSavedHost(), []);
@@ -136,20 +137,17 @@ function Menu({ onNavigate }: { onNavigate: (mode: AppMode, fresh?: boolean) => 
   const hasSavedHost = Boolean(savedHost && preview);
   const fullscreenSupported = Boolean(document.fullscreenEnabled || (document.documentElement as WebkitElement).webkitRequestFullscreen);
 
-  useOutsideDismiss(Boolean(modal), () => setModal(null), modalRef);
+  useOutsideDismiss(Boolean(modal), () => setModal(null), modalRef, modalTriggerRef);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 30_000);
     const syncFullscreen = () => setFullscreen(fullscreenActive());
-    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') setModal(null); };
     document.addEventListener('fullscreenchange', syncFullscreen);
     document.addEventListener('webkitfullscreenchange', syncFullscreen as EventListener);
-    window.addEventListener('keydown', closeOnEscape);
     return () => {
       window.clearInterval(timer);
       document.removeEventListener('fullscreenchange', syncFullscreen);
       document.removeEventListener('webkitfullscreenchange', syncFullscreen as EventListener);
-      window.removeEventListener('keydown', closeOnEscape);
     };
   }, []);
 
@@ -234,8 +232,8 @@ function Menu({ onNavigate }: { onNavigate: (mode: AppMode, fresh?: boolean) => 
 
       <div className="menu-tool-row" aria-label="Menu tools">
         <button className="menu-tool-button" disabled={!fullscreenSupported} onClick={() => void toggleFullscreen()}><span aria-hidden="true">⛶</span>{fullscreen ? 'Exit Fullscreen' : 'Fullscreen'}</button>
-        <button className="menu-tool-button" onClick={() => setModal('how')}><span aria-hidden="true">?</span>How to Play</button>
-        <button className="menu-tool-button" onClick={() => setModal('advanced')}><span aria-hidden="true">⚙</span>Advanced</button>
+        <button className="menu-tool-button" onClick={(event) => { modalTriggerRef.current = event.currentTarget; setModal('how'); }}><span aria-hidden="true">?</span>How to Play</button>
+        <button className="menu-tool-button" onClick={(event) => { modalTriggerRef.current = event.currentTarget; setModal('advanced'); }}><span aria-hidden="true">⚙</span>Advanced</button>
         <MusicTrackSelect className="menu-music-select" />
       </div>
     </section>
@@ -243,8 +241,8 @@ function Menu({ onNavigate }: { onNavigate: (mode: AppMode, fresh?: boolean) => 
     <footer className="menu-footer"><span>PHONE BUZZERS</span><b>•</b><span>DAILY DOUBLES</span><b>•</b><span>FINAL ROUND</span></footer>
 
     {modal === 'how' && <div className="menu-modal-backdrop">
-      <section ref={modalRef} className="menu-modal how-to-modal" role="dialog" aria-modal="true" aria-labelledby="how-to-title">
-        <button className="menu-modal-close" aria-label="Close How to Play" onClick={() => setModal(null)}>×</button>
+      <section ref={modalRef} className="menu-modal how-to-modal" role="dialog" aria-modal="true" aria-labelledby="how-to-title" tabIndex={-1}>
+        <button className="menu-modal-close" aria-label="Close How to Play" data-modal-initial-focus onClick={() => setModal(null)}>×</button>
         <div className="section-kicker gold">HOW TO PLAY</div>
         <h2 id="how-to-title">Three steps. Then play.</h2>
         <div className="how-step-grid">
@@ -257,8 +255,8 @@ function Menu({ onNavigate }: { onNavigate: (mode: AppMode, fresh?: boolean) => 
     </div>}
 
     {modal === 'advanced' && <div className="menu-modal-backdrop">
-      <section ref={modalRef} className="menu-modal advanced-modal" role="dialog" aria-modal="true" aria-labelledby="advanced-title">
-        <button className="menu-modal-close" aria-label="Close Advanced" onClick={() => setModal(null)}>×</button>
+      <section ref={modalRef} className="menu-modal advanced-modal" role="dialog" aria-modal="true" aria-labelledby="advanced-title" tabIndex={-1}>
+        <button className="menu-modal-close" aria-label="Close Advanced" data-modal-initial-focus onClick={() => setModal(null)}>×</button>
         <div className="section-kicker">ADVANCED</div>
         <h2 id="advanced-title">Maintenance</h2>
         <p>Normal games do not require these controls.</p>

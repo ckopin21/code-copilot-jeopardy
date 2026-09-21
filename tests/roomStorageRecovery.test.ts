@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { BrowserGameEngine, type RandomSource } from '../src/lib/browserGameEngine';
-import { mergeStoredRooms, recoverRoomStorage } from '../src/lib/roomStorageRecovery';
+import { mergeStoredRooms, recoverRoomStorage, serializeStoredRooms } from '../src/lib/roomStorageRecovery';
 
 class MemoryStorage implements Storage {
   private values = new Map<string, string>();
@@ -52,7 +52,7 @@ describe('room storage recovery', () => {
 
     const recovered = recoverRoomStorage(storage);
     expect(recovered.some((item) => item.state?.code === 'ROOM1')).toBe(true);
-    expect(JSON.parse(storage.getItem(PRIMARY_KEY) ?? '[]')).toHaveLength(2);
+    expect(JSON.parse(storage.getItem(PRIMARY_KEY) ?? '{}').rooms).toHaveLength(2);
   });
 
   it('recovers a real active room and preserves host and player reconnect credentials', () => {
@@ -98,7 +98,7 @@ describe('room storage recovery', () => {
 
     const restored = new BrowserGameEngine(new FixedRandom(), 60_000);
     expect(restored.reconnectHost(host.roomCode, host.hostToken).code).toBe(host.roomCode);
-    expect(JSON.parse(localStorage.getItem(PRIMARY_KEY) ?? '[]')[0].hostToken).toBe(host.hostToken);
+    expect(JSON.parse(localStorage.getItem(PRIMARY_KEY) ?? '{}').rooms[0].hostToken).toBe(host.hostToken);
   });
 
   it('prefers the higher state revision when timestamps tie', () => {
@@ -126,7 +126,21 @@ describe('room storage recovery', () => {
   it('skips a structurally corrupt room record instead of crashing engine startup', () => {
     localStorage.setItem(PRIMARY_KEY, JSON.stringify([{ broken: true }]));
     expect(() => new BrowserGameEngine(new FixedRandom(), 60_000)).not.toThrow();
-    expect(JSON.parse(localStorage.getItem(PRIMARY_KEY) ?? '[]')).toEqual([]);
+    expect(JSON.parse(localStorage.getItem(PRIMARY_KEY) ?? '{}').rooms).toEqual([]);
+  });
+
+  it('migrates legacy arrays to the versioned schema and quarantines malformed payloads', () => {
+    const storage = new MemoryStorage();
+    const legacy = [room('MIGR8', Date.now() + 60_000, 'legacy')];
+    storage.setItem(PRIMARY_KEY, JSON.stringify(legacy));
+    recoverRoomStorage(storage);
+    expect(JSON.parse(storage.getItem(PRIMARY_KEY) ?? '{}')).toMatchObject({ version: 1, rooms: legacy });
+
+    storage.setItem(PRIMARY_KEY, '{not json');
+    storage.setItem(BACKUP_KEY, serializeStoredRooms(legacy));
+    expect(recoverRoomStorage(storage)).toHaveLength(1);
+    expect(storage.getItem(PRIMARY_KEY)).toBe(serializeStoredRooms(legacy));
+    expect(Array.from({ length: storage.length }, (_, index) => storage.key(index)).some((key) => key?.startsWith(`${PRIMARY_KEY}-corrupt-`))).toBe(true);
   });
 
 });

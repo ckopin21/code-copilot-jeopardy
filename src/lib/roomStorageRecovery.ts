@@ -1,5 +1,7 @@
 const PRIMARY_KEY = 'blue-stage-p2p-engine-v2';
 const BACKUP_KEY = 'blue-stage-p2p-engine-v2-backup';
+const STORAGE_SCHEMA_VERSION = 1;
+const CORRUPT_KEY_PREFIX = `${PRIMARY_KEY}-corrupt-`;
 
 type StoredRoom = {
   state?: {
@@ -11,14 +13,31 @@ type StoredRoom = {
   [key: string]: unknown;
 };
 
-function parseRooms(raw: string | null): StoredRoom[] {
-  if (!raw) return [];
+type StoredRoomEnvelope = { version: number; rooms: StoredRoom[] };
+type ParsedRooms = { rooms: StoredRoom[]; malformed: boolean };
+
+function parseRooms(raw: string | null): ParsedRooms {
+  if (!raw) return { rooms: [], malformed: false };
   try {
     const parsed = JSON.parse(raw) as unknown;
-    return Array.isArray(parsed) ? parsed.filter((item): item is StoredRoom => Boolean(item && typeof item === 'object')) : [];
+    // Version zero was the original unwrapped array. It remains readable so
+    // existing rooms migrate instead of being discarded during an upgrade.
+    if (Array.isArray(parsed)) return { rooms: parsed.filter((item): item is StoredRoom => Boolean(item && typeof item === 'object')), malformed: false };
+    if (!parsed || typeof parsed !== 'object') return { rooms: [], malformed: true };
+    const envelope = parsed as Partial<StoredRoomEnvelope>;
+    if (envelope.version !== STORAGE_SCHEMA_VERSION || !Array.isArray(envelope.rooms)) return { rooms: [], malformed: true };
+    return { rooms: envelope.rooms.filter((item): item is StoredRoom => Boolean(item && typeof item === 'object')), malformed: false };
   } catch {
-    return [];
+    return { rooms: [], malformed: true };
   }
+}
+
+export function serializeStoredRooms(rooms: readonly unknown[]): string {
+  return JSON.stringify({ version: STORAGE_SCHEMA_VERSION, rooms });
+}
+
+export function isValidStoredRoomPayload(raw: string | null): boolean {
+  return !parseRooms(raw).malformed;
 }
 
 /** Reject records that could win freshness selection but cannot restore a room. */
@@ -79,10 +98,14 @@ function safeSetItem(storage: Storage, key: string, value: string): void {
 export function recoverRoomStorage(storage: Storage = localStorage): StoredRoom[] {
   const primaryRaw = safeGetItem(storage, PRIMARY_KEY);
   const backupRaw = safeGetItem(storage, BACKUP_KEY);
-  const primary = parseRooms(primaryRaw).filter(isRecoverableStoredRoom);
-  const backup = parseRooms(backupRaw).filter(isRecoverableStoredRoom);
+  const parsedPrimary = parseRooms(primaryRaw);
+  const parsedBackup = parseRooms(backupRaw);
+  const primary = parsedPrimary.rooms.filter(isRecoverableStoredRoom);
+  const backup = parsedBackup.rooms.filter(isRecoverableStoredRoom);
   const merged = mergeStoredRooms(primary, backup);
-  const serialized = JSON.stringify(merged);
+  const serialized = serializeStoredRooms(merged);
+  if (parsedPrimary.malformed && primaryRaw) safeSetItem(storage, `${CORRUPT_KEY_PREFIX}${Date.now()}-primary`, primaryRaw);
+  if (parsedBackup.malformed && backupRaw) safeSetItem(storage, `${CORRUPT_KEY_PREFIX}${Date.now()}-backup`, backupRaw);
   if (primaryRaw !== serialized) safeSetItem(storage, PRIMARY_KEY, serialized);
   return merged;
 }

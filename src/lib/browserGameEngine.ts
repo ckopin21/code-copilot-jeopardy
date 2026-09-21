@@ -8,7 +8,7 @@ import { finalWagerRules } from './finalWagerRules';
 import { gameModeAllowsDailyDoubles, gameModePenalizesTypedTimeout, isGameMode, responseModeForGameMode } from '../shared/gameModes';
 import { randomId } from './ids';
 import { normalizePlayerCustomization, type PlayerCustomizationFields } from '../shared/playerCustomization';
-import { recoverRoomStorage } from './roomStorageRecovery';
+import { isValidStoredRoomPayload, recoverRoomStorage, serializeStoredRooms } from './roomStorageRecovery';
 
 export interface RoomRecord {
   state: RoomState;
@@ -56,11 +56,6 @@ function loadRooms(): { rooms: RoomRecord[]; readable: boolean } {
   } catch {
     return { rooms: [], readable: false };
   }
-}
-function validStoredRooms(raw: string | null): boolean {
-  if (!raw) return false;
-  try { return Array.isArray(JSON.parse(raw)); }
-  catch { return false; }
 }
 function preferredDifficulty(value: number): Question['difficulty'] {
   if (value <= 200) return 'easy';
@@ -177,9 +172,9 @@ export class BrowserGameEngine {
   private persist(): void {
     try {
       for (const room of this.rooms.values()) room.state.revision = (room.state.revision ?? 0) + 1;
-      const serialized = JSON.stringify([...this.rooms.values()]);
+      const serialized = serializeStoredRooms([...this.rooms.values()]);
       const previous = localStorage.getItem(STORAGE_KEY);
-      if (previous && previous !== serialized && validStoredRooms(previous)) localStorage.setItem(STORAGE_BACKUP_KEY, previous);
+      if (previous && previous !== serialized && isValidStoredRoomPayload(previous)) localStorage.setItem(STORAGE_BACKUP_KEY, previous);
       localStorage.setItem(STORAGE_KEY, serialized);
       this.reportPersistence(true);
     } catch {

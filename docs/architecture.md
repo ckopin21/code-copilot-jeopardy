@@ -53,7 +53,7 @@ Final responses are private until review. A player may retain their own submitte
 
 Host credentials are stored under `blue-stage-host-room`. Player seat credentials are stored under `blue-stage-player`. A player credential contains a stable player ID, reconnect token, and room code. Leaving the phone UI intentionally does not discard those credentials, allowing the same browser to reclaim the reserved seat.
 
-The browser engine persists active rooms under `blue-stage-p2p-engine-v2`. The hard Reset Instance path clears Blue Stage client state and reloads a clean build. Normal New Game/Reset Game keeps the same room, host/player credentials, connection flags, permanent seats, and customization fields while resetting board, score, statistics, and game progression.
+The browser engine persists active rooms under `blue-stage-p2p-engine-v2` in a versioned `{ version: 1, rooms: [...] }` envelope. Legacy array saves are migrated on the next recovery cycle. Recovery validates records before comparing primary and backup freshness, selects the newest valid revision per room, and quarantines malformed raw payloads before repairing the primary. The hard Reset Instance path clears Blue Stage client state and reloads a clean build. Normal New Game/Reset Game keeps the same room, host/player credentials, connection flags, permanent seats, and customization fields while resetting board, score, statistics, and game progression.
 
 ## Question flow
 

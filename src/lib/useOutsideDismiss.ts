@@ -63,10 +63,13 @@ export function useOutsideDismiss(
     };
 
     document.addEventListener('pointerdown', onPointerDown, true);
-    if (dismissOnEscape) document.addEventListener('keydown', onKeyDown);
+    // A dialog may intentionally be nondismissible while it is still open. Its
+    // keyboard focus must remain contained in that case, so focus trapping is
+    // not contingent on Escape dismissal being enabled.
+    if (dismissOnEscape || trapFocus) document.addEventListener('keydown', onKeyDown);
     return () => {
       document.removeEventListener('pointerdown', onPointerDown, true);
-      if (dismissOnEscape) document.removeEventListener('keydown', onKeyDown);
+      if (dismissOnEscape || trapFocus) document.removeEventListener('keydown', onKeyDown);
       const restore = trigger ?? previousFocus;
       if (restore?.isConnected) queueMicrotask(() => restore.focus());
     };
