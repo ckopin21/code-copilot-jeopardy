@@ -503,6 +503,7 @@ async function createHostPeerOnce(roomCode: string, allowAuthorityTakeover: bool
         window.clearTimeout(hostSignalRetryTimer);
         hostSignalRetryTimer = null;
       }
+      hostSignalReconnectAttempts = 0;
       if (settled) {
         if (hostRoomCode === roomCode) emitRoom(roomCode);
         return;
@@ -1013,7 +1014,6 @@ window.setInterval(() => {
       for (const connection of connections) {
         try { connection.close(); } catch { /* best-effort runtime teardown */ }
       }
-      hostSignalReconnectAttempts = 0;
       connections.clear();
       identities.clear();
       playerConnections.clear();
