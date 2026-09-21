@@ -13,7 +13,10 @@
 }
 
 /* Text contracts: live identities and scores are always a single line. */
-:is(.showcase-player-card, .presentation-name-card) :is(.player-name strong, .presentation-player-main strong, [data-player-score], > b) {
+.showcase-player-card .player-name strong,
+.showcase-player-card [data-player-score],
+.presentation-name-card .presentation-player-main strong,
+.presentation-name-card > b {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -129,6 +132,17 @@
 
 @media (max-width: 760px) {
   :is(.player-phone-v2, .phone-join) button:not(.buzzer-button-v2) { min-block-size: var(--ui-control-min); }
+  /* The room-code field and its QR action form one control row, so they share
+     an explicit 44px box instead of competing min-height declarations. */
+  .phone-shell.phone-join {
+    --join-control-height: var(--ui-control-min);
+    --join-touch-target: var(--ui-control-min);
+  }
+  .phone-join .join-code-row > label > input,
+  .phone-join .join-code-row > .scan-qr-button {
+    block-size: var(--join-control-height);
+    min-block-size: var(--join-control-height);
+  }
   .showcase-player-card.player-card { --ui-avatar-card: 2.5rem; --ui-status-lane: 4.25rem; column-gap: var(--ui-space-1) !important; padding-inline: var(--ui-space-2) !important; }
   .showcase-player-card .player-status-stack :is(.streak-ribbon, .turn-beacon, .status-pill) { font-size: .42rem !important; }
 }
