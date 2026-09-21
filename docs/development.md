@@ -55,10 +55,12 @@ npm run packs:sync
 npm run typecheck
 npm run lint
 npm test
+npm run test:e2e
+npm run test:e2e:webkit
 npm run build
 ```
 
-`npm run dev`, `npm run typecheck`, `npm test`, and `npm run build` automatically regenerate the built-in pack registry first.
+`npm run dev`, `npm run typecheck`, `npm test`, and `npm run build` automatically regenerate the built-in pack registry first. `npm run test:e2e` runs the locked Playwright Chromium suite; `npm run test:e2e:webkit` runs the equivalent WebKit suite. Install browser binaries once with `npx playwright install chromium webkit` (CI uses `--with-deps`).
 
 A change is ready to deploy only after typecheck, lint, Vitest, production build, and applicable browser regressions pass. The main CI workflow installs the locked dependencies, runs typecheck/lint/unit tests/build, installs Playwright Chromium + WebKit, runs the complete Playwright suite in Chromium, then reruns the Safari/mobile smoke and player-card layout suites in WebKit. The Pages workflow builds/deploys the static site.
 
@@ -110,7 +112,7 @@ Do not hand-edit `src/packs/generatedRegistry.ts`. Add/copy a pack file and let 
 
 ## Testing expectations
 
-Regression tests should target the production browser engine and cover rule/state behavior rather than only visual markup. Important areas include:
+Regression tests should target the production browser engine and cover rule/state behavior rather than only visual markup. Deterministic `createSocketRuntime(...)` coverage exercises the actual request/response protocol with controlled Peer/DataConnection failures; browser suites provide rendered Chromium/WebKit evidence but do not claim physical-device or restrictive-NAT coverage. Important areas include:
 
 - room creation and capacity
 - Classic and Free Response mode behavior, including reading delay, simultaneous submissions, missing-response penalties, Group Miss Mercy, and confirm-to-score flow
