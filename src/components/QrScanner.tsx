@@ -87,8 +87,8 @@ export function QrScanner({ onResult, onClose }: { onResult: (value: string) => 
   }, [onResult]);
 
   return <div className="qr-scanner-backdrop" role="dialog" aria-modal="true" aria-label="Scan game QR code">
-    <section ref={cardRef} className="qr-scanner-card">
-      <button type="button" className="modal-close" onClick={onClose} aria-label="Close camera">×</button>
+    <section ref={cardRef} tabIndex={-1} className="qr-scanner-card">
+      <button type="button" className="modal-close" data-modal-initial-focus onClick={onClose} aria-label="Close camera">×</button>
       <div className="section-kicker">SCAN JOIN QR</div>
       <h2>Point your camera at the host QR code</h2>
       <div className="qr-camera-frame">

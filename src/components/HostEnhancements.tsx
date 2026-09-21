@@ -245,8 +245,8 @@ export function HostEnhancements() {
     </aside>}
 
     {preflightOpen && <div className="enhancement-modal-backdrop">
-      <section ref={preflightRef} className="preflight-modal" role="dialog" aria-modal="true" aria-label="Controller connection check">
-        <button className="enhancement-modal-close" onClick={() => setPreflightOpen(false)} aria-label="Close">×</button>
+      <section ref={preflightRef} tabIndex={-1} className="preflight-modal" role="dialog" aria-modal="true" aria-label="Controller connection check">
+        <button className="enhancement-modal-close" data-modal-initial-focus onClick={() => setPreflightOpen(false)} aria-label="Close">×</button>
         <div className="section-kicker gold">PRE-GAME CHECK</div><h2>Controllers ready?</h2><p>Phones should be connected and checking in recently. Test sends a sound/haptic confirmation to every reachable controller.</p>
         <div className="preflight-list">{room.players.length ? room.players.map((player) => {
           const item = healthMap.get(player.id);
