@@ -505,7 +505,11 @@ async function createHostPeerOnce(roomCode: string, allowAuthorityTakeover: bool
       }
       hostSignalReconnectAttempts = 0;
       if (settled) {
-        if (hostRoomCode === roomCode) emitRoom(roomCode);
+        if (hostPeer === peer && hostRoomCode === roomCode) {
+          socket.connected = true;
+          emitLocal('connect');
+          emitRoom(roomCode);
+        }
         return;
       }
       if (!canClaimHostAuthority(roomCode, hostAuthorityId, allowAuthorityTakeover)) {
@@ -525,6 +529,7 @@ async function createHostPeerOnce(roomCode: string, allowAuthorityTakeover: bool
       if (previousPeer && previousPeer !== peer) { try { previousPeer.destroy(); } catch { /* ignore */ } }
       peer.on('connection', attachHostConnection);
       peer.on('disconnected', () => {
+        if (hostPeer !== peer) return;
         socket.connected = false;
         emitLocal('disconnect');
         scheduleHostSignalReconnect();
