@@ -1,9 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { HostAppV3 } from './components/HostAppV3';
-import { HostEnhancements } from './components/HostEnhancements';
-import { PlayerApp } from './components/PlayerApp';
-import { PlayerEnhancements } from './components/PlayerEnhancements';
-import { PresentationApp } from './components/PresentationApp';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { MusicTrackSelect } from './components/BackgroundMusicPicker';
 import { audio } from './lib/audio';
 import { DEFAULT_MUSIC_GAIN } from './lib/musicVolumePolicy';
@@ -19,6 +14,12 @@ import './interaction-polish.css';
 import './bugfix-polish.css';
 import './menu-polish.css';
 import './enhancement-polish.css';
+
+const HostAppV3 = lazy(async () => import('./components/HostAppV3').then((module) => ({ default: module.HostAppV3 })));
+const HostEnhancements = lazy(async () => import('./components/HostEnhancements').then((module) => ({ default: module.HostEnhancements })));
+const PlayerApp = lazy(async () => import('./components/PlayerApp').then((module) => ({ default: module.PlayerApp })));
+const PlayerEnhancements = lazy(async () => import('./components/PlayerEnhancements').then((module) => ({ default: module.PlayerEnhancements })));
+const PresentationApp = lazy(async () => import('./components/PresentationApp').then((module) => ({ default: module.PresentationApp })));
 
 const HOST_KEY = 'blue-stage-host-room';
 const AUDIO_75_MIGRATION_KEY = 'blue-stage-audio-default-75-v1';
@@ -114,10 +115,14 @@ export default function App() {
 
   const params = useMemo(() => new URL(routeHref).searchParams, [routeHref]);
   const mode = params.get('mode');
-  if (mode === 'host') return <><HostAppV3/><HostEnhancements/></>;
-  if (mode === 'player') return <><PlayerApp/><PlayerEnhancements/></>;
-  if (mode === 'presentation') return <PresentationApp/>;
+  if (mode === 'host') return <Suspense fallback={<RouteLoading label="Loading host game…"/>}><HostAppV3/><HostEnhancements/></Suspense>;
+  if (mode === 'player') return <Suspense fallback={<RouteLoading label="Loading controller…"/>}><PlayerApp/><PlayerEnhancements/></Suspense>;
+  if (mode === 'presentation') return <Suspense fallback={<RouteLoading label="Loading presentation…"/>}><PresentationApp/></Suspense>;
   return <Menu onNavigate={navigate}/>;
+}
+
+function RouteLoading({ label }: { label: string }) {
+  return <main className="presentation-shell presentation-boot" role="status" aria-live="polite"><div className="brand-mark"><span>BLUE STAGE</span><strong>TRIVIA</strong></div><p>{label}</p></main>;
 }
 
 function Menu({ onNavigate }: { onNavigate: (mode: AppMode, fresh?: boolean) => Promise<void> }) {
