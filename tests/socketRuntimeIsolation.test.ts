@@ -643,6 +643,30 @@ describe('production socket runtime isolation', () => {
     firstHost.destroy(); replacementHost.destroy(); player.destroy();
   });
 
+  it('keeps simultaneous authoritative rooms and their player traffic isolated', async () => {
+    const { createSocketRuntime } = await import('../src/lib/socket');
+    DeterministicPeer.peers.clear();
+    DeterministicPeer.clientConnections = [];
+    const peerFactory = (id: string | undefined) => new DeterministicPeer(id) as never;
+    const firstEngine = new BrowserGameEngine();
+    const secondEngine = new BrowserGameEngine();
+    location.search = '?mode=host';
+    const firstHost = createSocketRuntime({ createPeer: peerFactory, createEngine: () => firstEngine, installBrowserHooks: false });
+    const secondHost = createSocketRuntime({ createPeer: peerFactory, createEngine: () => secondEngine, installBrowserHooks: false });
+    const firstRoom = await firstHost.emitAck<{ roomCode: string; hostToken: string }>('room:create', { settings: { dailyDoublesEnabled: false, finalRoundEnabled: false } });
+    const secondRoom = await secondHost.emitAck<{ roomCode: string; hostToken: string }>('room:create', { settings: { dailyDoublesEnabled: false, finalRoundEnabled: false } });
+    location.search = '?mode=player';
+    const firstPlayer = createSocketRuntime({ createPeer: peerFactory, installBrowserHooks: false });
+    const secondPlayer = createSocketRuntime({ createPeer: peerFactory, installBrowserHooks: false });
+    await firstPlayer.emitAck('player:join', { roomCode: firstRoom.roomCode, name: 'First room', avatar: '🚀', accent: '#93c5fd' });
+    await secondPlayer.emitAck('player:join', { roomCode: secondRoom.roomCode, name: 'Second room', avatar: '🛰️', accent: '#f9a8d4' });
+    location.search = '?mode=host';
+    await firstHost.emitAck('host:start-game', { roomCode: firstRoom.roomCode, hostToken: firstRoom.hostToken });
+    expect(firstEngine.snapshot(firstRoom.roomCode)).toMatchObject({ phase: 'board', players: [expect.objectContaining({ name: 'First room' })] });
+    expect(secondEngine.snapshot(secondRoom.roomCode)).toMatchObject({ phase: 'lobby', players: [expect.objectContaining({ name: 'Second room' })] });
+    firstHost.destroy(); secondHost.destroy(); firstPlayer.destroy(); secondPlayer.destroy();
+  });
+
   it('enforces and rotates presentation capabilities through the production socket protocol', async () => {
     const { createSocketRuntime } = await import('../src/lib/socket');
     DeterministicPeer.peers.clear();
