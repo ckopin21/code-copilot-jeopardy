@@ -386,10 +386,17 @@ test('dismissible host panels preserve inside clicks and close outside', async (
   await page.getByRole('button', { name: 'Join QR', exact: true }).click();
   const joinModal = page.locator('.expanded-qr-modal');
   await expect(joinModal).toBeVisible();
+  const closeJoin = joinModal.getByRole('button', { name: 'Close' });
+  await expect(closeJoin).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(joinModal.getByRole('button', { name: 'Rotate display link' })).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(closeJoin).toBeFocused();
   await joinModal.click({ position: { x: 40, y: 40 } });
   await expect(joinModal).toBeVisible();
-  await page.locator('.modal-backdrop').click({ position: { x: 10, y: 10 } });
+  await page.keyboard.press('Escape');
   await expect(joinModal).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Join QR', exact: true })).toBeFocused();
 
   const hostControls = page.getByRole('button', { name: 'Open host controls' });
   await hostControls.click();
