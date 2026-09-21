@@ -1,7 +1,9 @@
 import { useLayoutEffect, useRef, type CSSProperties } from 'react';
 import { AVATAR_CATALOG, getAvatarOption, type PlayerFrameStyle } from '../shared/playerCustomization';
 
-const clampGlyphOffset = (value: number) => Math.max(-4, Math.min(4, value));
+// Emoji metrics differ markedly between Segoe UI Emoji, Apple Color Emoji, and
+// Noto. Keep the correction bounded, but allow enough range for compact cards.
+const clampGlyphOffset = (value: number) => Math.max(-8, Math.min(8, value));
 
 export function PlayerAvatar({
   avatarId,

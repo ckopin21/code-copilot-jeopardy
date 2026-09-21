@@ -4,28 +4,36 @@ import { describe, expect, it } from 'vitest';
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
 
 describe('player card layout regression', () => {
-  it('routes every Fire/Cold state through the reserved status stack', () => {
+  it('routes every live player state through the shared status primitive', () => {
     const component = read('../src/components/PlayerStrip.tsx');
-    expect(component).toContain('hasStreakStatus && <div className="player-status-stack">{streakBadge}{turnBadge}</div>');
+    const primitive = read('../src/components/PlayerStatusStack.tsx');
+    expect(component).toContain("import { PlayerStatusStack } from './PlayerStatusStack';");
+    expect(component).toContain('<PlayerStatusStack');
+    expect(component).toContain('streak={streakBadge}');
+    expect(component).toContain('turn={turnBadge}');
+    expect(primitive).toContain('data-status-count');
+    expect(primitive).toContain('!hasStatus && fallback');
     expect(component).toContain('<strong title={player.name}>{player.name}</strong>');
-    expect(component).not.toContain('isTurn && hasStreakStatus\n              ? <div className="player-status-stack">');
+    expect(component).not.toContain('position: absolute');
   });
 
-  it('keeps status stacks out of intrinsic card sizing', () => {
-    const css = read('../src/ui-layout-audit-fixes.css');
+  it('keeps status stacks in the owned grid lane rather than offsetting them', () => {
+    const css = read('../src/ui-layout-contract.css');
     const statusStart = css.indexOf('.showcase-player-card .player-status-stack {');
-    const statusEnd = css.indexOf('/* Used-result tiles reserve', statusStart);
+    const statusEnd = css.indexOf('.showcase-player-card .player-status-stack :is', statusStart);
     const statusRules = css.slice(statusStart, statusEnd);
 
-    expect(statusRules).toContain('position: absolute !important;');
-    expect(statusRules).toContain('transform: translateY(-50%) !important;');
-    expect(statusRules).toContain('padding-right: 112px !important;');
-    expect(statusRules).toContain('overflow: visible;');
+    expect(css).toContain("grid-template-areas: 'avatar main status'");
+    expect(statusRules).toContain('grid-area: status !important;');
+    expect(statusRules).toContain('position: static !important;');
+    expect(statusRules).toContain('flex-direction: column;');
+    expect(statusRules).toContain('gap: var(--ui-status-gap);');
+    expect(statusRules).toContain('overflow: visible !important;');
     expect(statusRules).toContain('background: transparent !important;');
     expect(statusRules).toContain('box-shadow: none !important;');
     expect(statusRules).toContain('filter: none !important;');
     expect(statusRules).toContain('backdrop-filter: none !important;');
-    expect(statusRules).not.toContain('position: static !important;\n  inset: auto !important;\n  transform: none !important;\n  grid-column: 3;');
+    expect(statusRules).not.toContain('position: absolute');
   });
 
   it('keeps the avatar shell centered and uses rendered glyph metrics instead of a platform-specific offset', () => {
@@ -74,14 +82,13 @@ describe('player card layout regression', () => {
     expect(css).toContain('height: 72px;');
   });
 
-  it('keeps compact host streak pills readable without changing card height', () => {
-    const css = read('../src/ui-layout-audit-fixes.css');
-    expect(css).toContain('.showcase-host:not(.host-presentation-mode) .showcase-player-card .player-status-stack');
-    expect(css).toContain('width: 72px;');
-    expect(css).toContain('.streak-ribbon em {\n    display: none !important;');
-    expect(css).toContain('min-width: max-content;');
-    expect(css).toContain('overflow: visible !important;');
-    expect(css).toContain('text-overflow: clip !important;');
+  it('defines one responsive status lane instead of per-state padding offsets', () => {
+    const css = read('../src/ui-layout-contract.css');
+    expect(css).toContain('--ui-status-lane: clamp(4.5rem, 10vw, 8.75rem);');
+    expect(css).toContain('--ui-status-lane: 4.25rem;');
+    expect(css).toContain('.showcase-player-card .player-status-stack .streak-ribbon > em { display: none; }');
+    expect(css).toContain('max-inline-size: 100%;');
+    expect(css).toContain('text-overflow: ellipsis;');
   });
 
   it('gives used-result player names enough line box for descenders in presentation mode', () => {

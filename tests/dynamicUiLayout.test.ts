@@ -6,32 +6,30 @@ const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf
 describe('dynamic UI layout regression', () => {
   it('loads the comprehensive layout repairs last', () => {
     const main = read('../src/main.tsx');
-    expect(main.indexOf("import './ui-layout-audit-fixes.css';"))
-      .toBeGreaterThan(main.indexOf("import './normal-host-layout.css';"));
+    expect(main.indexOf("import './ui-layout-contract.css';"))
+      .toBeGreaterThan(main.indexOf("import './ui-layout-audit-fixes.css';"));
   });
 
   it('keeps live player identities single-line while long-form result and podium text may wrap', () => {
-    const css = read('../src/ui-layout-audit-fixes.css');
+    const css = read('../src/ui-layout-contract.css');
+    const longFormCss = read('../src/ui-layout-audit-fixes.css');
     for (const selector of [
-      '.presentation-player-main strong',
+      '.player-name strong',
       '.presentation-player-main small',
-      '.showcase-player-card .player-name',
-      '.showcase-player-card .player-name strong',
-      '.podium-name',
-      '.question-tile.used.has-result .used-result-chip b'
+      '[data-player-score]'
     ]) expect(css).toContain(selector);
-    expect(css).toContain('text-overflow: ellipsis !important;');
-    expect(css).toContain('white-space: nowrap !important;');
-    expect(css).toContain('text-overflow: clip !important;');
-    expect(css).toContain('white-space: normal !important;');
+    expect(css).toContain('text-overflow: ellipsis;');
+    expect(css).toContain('white-space: nowrap;');
+    expect(longFormCss).toContain('.podium-name');
+    expect(longFormCss).toContain('white-space: normal !important;');
   });
 
   it('isolates stacked player status from card sizing while result modifiers keep dedicated flow rows', () => {
-    const css = read('../src/ui-layout-audit-fixes.css');
+    const css = read('../src/ui-layout-contract.css');
     expect(css).toContain('.showcase-player-card .player-status-stack');
-    expect(css).toContain('position: absolute !important;');
-    expect(css).toContain('transform: translateY(-50%) !important;');
-    expect(css).toContain('grid-template-rows: auto minmax(0, 1fr) !important;');
+    expect(css).toContain('grid-template-areas: \'avatar main status\' !important;');
+    expect(css).toContain('grid-area: status !important;');
+    expect(css).toContain('position: static !important;');
     expect(css).toContain('flex-wrap: wrap !important;');
   });
 

@@ -1,0 +1,137 @@
+/* Blue Stage layout contract. Surface owns outer spacing; components own their interior. */
+:root {
+  --ui-space-1: 4px;
+  --ui-space-2: 8px;
+  --ui-space-3: 12px;
+  --ui-space-4: 16px;
+  --ui-radius-control: 10px;
+  --ui-radius-card: 14px;
+  --ui-control-min: 44px;
+  --ui-status-gap: var(--ui-space-1);
+  --ui-status-lane: clamp(4.5rem, 10vw, 8.75rem);
+  --ui-avatar-card: clamp(2.5rem, 5vw, 4rem);
+}
+
+/* Text contracts: live identities and scores are always a single line. */
+:is(.showcase-player-card, .presentation-name-card) :is(.player-name strong, .presentation-player-main strong, [data-player-score], > b) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+
+/* Three explicit tracks prevent status changes from moving identity content. */
+.showcase-player-card.player-card {
+  display: grid !important;
+  grid-template-columns: var(--ui-avatar-card) minmax(0, 1fr) var(--ui-status-lane) !important;
+  grid-template-areas: 'avatar main status' !important;
+  align-items: center !important;
+  column-gap: var(--ui-space-2) !important;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.showcase-player-card .player-avatar-large {
+  grid-area: avatar;
+  inline-size: var(--ui-avatar-card) !important;
+  block-size: var(--ui-avatar-card) !important;
+  min-inline-size: 0;
+  min-block-size: 0;
+  margin: 0 !important;
+  align-self: center !important;
+  justify-self: center !important;
+}
+
+.showcase-player-card .player-card-main { grid-area: main; min-width: 0; align-self: center; }
+
+/* PlayerStatusStack owns order and inner spacing; its parent owns this track. */
+.showcase-player-card .player-status-stack {
+  grid-area: status !important;
+  position: static !important;
+  inset: auto !important;
+  transform: none !important;
+  display: flex !important;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  align-self: stretch;
+  justify-self: stretch;
+  gap: var(--ui-status-gap);
+  inline-size: 100%;
+  min-inline-size: 0;
+  max-inline-size: none !important;
+  overflow: visible !important;
+  pointer-events: none;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  filter: none !important;
+  backdrop-filter: none !important;
+}
+
+.showcase-player-card .player-status-stack :is(.streak-ribbon, .turn-beacon, .status-pill) {
+  position: static !important;
+  inset: auto !important;
+  transform: none !important;
+  box-sizing: border-box;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  max-inline-size: 100%;
+  min-block-size: 1.65em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.1;
+}
+
+.showcase-player-card .player-status-stack .streak-ribbon { min-inline-size: 0; padding: 3px 7px !important; }
+.showcase-player-card .player-status-stack .streak-ribbon > b { min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.showcase-player-card .player-status-stack .streak-ribbon > em { display: none; }
+.showcase-player-card .player-status-stack .turn-beacon { min-inline-size: 0; padding: 3px 6px !important; }
+.showcase-player-card .status-pill.neutral { padding: 3px 7px; border: 1px solid rgba(185, 215, 231, .35); border-radius: 999px; color: #b9d7e7; font-size: .58rem; font-weight: 900; letter-spacing: .08em; }
+
+/* The lane replaces every historical absolute turn/status placement. */
+.showcase-player-card:is(.is-fire, .is-cold), .showcase-player-card.has-turn-label { padding-right: var(--ui-space-3) !important; }
+
+/* Remote Presentation and host fullscreen use the same three-track card. */
+.presentation-shell .showcase-player-card.player-card,
+.showcase-host.host-presentation-mode > .showcase-player-strip .showcase-player-card.player-card {
+  --ui-avatar-card: clamp(3.1rem, 4.8vw, 4rem);
+  --ui-status-lane: clamp(5.5rem, 10vw, 9rem);
+  min-height: clamp(6rem, 13vh, 8.875rem) !important;
+  height: auto !important;
+  padding: var(--ui-space-3) var(--ui-space-4) !important;
+}
+
+/* Compact presentation identities share the avatar, text, and score contracts. */
+.presentation-name-card {
+  display: grid;
+  grid-template-columns: var(--ui-avatar-card) minmax(0, 1fr) max-content;
+  align-items: center;
+  gap: var(--ui-space-2);
+  min-height: 58px;
+  height: auto;
+  padding: var(--ui-space-2) var(--ui-space-3) !important;
+  box-sizing: border-box;
+}
+.presentation-name-card .presentation-player-avatar { inline-size: var(--ui-avatar-card); block-size: var(--ui-avatar-card); min-inline-size: 0; min-block-size: 0; aspect-ratio: 1; align-self: center; justify-self: center; }
+.presentation-name-card .presentation-player-main { min-width: 0; align-self: center; }
+.presentation-player-main small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.1; }
+
+/* Board result modifier labels are ordinary flow siblings, never offset from the value. */
+:is(.presentation-board, .board-presentation-mode) .used-tile-topline { display: flex !important; position: static !important; flex-wrap: wrap; align-items: center; justify-content: center; gap: var(--ui-space-1) var(--ui-space-2); min-height: 0 !important; }
+:is(.presentation-board, .board-presentation-mode) .used-tile-value,
+:is(.presentation-board, .board-presentation-mode) .used-question-modifiers { position: static !important; inset: auto !important; transform: none !important; max-inline-size: 100% !important; }
+:is(.presentation-board, .board-presentation-mode) .used-question-modifiers { display: flex !important; flex: 0 1 auto; flex-wrap: wrap !important; justify-content: center !important; gap: var(--ui-space-1); overflow: visible !important; }
+
+@media (max-width: 760px) {
+  :is(.player-phone-v2, .phone-join) button:not(.buzzer-button-v2) { min-block-size: var(--ui-control-min); }
+  .showcase-player-card.player-card { --ui-avatar-card: 2.5rem; --ui-status-lane: 4.25rem; column-gap: var(--ui-space-1) !important; padding-inline: var(--ui-space-2) !important; }
+  .showcase-player-card .player-status-stack :is(.streak-ribbon, .turn-beacon, .status-pill) { font-size: .42rem !important; }
+}
+
+@media (max-width: 480px) { .presentation-name-strip[data-player-count] { grid-template-columns: 1fr !important; } }
+@media (prefers-reduced-motion: reduce) { .showcase-player-card .player-status-stack .streak-ribbon { animation: none !important; } }

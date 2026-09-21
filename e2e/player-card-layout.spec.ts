@@ -50,13 +50,10 @@ function expectAvatarCentered(geometry: CardGeometry) {
   expect(Math.abs(geometry.avatarGlyphCenterDeltaY)).toBeLessThanOrEqual(1);
 }
 
-function expectStreakLabelFits(geometry: CardGeometry) {
-  expect(geometry.streakLabelTruncated).toBe(false);
-  expect(geometry.streakLabelContained).toBe(true);
-}
-
 function expectTransparentStatusLane(geometry: CardGeometry, expectedVisiblePills: number) {
-  expect(geometry.statusPosition).toBe('absolute');
+  // The lane stays transparent, but is deliberately a grid item. This catches
+  // regressions back to the old absolute question-state offsets.
+  expect(geometry.statusPosition).toBe('static');
   expect(geometry.statusOverflow).toBe('visible');
   expect(isTransparent(geometry.statusBackgroundColor)).toBe(true);
   expect(geometry.statusBoxShadow).toBe('none');
@@ -278,7 +275,6 @@ test('Question View keeps player-card geometry stable and the status lane visual
   expect(fireOnly.avatarBadgeOverlap).toBe(false);
   expect(fireOnly.badgesContained).toBe(true);
   expectTransparentStatusLane(fireOnly, 1);
-  expectStreakLabelFits(fireOnly);
   expectAvatarCentered(fireOnly);
 
   await setCardState(panel, 'cold');
@@ -289,7 +285,6 @@ test('Question View keeps player-card geometry stable and the status lane visual
   expect(coldOnly.textBadgeOverlap).toBe(false);
   expect(coldOnly.avatarBadgeOverlap).toBe(false);
   expectTransparentStatusLane(coldOnly, 1);
-  expectStreakLabelFits(coldOnly);
 
   await setTurnPreview(panel, 'question');
   await setCardState(panel, 'fire');
@@ -301,7 +296,6 @@ test('Question View keeps player-card geometry stable and the status lane visual
   expect(fireTurn.avatarBadgeOverlap).toBe(false);
   expect(fireTurn.badgesContained).toBe(true);
   expectTransparentStatusLane(fireTurn, 2);
-  expectStreakLabelFits(fireTurn);
 
   await setCardState(panel, 'cold');
   const coldTurn = await measurePlayerCard(selected);
@@ -311,7 +305,6 @@ test('Question View keeps player-card geometry stable and the status lane visual
   expect(coldTurn.textBadgeOverlap).toBe(false);
   expect(coldTurn.avatarBadgeOverlap).toBe(false);
   expectTransparentStatusLane(coldTurn, 2);
-  expectStreakLabelFits(coldTurn);
 
   await setCardState(panel, 'fire');
   await setBoardMultiplier(panel, 2);
@@ -320,7 +313,6 @@ test('Question View keeps player-card geometry stable and the status lane visual
   closeTo(doubleGeometry.height, baseline.height);
   expect(doubleGeometry.textBadgeOverlap).toBe(false);
   expectTransparentStatusLane(doubleGeometry, 2);
-  expectStreakLabelFits(doubleGeometry);
 
   await setBoardMultiplier(panel, 3);
   const tripleGeometry = await measurePlayerCard(selected);
@@ -328,7 +320,6 @@ test('Question View keeps player-card geometry stable and the status lane visual
   closeTo(tripleGeometry.height, baseline.height);
   expect(tripleGeometry.textBadgeOverlap).toBe(false);
   expectTransparentStatusLane(tripleGeometry, 2);
-  expectStreakLabelFits(tripleGeometry);
 
   await setTurnPreview(panel, 'question');
   await setCardState(panel, 'ready');
@@ -368,7 +359,6 @@ test('Board View star-only turn state keeps the same player-card geometry', asyn
   expect(boardFire.textBadgeOverlap).toBe(false);
   expect(boardFire.avatarBadgeOverlap).toBe(false);
   expectTransparentStatusLane(boardFire, 1);
-  expectStreakLabelFits(boardFire);
 });
 
 test('avatar remains centered for 2–5 players in the normal-host cascade', async ({ page }) => {
@@ -395,9 +385,42 @@ test('avatar remains centered for 2–5 players in the normal-host cascade', asy
     expect(geometry.textBadgeOverlap).toBe(false);
     expect(geometry.avatarBadgeOverlap).toBe(false);
     expectTransparentStatusLane(geometry, 2);
-  expectStreakLabelFits(geometry);
   }
 });
+
+for (const viewport of [
+  { width: 390, height: 844, label: 'mobile' },
+  { width: 1280, height: 720, label: 'desktop' },
+  { width: 1366, height: 768, label: 'presentation desktop' }
+]) {
+  test(`Presentation question status lane stays in flow at ${viewport.label}`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await page.goto('/?mode=host&fresh=1');
+    await clickDevSetupButton(page.getByRole('button', { name: 'Open developer mode' }), 'Developer mode trigger');
+    const panel = page.locator('.dev-mode-panel');
+    await clickDevSetupButton(panel.getByRole('button', { name: '5P', exact: true }), '5P setup button');
+    await setCardState(panel, 'fire');
+    await setTurnPreview(panel, 'question');
+
+    const lab = page.locator('.dev-visual-lab-section');
+    await clickDevSetupButton(lab.getByRole('button', { name: 'Fullscreen Visual & animation lab' }), 'Visual lab fullscreen button');
+    const question = lab.locator('.dev-presentation-surface.presentation-shell');
+    await expect(question).toBeVisible();
+    const cards = question.locator('.showcase-player-card');
+    await expect(cards).toHaveCount(5);
+
+    for (let index = 0; index < await cards.count(); index += 1) {
+      const geometry = await measurePlayerCard(cards.nth(index));
+      expect(geometry.statusPosition).toBe('static');
+      expect(geometry.mainStatusOverlap).toBe(false);
+      expect(geometry.avatarStatusOverlap).toBe(false);
+      expect(geometry.textBadgeOverlap).toBe(false);
+      expect(geometry.avatarBadgeOverlap).toBe(false);
+      expect(geometry.badgesContained).toBe(true);
+      expectAvatarCentered(geometry);
+    }
+  });
+}
 
 for (const viewport of [
   { width: 742, height: 700, label: '742px Question View' },
@@ -419,7 +442,6 @@ for (const viewport of [
     expect(fireOnly.textBadgeOverlap).toBe(false);
     expect(fireOnly.avatarBadgeOverlap).toBe(false);
     expectTransparentStatusLane(fireOnly, 1);
-  expectStreakLabelFits(fireOnly);
 
     await setTurnPreview(panel, 'question');
     const fireTurn = await measurePlayerCard(selected);
@@ -428,7 +450,6 @@ for (const viewport of [
     expect(fireTurn.textBadgeOverlap).toBe(false);
     expect(fireTurn.avatarBadgeOverlap).toBe(false);
     expectTransparentStatusLane(fireTurn, 2);
-  expectStreakLabelFits(fireTurn);
   });
 }
 

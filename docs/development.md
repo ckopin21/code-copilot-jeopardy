@@ -133,6 +133,8 @@ Regression tests should target the production browser engine and cover rule/stat
 - Final participant selection, wager fairness/protection rules, answer lock, timeout, disconnects, privacy, review, recap
 - player customization consistency across host, phone, presentation, score effects, and recap
 - rendered player-card geometry/status/avatar regressions in Chromium and WebKit
+- the shared three-track player identity contract: Fire/Cold and question-turn pills must remain in the normal-flow status lane, preserve card geometry, stay contained, and never overlap an avatar, name, or score
+- presentation board result modifiers: used values and modifier pills must remain centered flow siblings rather than resolution-specific positioned overlays
 - reset behavior
 
 Visual interaction changes that depend on DOM geometry, WebRTC, camera APIs, vibration, or Web Audio still require browser/device smoke testing in addition to unit tests.

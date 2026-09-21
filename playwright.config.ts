@@ -15,7 +15,9 @@ export default defineConfig({
     { name: 'webkit', use: { browserName: 'webkit' } }
   ],
   webServer: {
-    command: 'node node_modules/vite/bin/vite.js --host 127.0.0.1 --port 4173',
+    // Use the same Node binary that launched Playwright. This keeps local desktop
+    // runs reliable when Node is supplied by a managed runtime instead of PATH.
+    command: `${process.execPath} node_modules/vite/bin/vite.js --host 127.0.0.1 --port 4173`,
     url: 'http://127.0.0.1:4173',
     reuseExistingServer: false
   }
