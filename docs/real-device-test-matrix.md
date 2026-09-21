@@ -8,6 +8,8 @@ Deploy the exact commit under test over HTTPS. Record commit, deployed URL, brow
 
 ## Test cases
 
+Use a Windows/desktop HTTPS host in Chrome or Edge unless a row says otherwise. Start every case with a fresh room, record the room code separately from credentials, and retain a screen recording plus a redacted diagnostic-event export. A pass requires the stated behavior **and** no duplicate roster entry; a failure is any permanent Connecting/Reconnecting state, lost authoritative state, or a room that rejects a new controller after recovery.
+
 | Scenario | Action | Expected result | Record |
 | --- | --- | --- | --- |
 | Same Wi-Fi iPhone Safari | Join, buzz, score, lock briefly, return | Same seat reconnects; score/question remain | reconnect time, duplicate seat, state preserved |
@@ -18,6 +20,14 @@ Deploy the exact commit under test over HTTPS. Record commit, deployed URL, brow
 | Host interruption | Hide/restore, refresh/recover host, temporary network loss | Saved room recoverable; controllers reclaim state | room reachability, new join afterward |
 | Mass recovery | Drop two controllers during active clue; restore together | No duplicates; scores/question retained; third player joins | all recovery times, third join result |
 | Presentation | Join display, rotate capability, retry old/new URLs | Old display closes; new works; players/privacy unaffected | display count, privacy result |
+
+### Exact lifecycle procedure
+
+For iPhone Safari and Android Chrome, run each action with two joined controllers during an active clue: switch apps for 10 seconds, background for 60 seconds, lock/unlock for 60 seconds, reload the controller, then repeat after 5 minutes where the operating system permits. Return to the page and wait up to 20 seconds for an existing healthy channel or a restored reserved seat. Save the player screen, host roster, current clue/score, and safe events (`peer-*`, `data-*`, `reconnect-*`, `generation-superseded`).
+
+For Wi-Fi-to-cellular, cellular-to-Wi-Fi, and airplane-mode tests, make the switch while the buzzer is open. For host loss, disable the host network for 30 seconds or reload the host tab, restore it, then require both controllers to recover and a third new controller to join. For failed-first-retry, restore the network only after one failed automatic reconnect attempt has been visibly recorded.
+
+For presentation, use a second screen or browser with the current presentation URL, verify that Final answers are absent before host reveal, rotate the capability from the host, show that the old URL cannot reconnect, and show that the replacement URL can. Capture only redacted URLs/screenshots.
 
 For every row record: environment, browser/device, host/controller networks, expected and observed result, reconnect time, duplicated players (yes/no), state preserved (yes/no), room still joinable (yes/no), new player joins (yes/no), and safe diagnostic kinds. Classify failures as signaling, ICE/TURN, data channel, identity authorization, host authority, or lifecycle recovery; do not paste secrets into reports.
 
