@@ -566,6 +566,54 @@ describe('production socket runtime isolation', () => {
     host.destroy(); one.destroy(); two.destroy();
   });
 
+  it('preserves Final credentials and rejects duplicate or stale answer traffic through the production protocol', async () => {
+    const { createSocketRuntime } = await import('../src/lib/socket');
+    DeterministicPeer.peers.clear();
+    DeterministicPeer.clientConnections = [];
+    const peerFactory = (id: string | undefined) => new DeterministicPeer(id) as never;
+    const engine = new BrowserGameEngine();
+    location.search = '?mode=host';
+    const host = createSocketRuntime({ createPeer: peerFactory, createEngine: () => engine, installBrowserHooks: false });
+    const room = await host.emitAck<{ roomCode: string; hostToken: string }>('room:create', { settings: { gameLength: 'quick', dailyDoublesEnabled: false, finalRoundEnabled: true, timerSeconds: 15 } });
+    location.search = '?mode=player';
+    const player = createSocketRuntime({ createPeer: peerFactory, installBrowserHooks: false });
+    const identity = await player.emitAck<{ playerId: string; reconnectToken: string }>('player:join', { roomCode: room.roomCode, name: 'Finalist', avatar: '🚀', accent: '#93c5fd' });
+    location.search = '?mode=host';
+    await host.emitAck('host:start-game', { roomCode: room.roomCode, hostToken: room.hostToken });
+    while (engine.snapshot(room.roomCode).phase === 'board') {
+      const question = engine.snapshot(room.roomCode).board!.questions.find((candidate) => !candidate.used)!;
+      await host.emitAck('host:select-question', { roomCode: room.roomCode, hostToken: room.hostToken, questionId: question.questionId });
+      await host.emitAck('host:reveal-answer', { roomCode: room.roomCode, hostToken: room.hostToken });
+      await host.emitAck('host:advance-board', { roomCode: room.roomCode, hostToken: room.hostToken });
+    }
+    expect(engine.snapshot(room.roomCode).phase).toBe('final-category');
+    await host.emitAck('host:begin-final-wagers', { roomCode: room.roomCode, hostToken: room.hostToken });
+    const staleWire = DeterministicPeer.clientConnections[0]!;
+    staleWire.close();
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    expect(player.socket.connected).toBe(true);
+    location.search = '?mode=player';
+    await player.emitAck('player:final-wager', { roomCode: room.roomCode, ...identity, wager: 0, gameStartedAt: engine.snapshot(room.roomCode).gameStartedAt });
+    location.search = '?mode=host';
+    await host.emitAck('host:open-final-question', { roomCode: room.roomCode, hostToken: room.hostToken });
+    const liveWire = DeterministicPeer.clientConnections.at(-1)!;
+    const responses: Array<{ ok?: boolean }> = [];
+    liveWire.on('data', (message: { kind?: string; requestId?: string; ok?: boolean }) => {
+      if (message.kind === 'response' && message.requestId === 'duplicate-final-answer') responses.push(message);
+    });
+    const answer = { kind: 'request', requestId: 'duplicate-final-answer', event: 'player:final-answer', payload: { roomCode: room.roomCode, ...identity, answer: 'answer', gameStartedAt: engine.snapshot(room.roomCode).gameStartedAt } };
+    liveWire.send(answer);
+    liveWire.send(answer);
+    await settle();
+    expect(engine.snapshot(room.roomCode).finalRound).toMatchObject({ responsesClosed: true, responsesClosedReason: 'all-submitted' });
+    expect(responses).toHaveLength(2);
+    expect(responses.every((response) => response.ok)).toBe(true);
+    staleWire.send({ ...answer, requestId: 'stale-final-answer' });
+    await settle();
+    expect(engine.snapshot(room.roomCode).players.find((candidate) => candidate.id === identity.playerId)?.finalAnswer).toBe('answer');
+    host.destroy(); player.destroy();
+  });
+
   it('enforces and rotates presentation capabilities through the production socket protocol', async () => {
     const { createSocketRuntime } = await import('../src/lib/socket');
     DeterministicPeer.peers.clear();
