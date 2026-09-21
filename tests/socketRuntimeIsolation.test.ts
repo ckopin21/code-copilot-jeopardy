@@ -508,6 +508,32 @@ describe('production socket runtime isolation', () => {
     host.destroy(); player.destroy();
   });
 
+  it('keeps repeated forced transport recoveries bounded and preserves one reserved player', async () => {
+    const { createSocketRuntime } = await import('../src/lib/socket');
+    DeterministicPeer.peers.clear();
+    DeterministicPeer.clientConnections = [];
+    DeterministicPeer.instances = [];
+    const peerFactory = (id: string | undefined) => new DeterministicPeer(id) as never;
+    const engine = new BrowserGameEngine();
+    location.search = '?mode=host';
+    const host = createSocketRuntime({ createPeer: peerFactory, createEngine: () => engine, installBrowserHooks: false });
+    const room = await host.emitAck<{ roomCode: string }>('room:create', { settings: {} });
+    location.search = '?mode=player';
+    const player = createSocketRuntime({ createPeer: peerFactory, installBrowserHooks: false });
+    const identity = await player.emitAck<{ playerId: string }>('player:join', { roomCode: room.roomCode, name: 'Stress', avatar: '🚀', accent: '#93c5fd' });
+
+    for (let cycle = 0; cycle < 4; cycle += 1) {
+      player.resumeClientSession(false, true);
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      expect(player.socket.connected).toBe(true);
+      expect(engine.snapshot(room.roomCode).players.filter((candidate) => candidate.id === identity.playerId)).toHaveLength(1);
+    }
+
+    expect(DeterministicPeer.instances.filter((candidate) => !candidate['id'] && !candidate.destroyed)).toHaveLength(1);
+    expect(player.getNetworkDiagnostics().filter((entry) => entry.kind === 'data-open' && entry.role === 'client')).toHaveLength(5);
+    host.destroy(); player.destroy();
+  });
+
   it('keeps Free Response submissions authoritative across reconnects, duplicates, and stale connections', async () => {
     const { createSocketRuntime } = await import('../src/lib/socket');
     DeterministicPeer.peers.clear();
