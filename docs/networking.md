@@ -1,5 +1,7 @@
 # Networking and reconnect behavior
 
+For repeatable physical iPhone/Android, cellular, cross-network, mass-recovery, and TURN validation, use the [real-device test matrix](real-device-test-matrix.md). Those results are deliberately separate from deterministic and Playwright evidence.
+
 ## Transport
 
 Blue Stage uses PeerJS/WebRTC. The host browser creates a deterministic PeerJS ID from the room code. Player phones and remote presentation screens create their own PeerJS peers and open reliable data connections to the host peer.

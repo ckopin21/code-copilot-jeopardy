@@ -9,6 +9,7 @@ This folder is the maintained technical and gameplay reference for the current g
 - [`experience.md`](experience.md) — permanent seats, pre-game checks, host controls, presets, undo, recovery, transitions, awards, accessibility
 - [`architecture.md`](architecture.md) — client structure, state ownership, storage, snapshot security, audio, presentation mode
 - [`networking.md`](networking.md) — phone connections, PeerJS/WebRTC lifecycle, reconnect/reserved-seat behavior, failure cases
+- [`real-device-test-matrix.md`](real-device-test-matrix.md) — repeatable physical-device, cross-network, and TURN validation matrix
 - [`question-packs.md`](question-packs.md) — built-in pack authoring, automatic registration, metadata, and validation
 - [`development.md`](development.md) — repository layout, testing, CI, deployment, safe modification checklist
 

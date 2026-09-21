@@ -145,6 +145,9 @@ describe('production socket runtime isolation', () => {
     expect(hostEngine.snapshot(credentials.roomCode).players).toHaveLength(2);
     expect(two.playerId).not.toBe(one.playerId);
     expect(broadcasts.length).toBeGreaterThan(0);
+    expect(host.getNetworkDiagnostics().map((entry) => entry.kind)).toContain('host-authority-acquired');
+    expect(playerOne.getNetworkDiagnostics().some((entry) => entry.kind === 'data-open' && entry.role === 'client')).toBe(true);
+    expect(JSON.stringify(playerOne.getNetworkDiagnostics())).not.toContain(one.reconnectToken);
     host.destroy(); playerOne.destroy(); playerTwo.destroy();
   });
 

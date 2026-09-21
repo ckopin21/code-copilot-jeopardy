@@ -57,9 +57,26 @@ export interface SocketRuntime {
   suspendClientSession(): void;
   resumeClientSession(forceHostPause?: boolean, forceTransportReset?: boolean): void;
   getPlayerConnectionHealth(roomCode: string): PlayerConnectionHealth[];
+  getNetworkDiagnostics(): readonly NetworkDiagnosticEvent[];
   getPresentationConnectionCount(roomCode: string): number;
   testPlayerControllers(roomCode: string): string[];
   destroy(): void;
+}
+
+export type NetworkDiagnosticKind =
+  | 'ice-configured' | 'ice-config-fallback' | 'peer-open' | 'peer-disconnected' | 'peer-closed' | 'peer-error'
+  | 'data-open' | 'data-closed' | 'data-error' | 'reconnect-scheduled' | 'reconnect-coalesced'
+  | 'reconnect-started' | 'reconnect-succeeded' | 'reconnect-failed' | 'generation-superseded'
+  | 'identity-restored' | 'identity-rejected' | 'host-authority-acquired' | 'host-authority-lost';
+
+/** A bounded, safe operational record. It deliberately contains no tokens, capabilities, ICE credentials, or payloads. */
+export interface NetworkDiagnosticEvent {
+  at: number;
+  kind: NetworkDiagnosticKind;
+  role: 'host' | 'client';
+  generation?: number;
+  detail?: string;
+  turnConfigured?: boolean;
 }
 
 export interface SocketRuntimeOptions {
@@ -101,6 +118,7 @@ let hostStaleSweepBlockedUntil = 0;
 let lastHostStaleSweepAt = Date.now();
 let activeIceServers: RTCIceServer[] = DEFAULT_ICE_SERVERS;
 let iceConfigWarning = '';
+const networkDiagnostics: NetworkDiagnosticEvent[] = [];
 
 function turnConfigured(servers: RTCIceServer[]): boolean {
   return servers.some((server) => {
@@ -109,58 +127,63 @@ function turnConfigured(servers: RTCIceServer[]): boolean {
   });
 }
 
+function recordDiagnostic(kind: NetworkDiagnosticKind, role: 'host' | 'client', fields: Omit<NetworkDiagnosticEvent, 'at' | 'kind' | 'role'> = {}): void {
+  const entry = { at: Date.now(), kind, role, ...fields } satisfies NetworkDiagnosticEvent;
+  networkDiagnostics.push(entry);
+  if (networkDiagnostics.length > 200) networkDiagnostics.shift();
+  emitLocal('network:diagnostic', entry);
+}
+
 function connectionFailureHint(): string {
   if (iceConfigWarning) return ` ${iceConfigWarning}`;
   if (!turnConfigured(activeIceServers)) return ' This deployment is using STUN only; restrictive or mobile networks may require a TURN relay.';
   return '';
 }
 
-async function resolveIceServers(): Promise<RTCIceServer[]> {
-  const runtime = window as IceConfigWindow;
-  const custom = runtime.BLUE_STAGE_ICE_SERVERS;
-  if (custom?.length) {
-    activeIceServers = custom;
-    iceConfigWarning = '';
-    return custom;
-  }
-
-  const endpoint = runtime.BLUE_STAGE_ICE_CONFIG_URL || import.meta.env.VITE_ICE_CONFIG_URL;
-  if (!endpoint) {
-    activeIceServers = DEFAULT_ICE_SERVERS;
-    iceConfigWarning = '';
-    return DEFAULT_ICE_SERVERS;
-  }
-
-  try {
-    const response = await fetch(endpoint, {
-      cache: 'no-store',
-      credentials: 'omit',
-      headers: { accept: 'application/json' }
-    });
-    if (!response.ok) throw new Error(`ICE config request failed with ${response.status}`);
-    const body = await response.json() as { iceServers?: RTCIceServer[] } | RTCIceServer[];
-    const servers = Array.isArray(body) ? body : body.iceServers;
-    if (!servers?.length) throw new Error('ICE config response did not include iceServers');
-    activeIceServers = servers;
-    iceConfigWarning = '';
-    return servers;
-  } catch {
-    activeIceServers = DEFAULT_ICE_SERVERS;
-    iceConfigWarning = 'The secure relay configuration could not be loaded; retrying with STUN only.';
-    return DEFAULT_ICE_SERVERS;
-  }
-}
-
-async function peerOptions() {
-  const iceServers = await resolveIceServers();
-  return { debug: 0, config: { iceServers } };
-}
 function emitLocal(event: string, data?: unknown): void { for (const listener of listeners.get(event) ?? []) listener(data); }
 const socket = {
   connected: false,
   on(event: string, listener: Listener) { const set = listeners.get(event) ?? new Set<Listener>(); set.add(listener); listeners.set(event, set); },
   off(event: string, listener: Listener) { listeners.get(event)?.delete(listener); }
 };
+async function resolveIceServers(): Promise<RTCIceServer[]> {
+  const role = currentMode() === 'host' ? 'host' : 'client';
+  const runtime = window as IceConfigWindow;
+  const custom = runtime.BLUE_STAGE_ICE_SERVERS;
+  if (custom?.length) {
+    activeIceServers = custom;
+    iceConfigWarning = '';
+    recordDiagnostic('ice-configured', role, { detail: 'runtime-override', turnConfigured: turnConfigured(custom) });
+    return custom;
+  }
+  const endpoint = runtime.BLUE_STAGE_ICE_CONFIG_URL || import.meta.env.VITE_ICE_CONFIG_URL;
+  if (!endpoint) {
+    activeIceServers = DEFAULT_ICE_SERVERS;
+    iceConfigWarning = '';
+    recordDiagnostic('ice-configured', role, { detail: 'default-stun', turnConfigured: false });
+    return DEFAULT_ICE_SERVERS;
+  }
+  try {
+    const response = await fetch(endpoint, { cache: 'no-store', credentials: 'omit', headers: { accept: 'application/json' } });
+    if (!response.ok) throw new Error(`ICE config request failed with ${response.status}`);
+    const body = await response.json() as { iceServers?: RTCIceServer[] } | RTCIceServer[];
+    const servers = Array.isArray(body) ? body : body.iceServers;
+    if (!servers?.length) throw new Error('ICE config response did not include iceServers');
+    activeIceServers = servers;
+    iceConfigWarning = '';
+    recordDiagnostic('ice-configured', role, { detail: 'credential-endpoint', turnConfigured: turnConfigured(servers) });
+    return servers;
+  } catch {
+    activeIceServers = DEFAULT_ICE_SERVERS;
+    iceConfigWarning = 'The secure relay configuration could not be loaded; retrying with STUN only.';
+    recordDiagnostic('ice-config-fallback', role, { detail: 'credential-endpoint-unavailable', turnConfigured: false });
+    return DEFAULT_ICE_SERVERS;
+  }
+}
+async function peerOptions() {
+  const iceServers = await resolveIceServers();
+  return { debug: 0, config: { iceServers } };
+}
 function failMessage(error: unknown): string { return error instanceof Error ? error.message : 'Unknown error'; }
 function presetWager(wager: number, includeZero = false): boolean {
   return (includeZero && wager === 0) || QUESTION_VALUES.includes(wager as (typeof QUESTION_VALUES)[number]);
@@ -483,9 +506,10 @@ function cacheCompletedRequest(connection: DataConnection, requestId: string, re
 }
 function attachHostConnection(connection: DataConnection): void {
   connections.add(connection);
+  connection.on('open', () => recordDiagnostic('data-open', 'host'));
   connection.on('data', (data) => { const message = data as WireMessage; if (message?.kind === 'request') void handleHostRequest(connection, message); });
-  connection.on('close', () => { completedRequests.delete(connection); inFlightRequests.delete(connection); handleConnectionClosed(connection); });
-  connection.on('error', () => { completedRequests.delete(connection); inFlightRequests.delete(connection); handleConnectionClosed(connection); });
+  connection.on('close', () => { recordDiagnostic('data-closed', 'host'); completedRequests.delete(connection); inFlightRequests.delete(connection); handleConnectionClosed(connection); });
+  connection.on('error', () => { recordDiagnostic('data-error', 'host'); completedRequests.delete(connection); inFlightRequests.delete(connection); handleConnectionClosed(connection); });
 }
 async function createHostPeerOnce(roomCode: string, allowAuthorityTakeover: boolean): Promise<void> {
   const options = await peerOptions();
@@ -518,6 +542,7 @@ async function createHostPeerOnce(roomCode: string, allowAuthorityTakeover: bool
       reject(error instanceof Error ? error : new Error('Could not start host connection'));
     };
     peer.on('open', () => {
+      recordDiagnostic('peer-open', 'host');
       if (hostSignalRetryTimer !== null) {
         window.clearTimeout(hostSignalRetryTimer);
         hostSignalRetryTimer = null;
@@ -545,6 +570,7 @@ async function createHostPeerOnce(roomCode: string, allowAuthorityTakeover: bool
       hostPeer = peer;
       hostRoomCode = roomCode;
       hostAuthorityId = authorityId;
+      recordDiagnostic('host-authority-acquired', 'host');
       if (previousPeer && previousPeer !== peer) { try { previousPeer.destroy(); } catch { /* ignore */ } }
       peer.on('connection', attachHostConnection);
       peer.on('disconnected', () => {
@@ -653,6 +679,7 @@ async function startHostPeer(roomCode: string, retryUnavailable: boolean, allowA
   throw lastError ?? new Error('Could not start host connection');
 }
 function attachClientConnection(connection: DataConnection): void {
+  connection.on('open', () => recordDiagnostic('data-open', 'client', { generation: clientTransportGeneration }));
   connection.on('data', (data) => {
     if (clientConnection !== connection) return;
     const message = data as WireMessage;
@@ -680,6 +707,7 @@ function attachClientConnection(connection: DataConnection): void {
   });
   const closed = () => {
     if (clientConnection !== connection) return;
+    recordDiagnostic('data-closed', 'client', { generation: clientTransportGeneration });
     clientConnection = null;
     socket.connected = false;
     emitLocal('disconnect');
@@ -707,6 +735,7 @@ async function createClientPeer(expectedGeneration: number): Promise<Peer> {
     clientPeer = peer;
     let settled = false;
     peer.on('open', () => {
+      recordDiagnostic('peer-open', 'client', { generation: expectedGeneration });
       if (clientPeer !== peer || expectedGeneration !== clientTransportGeneration) return;
       if (clientConnection?.open) socket.connected = true;
       if (!settled) { settled = true; resolve(peer); }
@@ -860,10 +889,14 @@ async function connectToHost(roomCode: string): Promise<DataConnection> {
   return promise;
 }
 function scheduleClientReconnect(): void {
-  if (clientSuspended || !clientRoomCode || reconnectTimer !== null || clientConnection?.open) return;
+  if (clientSuspended || !clientRoomCode || clientConnection?.open) return;
+  if (reconnectTimer !== null) { recordDiagnostic('reconnect-coalesced', 'client', { generation: clientTransportGeneration }); return; }
+  recordDiagnostic('reconnect-scheduled', 'client', { generation: clientTransportGeneration });
   reconnectTimer = window.setTimeout(() => {
     reconnectTimer = null;
+    recordDiagnostic('reconnect-started', 'client', { generation: clientTransportGeneration });
     void connectToHost(clientRoomCode).catch(() => {
+      recordDiagnostic('reconnect-failed', 'client', { generation: clientTransportGeneration });
       reconnectDelayMs = Math.min(5000, Math.round(reconnectDelayMs * 1.7));
       scheduleClientReconnect();
     });
@@ -1035,6 +1068,7 @@ window.setInterval(() => {
     suspendClientSession,
     resumeClientSession,
     getPlayerConnectionHealth,
+    getNetworkDiagnostics: () => networkDiagnostics.slice(),
     getPresentationConnectionCount,
     testPlayerControllers,
     destroy() {
