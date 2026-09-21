@@ -25,6 +25,8 @@ class DeterministicPeer {
   static peers = new Map<string, DeterministicPeer>();
   static clientConnections: DeterministicConnection[] = [];
   static instances: DeterministicPeer[] = [];
+  static reconnectFailures = 0;
+  static connectFailures = 0;
   open = false;
   disconnected = false;
   destroyed = false;
@@ -37,10 +39,26 @@ class DeterministicPeer {
     const host = new DeterministicConnection();
     DeterministicPeer.clientConnections.push(client);
     client.peerConnection = host; host.peerConnection = client;
-    queueMicrotask(() => { target?.emit('connection', host); client.emit('open'); host.emit('open'); });
+    queueMicrotask(() => {
+      if (DeterministicPeer.connectFailures > 0 || !target || target.destroyed) {
+        DeterministicPeer.connectFailures = Math.max(0, DeterministicPeer.connectFailures - 1);
+        client.open = false;
+        client.emit('error', new Error('Host peer is unavailable'));
+        client.emit('close');
+        return;
+      }
+      target.emit('connection', host); client.emit('open'); host.emit('open');
+    });
     return client;
   }
-  reconnect() { this.disconnected = false; }
+  reconnect() {
+    if (DeterministicPeer.reconnectFailures > 0) {
+      DeterministicPeer.reconnectFailures -= 1;
+      throw new Error('Temporary signaling failure');
+    }
+    this.disconnected = false;
+    queueMicrotask(() => this.emit('open', this.id));
+  }
   destroy() { this.destroyed = true; this.disconnected = true; if (this.id) DeterministicPeer.peers.delete(this.id); this.emit('close'); }
   emit(event: string, ...args: unknown[]) { for (const handler of this.handlers.get(event) ?? []) handler(...args); }
 }
@@ -128,6 +146,110 @@ describe('production socket runtime isolation', () => {
     expect(two.playerId).not.toBe(one.playerId);
     expect(broadcasts.length).toBeGreaterThan(0);
     host.destroy(); playerOne.destroy(); playerTwo.destroy();
+  });
+
+  it('recovers a functioning room after simultaneous player disconnects and a failed reconnect retry', async () => {
+    const { createSocketRuntime } = await import('../src/lib/socket');
+    DeterministicPeer.peers.clear();
+    DeterministicPeer.clientConnections = [];
+    DeterministicPeer.connectFailures = 0;
+    const peerFactory = (id: string | undefined) => new DeterministicPeer(id) as never;
+    const engine = new BrowserGameEngine();
+    location.search = '?mode=host';
+    const host = createSocketRuntime({ createPeer: peerFactory, createEngine: () => engine, installBrowserHooks: false });
+    const room = await host.emitAck<{ roomCode: string; hostToken: string }>('room:create', { settings: { dailyDoublesEnabled: false, finalRoundEnabled: false } });
+    location.search = '?mode=player';
+    const one = createSocketRuntime({ createPeer: peerFactory, installBrowserHooks: false });
+    const two = createSocketRuntime({ createPeer: peerFactory, installBrowserHooks: false });
+    const oneIdentity = await one.emitAck<{ playerId: string; reconnectToken: string }>('player:join', { roomCode: room.roomCode, name: 'One', avatar: '🚀', accent: '#93c5fd' });
+    const twoIdentity = await two.emitAck<{ playerId: string; reconnectToken: string }>('player:join', { roomCode: room.roomCode, name: 'Two', avatar: '🛰️', accent: '#f9a8d4' });
+    const originalSeats = new Map(engine.snapshot(room.roomCode).players.map((player) => [player.id, player.seat]));
+
+    location.search = '?mode=host';
+    await host.emitAck('host:start-game', { roomCode: room.roomCode, hostToken: room.hostToken });
+    const firstQuestion = engine.snapshot(room.roomCode).board!.questions.find((question) => !question.used)!;
+    await host.emitAck('host:select-question', { roomCode: room.roomCode, hostToken: room.hostToken, questionId: firstQuestion.questionId });
+    await host.emitAck('host:open-buzzers', { roomCode: room.roomCode, hostToken: room.hostToken });
+    location.search = '?mode=player';
+    await one.emitAck('player:buzz', { roomCode: room.roomCode, ...oneIdentity, questionId: firstQuestion.questionId, gameStartedAt: engine.snapshot(room.roomCode).gameStartedAt });
+    location.search = '?mode=host';
+    await host.emitAck('host:reveal-answer', { roomCode: room.roomCode, hostToken: room.hostToken });
+    await host.emitAck('host:resolve-answer', { roomCode: room.roomCode, hostToken: room.hostToken, playerId: oneIdentity.playerId, correct: true });
+    const scoreBeforeFailure = engine.snapshot(room.roomCode).players.find((player) => player.id === oneIdentity.playerId)!.score;
+
+    // This is the reported incident's controlled equivalent: every active player
+    // data channel closes at once while the authoritative host stays alive.
+    DeterministicPeer.clientConnections[0]!.close();
+    DeterministicPeer.clientConnections[1]!.close();
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    const afterMassReconnect = engine.snapshot(room.roomCode);
+    expect(one.socket.connected).toBe(true);
+    expect(two.socket.connected).toBe(true);
+    expect(afterMassReconnect.players).toHaveLength(2);
+    expect(afterMassReconnect.players.map((player) => player.id).sort()).toEqual([oneIdentity.playerId, twoIdentity.playerId].sort());
+    expect(afterMassReconnect.players.every((player) => player.connected && player.seat === originalSeats.get(player.id))).toBe(true);
+    expect(afterMassReconnect.players.find((player) => player.id === oneIdentity.playerId)?.score).toBe(scoreBeforeFailure);
+
+    // One failed recovery attempt must clear its pending state and retry rather
+    // than leaving an otherwise valid saved session permanently disconnected.
+    DeterministicPeer.connectFailures = 1;
+    DeterministicPeer.clientConnections.at(-1)!.close();
+    await new Promise((resolve) => setTimeout(resolve, 1400));
+    expect(two.socket.connected).toBe(true);
+    expect(engine.snapshot(room.roomCode).players).toHaveLength(2);
+
+    // A recovered room remains usable for both restored and new clients.
+    location.search = '?mode=host';
+    await host.emitAck('host:advance-board', { roomCode: room.roomCode, hostToken: room.hostToken });
+    const nextQuestion = engine.snapshot(room.roomCode).board!.questions.find((question) => !question.used)!;
+    await host.emitAck('host:select-question', { roomCode: room.roomCode, hostToken: room.hostToken, questionId: nextQuestion.questionId });
+    await host.emitAck('host:open-buzzers', { roomCode: room.roomCode, hostToken: room.hostToken });
+    location.search = '?mode=player';
+    await expect(two.emitAck('player:buzz', { roomCode: room.roomCode, ...twoIdentity, questionId: nextQuestion.questionId, gameStartedAt: engine.snapshot(room.roomCode).gameStartedAt })).resolves.toMatchObject({ accepted: true });
+    const newcomer = createSocketRuntime({ createPeer: peerFactory, installBrowserHooks: false });
+    await newcomer.emitAck('player:join', { roomCode: room.roomCode, name: 'New', avatar: '🎯', accent: '#86efac' });
+    expect(engine.snapshot(room.roomCode).players).toHaveLength(3);
+    host.destroy(); one.destroy(); two.destroy(); newcomer.destroy();
+  });
+
+  it('re-registers a destroyed host peer and ignores its delayed signaling events', async () => {
+    const { createSocketRuntime } = await import('../src/lib/socket');
+    DeterministicPeer.peers.clear();
+    DeterministicPeer.clientConnections = [];
+    DeterministicPeer.reconnectFailures = 1;
+    const peerFactory = (id: string | undefined) => new DeterministicPeer(id) as never;
+    const engine = new BrowserGameEngine();
+    location.search = '?mode=host';
+    const host = createSocketRuntime({ createPeer: peerFactory, createEngine: () => engine, installBrowserHooks: false });
+    const room = await host.emitAck<{ roomCode: string; hostToken: string }>('room:create', { settings: { dailyDoublesEnabled: false, finalRoundEnabled: false } });
+    location.search = '?mode=player';
+    const player = createSocketRuntime({ createPeer: peerFactory, installBrowserHooks: false });
+    const identity = await player.emitAck<{ playerId: string; reconnectToken: string }>('player:join', { roomCode: room.roomCode, name: 'Host recovery', avatar: '🚀', accent: '#93c5fd' });
+
+    const oldHostPeer = DeterministicPeer.peers.values().next().value!;
+    oldHostPeer.disconnected = true;
+    oldHostPeer.emit('disconnected');
+    await new Promise((resolve) => setTimeout(resolve, 2200));
+    expect(host.socket.connected).toBe(true);
+
+    // A permanently closed signaling peer must be replaced without abandoning
+    // the persisted room. Closing the data channel models the accompanying
+    // WebRTC loss that real players observe when their host Peer disappears.
+    oldHostPeer.destroy();
+    DeterministicPeer.clientConnections[0]!.close();
+    await new Promise((resolve) => setTimeout(resolve, 1600));
+    const replacementHostPeer = DeterministicPeer.peers.values().next().value!;
+    expect(replacementHostPeer).not.toBe(oldHostPeer);
+    expect(host.socket.connected).toBe(true);
+    expect(player.socket.connected).toBe(true);
+    expect(engine.snapshot(room.roomCode).players).toEqual([expect.objectContaining({ id: identity.playerId, connected: true })]);
+
+    oldHostPeer.emit('close');
+    oldHostPeer.emit('error', new Error('late stale host peer error'));
+    await settle();
+    expect(host.socket.connected).toBe(true);
+    expect([...DeterministicPeer.peers.values()]).toContain(replacementHostPeer);
+    host.destroy(); player.destroy();
   });
 
   it('coalesces simultaneous duplicate production packets and replays the cached acknowledgement', async () => {
@@ -326,6 +448,31 @@ describe('production socket runtime isolation', () => {
     await settle();
     expect(current.open).toBe(true);
     expect(player.socket.connected).toBe(true);
+    host.destroy(); player.destroy();
+  });
+
+  it('ignores stale data events that would otherwise suspend a recovered client session', async () => {
+    const { createSocketRuntime } = await import('../src/lib/socket');
+    DeterministicPeer.peers.clear();
+    DeterministicPeer.clientConnections = [];
+    const peerFactory = (id: string | undefined) => new DeterministicPeer(id) as never;
+    location.search = '?mode=host';
+    const host = createSocketRuntime({ createPeer: peerFactory, createEngine: () => new BrowserGameEngine(), installBrowserHooks: false });
+    const room = await host.emitAck<{ roomCode: string }>('room:create', { settings: {} });
+    location.search = '?mode=player';
+    const player = createSocketRuntime({ createPeer: peerFactory, installBrowserHooks: false });
+    await player.emitAck('player:join', { roomCode: room.roomCode, name: 'Stale data', avatar: '🚀', accent: '#93c5fd' });
+    const old = DeterministicPeer.clientConnections[0]!;
+    player.resumeClientSession(false, true);
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    const current = DeterministicPeer.clientConnections[1]!;
+    old.emit('data', { kind: 'event', event: 'player:removed', data: {} });
+    await settle();
+    expect(player.socket.connected).toBe(true);
+    current.close();
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    expect(player.socket.connected).toBe(true);
+    expect(DeterministicPeer.clientConnections).toHaveLength(3);
     host.destroy(); player.destroy();
   });
 

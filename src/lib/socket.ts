@@ -423,6 +423,9 @@ async function handleHostRequest(connection: DataConnection, message: RequestMes
   const requestRoomCode = String(message.payload.roomCode ?? '').toUpperCase();
   if (!ownsHostAuthority(requestRoomCode)) {
     if (connection.open) connection.send({ kind: 'response', requestId: message.requestId, ok: false, error: 'Host authority moved to another tab' } satisfies ResponseMessage);
+    activeRequests.delete(message.requestId);
+    if (!activeRequests.size) inFlightRequests.delete(connection);
+    finishRequest();
     window.setTimeout(() => { try { connection.close(); } catch { /* stale connection */ } }, 0);
     return;
   }
