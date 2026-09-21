@@ -6,8 +6,10 @@ test('real PeerJS host and controller complete a rendered buzz-and-score recover
 
   const hostContext = await browser.newContext();
   const playerContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const secondPlayerContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const host = await hostContext.newPage();
   const player = await playerContext.newPage();
+  const secondPlayer = await secondPlayerContext.newPage();
   try {
     await host.goto(`${baseURL}/?mode=host&fresh=1`);
     try {
@@ -33,6 +35,13 @@ test('real PeerJS host and controller complete a rendered buzz-and-score recover
     await expect(player.getByRole('heading', { name: 'You’re in.' })).toBeVisible({ timeout: 15_000 });
     await expect(host.locator('.roster-row').getByText('Browser player', { exact: true })).toBeVisible({ timeout: 15_000 });
 
+    await secondPlayer.goto(`${baseURL}/?mode=player&room=${roomCode}`);
+    await secondPlayer.getByLabel('Room code').fill(roomCode!);
+    await secondPlayer.getByLabel('Your name').fill('Second browser player');
+    await secondPlayer.getByRole('button', { name: 'Join Game' }).click();
+    await expect(secondPlayer.getByRole('heading', { name: 'You’re in.' })).toBeVisible({ timeout: 15_000 });
+    await expect(host.locator('.roster-row').getByText('Second browser player', { exact: true })).toBeVisible({ timeout: 15_000 });
+
     await host.getByRole('button', { name: 'Start Game' }).click();
     const tile = host.locator('.question-tile:not(.used)').first();
     await expect(tile).toBeEnabled();
@@ -50,7 +59,25 @@ test('real PeerJS host and controller complete a rendered buzz-and-score recover
     await player.reload();
     await expect(player.getByText(new RegExp(`ROOM ${roomCode}`))).toBeVisible({ timeout: 15_000 });
     await expect(host.locator('.showcase-player-card [data-player-score]')).toHaveText('100');
+    await expect(host.locator('.roster-row').filter({ hasText: 'Browser player' })).toHaveCount(1);
+    await expect(host.locator('.roster-row').filter({ hasText: 'Second browser player' })).toHaveCount(1);
+
+    // A previously disconnected controller must not strand the room: another
+    // controller can still join the same host after the recovery incident.
+    const latePlayerContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    const latePlayer = await latePlayerContext.newPage();
+    try {
+      await latePlayer.goto(`${baseURL}/?mode=player&room=${roomCode}`);
+      await latePlayer.getByLabel('Room code').fill(roomCode!);
+      await latePlayer.getByLabel('Your name').fill('Post recovery player');
+      await latePlayer.getByRole('button', { name: 'Join Game' }).click();
+      await expect(latePlayer.getByRole('heading', { name: 'You’re in.' })).toBeVisible({ timeout: 15_000 });
+      await expect(host.locator('.roster-row').getByText('Post recovery player', { exact: true })).toBeVisible({ timeout: 15_000 });
+    } finally {
+      await latePlayerContext.close();
+    }
   } finally {
+    await secondPlayerContext.close();
     await playerContext.close();
     await hostContext.close();
   }

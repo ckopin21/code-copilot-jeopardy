@@ -14,3 +14,19 @@ test('WebKit boots the menu and Join Game screen without runtime errors', async 
 
   expect(pageErrors).toEqual([]);
 });
+
+test('WebKit tolerates simulated page-cache, visibility, and network recovery events', async ({ page, browserName }) => {
+  test.skip(browserName !== 'webkit');
+  const pageErrors: string[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error.message));
+
+  await page.goto('/?mode=player');
+  await page.evaluate(() => {
+    window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }));
+    window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
+    document.dispatchEvent(new Event('visibilitychange'));
+    window.dispatchEvent(new Event('online'));
+  });
+  await expect(page.locator('.phone-shell.phone-join')).toBeVisible();
+  expect(pageErrors).toEqual([]);
+});
