@@ -505,6 +505,67 @@ describe('production socket runtime isolation', () => {
     host.destroy(); player.destroy();
   });
 
+  it('keeps Free Response submissions authoritative across reconnects, duplicates, and stale connections', async () => {
+    const { createSocketRuntime } = await import('../src/lib/socket');
+    DeterministicPeer.peers.clear();
+    DeterministicPeer.clientConnections = [];
+    const peerFactory = (id: string | undefined) => new DeterministicPeer(id) as never;
+    const engine = new BrowserGameEngine();
+    location.search = '?mode=host';
+    const host = createSocketRuntime({ createPeer: peerFactory, createEngine: () => engine, installBrowserHooks: false });
+    const room = await host.emitAck<{ roomCode: string; hostToken: string }>('room:create', {
+      settings: { gameMode: 'free-response', dailyDoublesEnabled: false, finalRoundEnabled: false, freeResponseReadSeconds: 0, timerSeconds: 15, allowNegativeScores: true }
+    });
+    location.search = '?mode=player';
+    const one = createSocketRuntime({ createPeer: peerFactory, installBrowserHooks: false });
+    const two = createSocketRuntime({ createPeer: peerFactory, installBrowserHooks: false });
+    const oneIdentity = await one.emitAck<{ playerId: string; reconnectToken: string }>('player:join', { roomCode: room.roomCode, name: 'Free one', avatar: '🚀', accent: '#93c5fd' });
+    const twoIdentity = await two.emitAck<{ playerId: string; reconnectToken: string }>('player:join', { roomCode: room.roomCode, name: 'Free two', avatar: '🛰️', accent: '#f9a8d4' });
+    location.search = '?mode=host';
+    await host.emitAck('host:start-game', { roomCode: room.roomCode, hostToken: room.hostToken });
+    const question = engine.snapshot(room.roomCode).board!.questions.find((candidate) => !candidate.used)!;
+    await host.emitAck('host:select-question', { roomCode: room.roomCode, hostToken: room.hostToken, questionId: question.questionId });
+    const state = engine.snapshot(room.roomCode);
+    expect(state.currentQuestion?.responseMode).toBe('text');
+
+    // Disconnect during collection, then let the real client reconnect/replay its identity.
+    const staleOneWire = DeterministicPeer.clientConnections[0]!;
+    staleOneWire.close();
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    const restoredOneWire = DeterministicPeer.clientConnections.at(-1)!;
+    expect(one.socket.connected).toBe(true);
+    staleOneWire.send({ kind: 'request', requestId: 'stale-text', event: 'player:text-response', payload: { roomCode: room.roomCode, ...oneIdentity, answer: 'stale', questionId: question.questionId, gameStartedAt: state.gameStartedAt } });
+    await settle();
+    expect(engine.snapshot(room.roomCode).currentQuestion?.textResponses?.[oneIdentity.playerId]).toBeUndefined();
+
+    location.search = '?mode=player';
+    await one.emitAck('player:text-response', { roomCode: room.roomCode, ...oneIdentity, answer: 'first', questionId: question.questionId, gameStartedAt: state.gameStartedAt });
+    const duplicateResponses: Array<{ ok?: boolean }> = [];
+    const twoWire = DeterministicPeer.clientConnections[1]!;
+    twoWire.on('data', (message: { kind?: string; requestId?: string; ok?: boolean }) => {
+      if (message.kind === 'response' && message.requestId === 'duplicate-text') duplicateResponses.push(message);
+    });
+    const duplicate = { kind: 'request', requestId: 'duplicate-text', event: 'player:text-response', payload: { roomCode: room.roomCode, ...twoIdentity, answer: 'second', questionId: question.questionId, gameStartedAt: state.gameStartedAt } };
+    twoWire.send(duplicate);
+    twoWire.send(duplicate);
+    await settle();
+    const revealed = engine.snapshot(room.roomCode);
+    expect(revealed.currentQuestion?.textResponses).toMatchObject({ [oneIdentity.playerId]: expect.any(Object), [twoIdentity.playerId]: expect.any(Object) });
+    expect(duplicateResponses).toHaveLength(2);
+    expect(duplicateResponses.every((response) => response.ok)).toBe(true);
+
+    location.search = '?mode=host';
+    await host.emitAck('host:resolve-text', { roomCode: room.roomCode, hostToken: room.hostToken, playerId: oneIdentity.playerId, correct: true });
+    await host.emitAck('host:resolve-text', { roomCode: room.roomCode, hostToken: room.hostToken, playerId: twoIdentity.playerId, correct: false });
+    await host.emitAck('host:confirm-text-grades', { roomCode: room.roomCode, hostToken: room.hostToken });
+    const finished = engine.snapshot(room.roomCode);
+    expect(finished.phase).toBe('board');
+    expect(finished.players.find((player) => player.id === oneIdentity.playerId)?.score).toBeGreaterThan(0);
+    expect(finished.players.find((player) => player.id === twoIdentity.playerId)?.score).toBeLessThan(0);
+    expect(restoredOneWire.open).toBe(true);
+    host.destroy(); one.destroy(); two.destroy();
+  });
+
   it('enforces and rotates presentation capabilities through the production socket protocol', async () => {
     const { createSocketRuntime } = await import('../src/lib/socket');
     DeterministicPeer.peers.clear();
