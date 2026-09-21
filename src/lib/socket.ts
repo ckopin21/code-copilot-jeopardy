@@ -635,6 +635,7 @@ async function startHostPeer(roomCode: string, retryUnavailable: boolean, allowA
 }
 function attachClientConnection(connection: DataConnection): void {
   connection.on('data', (data) => {
+    if (clientConnection !== connection) return;
     const message = data as WireMessage;
     if (message?.kind === 'response') {
       const request = pending.get(message.requestId);
@@ -687,18 +688,22 @@ async function createClientPeer(expectedGeneration: number): Promise<Peer> {
     clientPeer = peer;
     let settled = false;
     peer.on('open', () => {
+      if (clientPeer !== peer || expectedGeneration !== clientTransportGeneration) return;
       if (clientConnection?.open) socket.connected = true;
       if (!settled) { settled = true; resolve(peer); }
     });
     peer.on('disconnected', () => {
+      if (clientPeer !== peer || expectedGeneration !== clientTransportGeneration) return;
       if (!clientConnection?.open) socket.connected = false;
       try { peer.reconnect(); } catch { if (!clientConnection?.open) scheduleClientReconnect(); }
     });
     peer.on('error', (error) => {
+      if (clientPeer !== peer || expectedGeneration !== clientTransportGeneration) return;
       if (!settled) { settled = true; reject(error instanceof Error ? error : new Error('Could not connect to signaling')); }
       else if (clientRoomCode && !clientConnection?.open) scheduleClientReconnect();
     });
     peer.on('close', () => {
+      if (clientPeer !== peer || expectedGeneration !== clientTransportGeneration) return;
       if (!clientConnection?.open) socket.connected = false;
       if (clientRoomCode && !clientConnection?.open) scheduleClientReconnect();
     });
