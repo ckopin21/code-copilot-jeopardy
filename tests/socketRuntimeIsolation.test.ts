@@ -614,6 +614,46 @@ describe('production socket runtime isolation', () => {
     host.destroy(); player.destroy();
   });
 
+  it('rejects a Final answer delivered after the authoritative timer closes through the production socket', async () => {
+    const { createSocketRuntime } = await import('../src/lib/socket');
+    DeterministicPeer.peers.clear();
+    DeterministicPeer.clientConnections = [];
+    const peerFactory = (id: string | undefined) => new DeterministicPeer(id) as never;
+    const engine = new BrowserGameEngine();
+    location.search = '?mode=host';
+    const host = createSocketRuntime({ createPeer: peerFactory, createEngine: () => engine, installBrowserHooks: false });
+    const room = await host.emitAck<{ roomCode: string; hostToken: string }>('room:create', { settings: { gameLength: 'quick', dailyDoublesEnabled: false, finalRoundEnabled: true, timerSeconds: 5 } });
+    location.search = '?mode=player';
+    const player = createSocketRuntime({ createPeer: peerFactory, installBrowserHooks: false });
+    const identity = await player.emitAck<{ playerId: string; reconnectToken: string }>('player:join', { roomCode: room.roomCode, name: 'Late finalist', avatar: '🚀', accent: '#93c5fd' });
+    location.search = '?mode=host';
+    await host.emitAck('host:start-game', { roomCode: room.roomCode, hostToken: room.hostToken });
+    while (engine.snapshot(room.roomCode).phase === 'board') {
+      const question = engine.snapshot(room.roomCode).board!.questions.find((candidate) => !candidate.used)!;
+      await host.emitAck('host:select-question', { roomCode: room.roomCode, hostToken: room.hostToken, questionId: question.questionId });
+      await host.emitAck('host:reveal-answer', { roomCode: room.roomCode, hostToken: room.hostToken });
+      await host.emitAck('host:advance-board', { roomCode: room.roomCode, hostToken: room.hostToken });
+    }
+    await host.emitAck('host:begin-final-wagers', { roomCode: room.roomCode, hostToken: room.hostToken });
+    location.search = '?mode=player';
+    await player.emitAck('player:final-wager', { roomCode: room.roomCode, ...identity, wager: 0, gameStartedAt: engine.snapshot(room.roomCode).gameStartedAt });
+    location.search = '?mode=host';
+    await host.emitAck('host:open-final-question', { roomCode: room.roomCode, hostToken: room.hostToken });
+    const beforeExpiry = engine.snapshot(room.roomCode);
+    engine.tick(beforeExpiry.timer.endsAt! + 1);
+    expect(engine.snapshot(room.roomCode).finalRound).toMatchObject({ responsesClosed: true, responsesClosedReason: 'timer-expired' });
+    const wire = DeterministicPeer.clientConnections[0]!;
+    const responses: Array<{ ok?: boolean; error?: string }> = [];
+    wire.on('data', (message: { kind?: string; requestId?: string; ok?: boolean; error?: string }) => {
+      if (message.kind === 'response' && message.requestId === 'late-final-answer') responses.push(message);
+    });
+    wire.send({ kind: 'request', requestId: 'late-final-answer', event: 'player:final-answer', payload: { roomCode: room.roomCode, ...identity, answer: 'late', gameStartedAt: beforeExpiry.gameStartedAt } });
+    await settle();
+    expect(responses).toEqual([expect.objectContaining({ ok: false, error: expect.stringMatching(/closed/i) })]);
+    expect(engine.snapshot(room.roomCode).players.find((candidate) => candidate.id === identity.playerId)?.finalAnswer).toBeNull();
+    host.destroy(); player.destroy();
+  });
+
   it('moves same-room host authority deterministically without allowing the displaced runtime to mutate', async () => {
     const { createSocketRuntime } = await import('../src/lib/socket');
     DeterministicPeer.peers.clear();
