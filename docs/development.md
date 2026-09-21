@@ -62,6 +62,8 @@ npm run build
 
 `npm run dev`, `npm run typecheck`, `npm test`, and `npm run build` automatically regenerate the built-in pack registry first. `npm run test:e2e` runs the locked Playwright Chromium suite; `npm run test:e2e:webkit` runs the equivalent WebKit suite. Install browser binaries once with `npx playwright install chromium webkit` (CI uses `--with-deps`).
 
+The default browser suites are deterministic rendered checks. When a networked browser and the public PeerJS signaling service are available, run the real host/controller smoke separately with `BLUE_STAGE_REAL_PEERJS=1 npx playwright test e2e/real-peerjs-smoke.spec.ts --project=chromium`. It creates a room, joins a separate controller context, buzzes, scores, and reloads the controller to verify its seat recovery. Do not treat this opt-in smoke as evidence for restrictive-NAT, TURN, cellular, or physical-device behavior.
+
 A change is ready to deploy only after typecheck, lint, Vitest, production build, and applicable browser regressions pass. The main CI workflow installs the locked dependencies, runs typecheck/lint/unit tests/build, installs Playwright Chromium + WebKit, runs the complete Playwright suite in Chromium, then reruns the Safari/mobile smoke and player-card layout suites in WebKit. The Pages workflow builds/deploys the static site.
 
 ## GitHub Pages deployment
