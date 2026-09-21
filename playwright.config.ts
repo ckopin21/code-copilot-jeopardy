@@ -12,7 +12,7 @@ export default defineConfig({
     { name: 'webkit', use: { browserName: 'webkit' } }
   ],
   webServer: {
-    command: 'npm run dev -- --port 4173',
+    command: 'node node_modules/vite/bin/vite.js --host 127.0.0.1 --port 4173',
     url: 'http://127.0.0.1:4173',
     reuseExistingServer: false
   }
