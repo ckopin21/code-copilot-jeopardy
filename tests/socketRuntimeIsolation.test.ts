@@ -654,6 +654,56 @@ describe('production socket runtime isolation', () => {
     host.destroy(); player.destroy();
   });
 
+  it('keeps Final answers private on the capability-authorized presentation transport until review', async () => {
+    const { createSocketRuntime } = await import('../src/lib/socket');
+    DeterministicPeer.peers.clear();
+    DeterministicPeer.clientConnections = [];
+    const peerFactory = (id: string | undefined) => new DeterministicPeer(id) as never;
+    const engine = new BrowserGameEngine();
+    location.search = '?mode=host';
+    const host = createSocketRuntime({ createPeer: peerFactory, createEngine: () => engine, installBrowserHooks: false });
+    const room = await host.emitAck<{ roomCode: string; hostToken: string; presentationUrl: string }>('room:create', { settings: { gameLength: 'quick', dailyDoublesEnabled: false, finalRoundEnabled: true, timerSeconds: 15 } });
+    const presentationToken = new URL(room.presentationUrl).searchParams.get('display')!;
+    location.search = '?mode=player';
+    const one = createSocketRuntime({ createPeer: peerFactory, installBrowserHooks: false });
+    const two = createSocketRuntime({ createPeer: peerFactory, installBrowserHooks: false });
+    const oneIdentity = await one.emitAck<{ playerId: string; reconnectToken: string }>('player:join', { roomCode: room.roomCode, name: 'One', avatar: '🚀', accent: '#93c5fd' });
+    const twoIdentity = await two.emitAck<{ playerId: string; reconnectToken: string }>('player:join', { roomCode: room.roomCode, name: 'Two', avatar: '🛰️', accent: '#f9a8d4' });
+    location.search = '?mode=presentation';
+    const display = createSocketRuntime({ createPeer: peerFactory, installBrowserHooks: false });
+    const snapshots: import('../src/shared/types').RoomSnapshot[] = [];
+    display.socket.on('room:state', (snapshot) => snapshots.push(snapshot));
+    await display.emitAck('presentation:join', { roomCode: room.roomCode, presentationToken });
+    location.search = '?mode=host';
+    await host.emitAck('host:start-game', { roomCode: room.roomCode, hostToken: room.hostToken });
+    while (engine.snapshot(room.roomCode).phase === 'board') {
+      const question = engine.snapshot(room.roomCode).board!.questions.find((candidate) => !candidate.used)!;
+      await host.emitAck('host:select-question', { roomCode: room.roomCode, hostToken: room.hostToken, questionId: question.questionId });
+      await host.emitAck('host:reveal-answer', { roomCode: room.roomCode, hostToken: room.hostToken });
+      await host.emitAck('host:advance-board', { roomCode: room.roomCode, hostToken: room.hostToken });
+    }
+    await host.emitAck('host:begin-final-wagers', { roomCode: room.roomCode, hostToken: room.hostToken });
+    location.search = '?mode=player';
+    await one.emitAck('player:final-wager', { roomCode: room.roomCode, ...oneIdentity, wager: 0, gameStartedAt: engine.snapshot(room.roomCode).gameStartedAt });
+    await two.emitAck('player:final-wager', { roomCode: room.roomCode, ...twoIdentity, wager: 0, gameStartedAt: engine.snapshot(room.roomCode).gameStartedAt });
+    location.search = '?mode=host';
+    await host.emitAck('host:open-final-question', { roomCode: room.roomCode, hostToken: room.hostToken });
+    location.search = '?mode=player';
+    await one.emitAck('player:final-answer', { roomCode: room.roomCode, ...oneIdentity, answer: 'one secret', gameStartedAt: engine.snapshot(room.roomCode).gameStartedAt });
+    await settle();
+    const answering = snapshots.at(-1)!;
+    expect(answering.players.find((player) => player.id === oneIdentity.playerId)?.finalAnswer).toBeNull();
+    await two.emitAck('player:final-answer', { roomCode: room.roomCode, ...twoIdentity, answer: 'two secret', gameStartedAt: engine.snapshot(room.roomCode).gameStartedAt });
+    location.search = '?mode=host';
+    await host.emitAck('host:begin-final-review', { roomCode: room.roomCode, hostToken: room.hostToken });
+    await settle();
+    const reviewing = snapshots.at(-1)!;
+    expect(reviewing.phase).toBe('final-review');
+    expect(reviewing.players.find((player) => player.id === oneIdentity.playerId)?.finalAnswer).toBe('one secret');
+    expect(reviewing.players.find((player) => player.id === twoIdentity.playerId)?.finalAnswer).toBeNull();
+    host.destroy(); one.destroy(); two.destroy(); display.destroy();
+  });
+
   it('moves same-room host authority deterministically without allowing the displaced runtime to mutate', async () => {
     const { createSocketRuntime } = await import('../src/lib/socket');
     DeterministicPeer.peers.clear();
