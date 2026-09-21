@@ -31,7 +31,7 @@ https://ckopin21.github.io/code-copilot-jeopardy/
 - short haptic pulse on phone button presses when the browser supports the Vibration API
 - player customization for avatar, accent, buzzer sound, score effect, and victory effect
 - reduced-motion, larger-text, increased-contrast, and sound-caption accessibility support
-- seven built-in question packs with automatic pack registration and validation; pack availability is filtered by game mode and one pack is selected per game
+- built-in question packs with automatic pack registration and validation; pack availability is filtered by game mode and one pack is selected per game
 - mobile/WebKit recovery that rebuilds stale PeerJS/WebRTC transports after bfcache restore, meaningful background resume, or network return
 
 ## Documentation

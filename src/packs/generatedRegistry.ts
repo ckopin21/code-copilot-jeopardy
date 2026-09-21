@@ -8,6 +8,7 @@ import { freeResponseGenreHistoryGeographyPack } from './freeResponseGenreHistor
 import { freeResponseGenreMoviesTvPack } from './freeResponseGenreMoviesTv';
 import { freeResponseGenreMusicPack } from './freeResponseGenreMusic';
 import { freeResponseGenreSportsGamesPack } from './freeResponseGenreSportsGames';
+import { freeResponseYouthMixPack } from './freeResponseYouthMix';
 import { historyGeographyPack } from './historyGeography';
 import { historyGeography2Pack } from './historyGeography2';
 import { historyGeography3Pack } from './historyGeography3';
@@ -16,5 +17,6 @@ import { moviesTv2Pack } from './moviesTv2';
 import { musicPack } from './music';
 import { scienceNaturePack } from './scienceNature';
 import { sportsGamesPack } from './sportsGames';
+import { youthMixPack } from './youthMix';
 
-export const generatedBuiltInPacks = [booksWordsPack, disneyPack, foodTravelPack, freeResponseGeneral1Pack, freeResponseGenreDisneyPack, freeResponseGenreHistoryGeographyPack, freeResponseGenreMoviesTvPack, freeResponseGenreMusicPack, freeResponseGenreSportsGamesPack, historyGeographyPack, historyGeography2Pack, historyGeography3Pack, moviesTvPack, moviesTv2Pack, musicPack, scienceNaturePack, sportsGamesPack];
+export const generatedBuiltInPacks = [booksWordsPack, disneyPack, foodTravelPack, freeResponseGeneral1Pack, freeResponseGenreDisneyPack, freeResponseGenreHistoryGeographyPack, freeResponseGenreMoviesTvPack, freeResponseGenreMusicPack, freeResponseGenreSportsGamesPack, freeResponseYouthMixPack, historyGeographyPack, historyGeography2Pack, historyGeography3Pack, moviesTvPack, moviesTv2Pack, musicPack, scienceNaturePack, sportsGamesPack, youthMixPack];
