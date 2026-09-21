@@ -35,6 +35,12 @@ For every row record: environment, browser/device, host/controller networks, exp
 
 Run `BLUE_STAGE_REAL_PEERJS=1 npx playwright test e2e/real-peerjs-smoke.spec.ts --project=chromium` only when external public signaling access is intended. A public-service outage is an environment result, not deterministic product failure. There is no relay-only command because real relay verification needs externally provisioned TURN credentials; when available, repeat different-network, mass-recovery, and reload rows and retain only safe diagnostic evidence.
 
+## Safe diagnostics and TURN evidence
+
+For a local or support-session capture, attach a listener to the runtime's `network:diagnostic` event or read its bounded `getNetworkDiagnostics()` result in DevTools. Retain only `at`, `kind`, `role`, `generation`, `detail`, and `turnConfigured`. Do not export request payloads, local storage, URLs containing capabilities, reconnect tokens, or ICE credentials. Useful kinds are `peer-open`, `peer-disconnected`, `peer-closed`, `peer-error`, `data-open`, `data-closed`, `data-error`, `reconnect-scheduled`, `reconnect-coalesced`, `reconnect-started`, `reconnect-failed`, `ice-configured`, and `ice-config-fallback`.
+
+Before relay testing, verify the HTTPS ICE endpoint returns an `iceServers` array containing STUN plus short-lived `turn:` or `turns:` credentials and accepts no browser cookies. A relay-only experiment must live in a disposable test harness using `iceTransportPolicy: 'relay'`; never enable it in the shipping app. Save a redacted browser WebRTC-internals report showing a relay candidate, then repeat join, buzz, score, disconnect/reconnect, and a post-recovery join.
+
 ## Release record
 
 | Environment | Status | Evidence / limitation |
@@ -42,6 +48,10 @@ Run `BLUE_STAGE_REAL_PEERJS=1 npx playwright test e2e/real-peerjs-smoke.spec.ts 
 | Desktop host + desktop controller | Partially verified | Deterministic runtime and opt-in public-service smoke coverage |
 | Desktop host + Android | Not verified | Requires physical device/network run |
 | Desktop host + iPhone Safari | Not verified | Playwright WebKit is not iOS Safari |
-| Same Wi-Fi / cross-network / cellular | Not verified | Requires physical network runs |
+| Same Wi-Fi | Not verified | Requires iPhone/Android physical run |
+| Cellular and cross-network | Not verified | Requires physical carrier/remote-network run |
 | Player reload / host recovery / mass disconnect | Partially verified | Deterministic production-runtime coverage |
-| Restrictive or symmetric NAT / TURN relay | Not verified | Requires provisioned TURN service and relay observation |
+| Restrictive NAT | Not verified | Requires representative network and TURN fallback evidence |
+| Symmetric NAT / Private Relay-like path | Not verified | Requires representative network and relay evidence |
+| STUN direct path | Partially verified | Default configuration and deterministic browser-path validation; no external route proof |
+| TURN relay | Not verified | Requires provisioned TURN service and relay observation |
