@@ -658,11 +658,13 @@ describe('production socket runtime isolation', () => {
     const display = createSocketRuntime({ createPeer: peerFactory, installBrowserHooks: false });
     await expect(display.emitAck<{ code: string }>('presentation:join', { roomCode: room.roomCode, presentationToken: token })).resolves.toMatchObject({ code: room.roomCode });
     expect(display.socket.connected).toBe(true);
+    expect(host.getPresentationConnectionCount(room.roomCode)).toBe(1);
     location.search = '?mode=host';
     const rotated = await host.emitAck<{ presentationToken: string }>('host:rotate-presentation-capability', { roomCode: room.roomCode, hostToken: room.hostToken });
     await settle();
     expect(rotated.presentationToken).not.toBe(token);
     expect(display.socket.connected).toBe(false);
+    expect(host.getPresentationConnectionCount(room.roomCode)).toBe(0);
     const currentDisplay = createSocketRuntime({ createPeer: peerFactory, installBrowserHooks: false });
     location.search = '?mode=presentation';
     await expect(currentDisplay.emitAck('presentation:join', { roomCode: room.roomCode, presentationToken: token })).rejects.toThrow(/capability/i);

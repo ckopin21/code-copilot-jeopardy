@@ -57,6 +57,7 @@ export interface SocketRuntime {
   suspendClientSession(): void;
   resumeClientSession(forceHostPause?: boolean, forceTransportReset?: boolean): void;
   getPlayerConnectionHealth(roomCode: string): PlayerConnectionHealth[];
+  getPresentationConnectionCount(roomCode: string): number;
   testPlayerControllers(roomCode: string): string[];
   destroy(): void;
 }
@@ -197,6 +198,10 @@ function emitRoom(roomCode: string): void {
 }
 function bindIdentity(connection: DataConnection, identity: Identity): void {
   identities.set(connection, identity);
+  if (identity.role === 'presentation') {
+    emitPresentationStatus(identity.roomCode);
+    return;
+  }
   if (identity.role !== 'player' || !identity.playerId) return;
   const prior = playerConnections.get(identity.playerId);
   playerConnections.set(identity.playerId, connection);
@@ -207,6 +212,10 @@ function handleConnectionClosed(connection: DataConnection): void {
   connections.delete(connection);
   const identity = identities.get(connection);
   identities.delete(connection);
+  if (identity?.role === 'presentation') {
+    emitPresentationStatus(identity.roomCode);
+    return;
+  }
   if (!identity || identity.role !== 'player' || !identity.playerId) return;
   if (playerConnections.get(identity.playerId) !== connection) return;
   playerConnections.delete(identity.playerId);
@@ -448,6 +457,13 @@ async function handleHostRequest(connection: DataConnection, message: RequestMes
     if (!activeRequests.size) inFlightRequests.delete(connection);
     finishRequest();
   }
+}
+function getPresentationConnectionCount(roomCode: string): number {
+  const normalized = roomCode.toUpperCase();
+  return [...connections].filter((connection) => connection.open && identities.get(connection)?.roomCode === normalized && identities.get(connection)?.role === 'presentation').length;
+}
+function emitPresentationStatus(roomCode: string): void {
+  emitLocal('presentation:status', { roomCode: roomCode.toUpperCase(), connectedCount: getPresentationConnectionCount(roomCode) });
 }
 function requestSessionKey(identity: Identity | undefined): string | null {
   if (!identity) return null;
@@ -1019,6 +1035,7 @@ window.setInterval(() => {
     suspendClientSession,
     resumeClientSession,
     getPlayerConnectionHealth,
+    getPresentationConnectionCount,
     testPlayerControllers,
     destroy() {
       suspendClientSession();
@@ -1053,4 +1070,5 @@ export const emitAck = defaultRuntime.emitAck;
 export const suspendClientSession = defaultRuntime.suspendClientSession;
 export const resumeClientSession = defaultRuntime.resumeClientSession;
 export const getPlayerConnectionHealth = defaultRuntime.getPlayerConnectionHealth;
+export const getPresentationConnectionCount = defaultRuntime.getPresentationConnectionCount;
 export const testPlayerControllers = defaultRuntime.testPlayerControllers;

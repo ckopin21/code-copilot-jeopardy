@@ -4,7 +4,7 @@ import { clampDailyDoubleCount, DEFAULT_SETTINGS, QUESTION_VALUES, settingsForGa
 import { GAME_MODES, gameModeDefinition } from '../shared/gameModes';
 import { freeResponseReadingTimer } from '../lib/freeResponseFlow';
 import { autoGradeAnswer } from '../shared/validation';
-import { emitAck, socket } from '../lib/socket';
+import { emitAck, getPresentationConnectionCount, socket } from '../lib/socket';
 import { audio } from '../lib/audio';
 import { menuUrl, navigateInApp, resetInstance } from '../lib/resetInstance';
 import { calculateComebackAward } from '../lib/comebackScoring';
@@ -60,6 +60,7 @@ export function HostAppV3() {
   const [showJoin, setShowJoin] = useState(false);
   const [reviewId, setReviewId] = useState<string | null>(null);
   const [presentationMode, setPresentationMode] = useState(false);
+  const [presentationConnections, setPresentationConnections] = useState(0);
   const [historyEntries, setHistoryEntries] = useState<QuestionHistoryEntry[]>([]);
   const [buzzerCountdown, setBuzzerCountdown] = useState<number | null>(null);
   const [modifierReveal, setModifierReveal] = useState<2 | 3 | null>(null);
@@ -122,16 +123,22 @@ export function HostAppV3() {
 
   useEffect(() => {
     fetch('/api/packs').then((response) => response.json()).then(setPacks).catch(() => setError('Could not load question packs'));
-    const onState = (next: RoomSnapshot) => setRoom(next);
+    const onState = (next: RoomSnapshot) => {
+      setRoom(next);
+      setPresentationConnections(getPresentationConnectionCount(next.code));
+    };
     const onConnect = () => setConnectionOnline(true);
     const onDisconnect = () => setConnectionOnline(false);
+    const onPresentationStatus = (status: { connectedCount?: number }) => setPresentationConnections(status.connectedCount ?? 0);
     socket.on('room:state', onState);
     socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);
+    socket.on('presentation:status', onPresentationStatus);
     return () => {
       socket.off('room:state', onState);
       socket.off('connect', onConnect);
       socket.off('disconnect', onDisconnect);
+      socket.off('presentation:status', onPresentationStatus);
     };
   }, []);
 
@@ -822,7 +829,7 @@ export function HostAppV3() {
 
       {room.phase === 'recap' && <EndgameRecap players={recapPlayers} onNewGame={() => void resetGame(false)} onMenu={goMenu} />}
 
-      {showJoin && <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Join game"><section ref={joinModalRef} tabIndex={-1} className="modal-card join-modal-v2 expanded-qr-modal"><button className="modal-close" data-modal-initial-focus onClick={() => setShowJoin(false)} aria-label="Close">×</button><div className="section-kicker">JOIN GAME</div>{qr && <img src={qr} alt="QR code to join or reconnect to the game" />}<strong className="modal-room-code">{room.code}</strong><a href={credentials.joinUrl}>{credentials.joinUrl}</a><p>Returning players reconnect to the same reserved seat on the same phone and browser.</p><div className="presentation-link-controls"><small>DISPLAY LINK · Anyone with this link can view the shared screen.</small><a href={credentials.presentationUrl} target="_blank" rel="noreferrer">Open presentation display</a><button className="secondary-button" disabled={busy} onClick={() => void rotatePresentationCapability()}>Rotate display link</button><p className="helper-copy">Rotating immediately disconnects displays using the old link.</p></div></section></div>}
+      {showJoin && <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Join game"><section ref={joinModalRef} tabIndex={-1} className="modal-card join-modal-v2 expanded-qr-modal"><button className="modal-close" data-modal-initial-focus onClick={() => setShowJoin(false)} aria-label="Close">×</button><div className="section-kicker">JOIN GAME</div>{qr && <img src={qr} alt="QR code to join or reconnect to the game" />}<strong className="modal-room-code">{room.code}</strong><a href={credentials.joinUrl}>{credentials.joinUrl}</a><p>Returning players reconnect to the same reserved seat on the same phone and browser.</p><div className="presentation-link-controls"><small>DISPLAY LINK · {presentationConnections} connected display{presentationConnections === 1 ? '' : 's'} · Anyone with this link can view the shared screen.</small><a href={credentials.presentationUrl} target="_blank" rel="noreferrer">Open presentation display</a><button className="secondary-button" disabled={busy} onClick={() => void rotatePresentationCapability()}>Rotate display link</button><p className="helper-copy">Rotating immediately disconnects displays using the old link.</p></div></section></div>}
 
       {reviewId && <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Question review"><section ref={reviewModalRef} tabIndex={-1} className="modal-card review-modal-v2"><button className="modal-close" data-modal-initial-focus onClick={() => setReviewId(null)} aria-label="Close">×</button>{(() => {
         const entry = historyEntries.find((item) => item.questionId === reviewId);
