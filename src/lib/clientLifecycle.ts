@@ -16,9 +16,7 @@ function clientMode(): boolean {
   return mode === 'player' || mode === 'presentation';
 }
 
-// Keep a room alive while its owning host tab is open. Credentials are session-scoped first,
-// so another tab starting a different game cannot redirect this tab's keepalive.
-window.setInterval(() => {
+function resumeHostSession(): void {
   if (currentMode() !== 'host') return;
   const credentials = readActiveHostCredentials();
   if (!credentials) return;
@@ -26,8 +24,15 @@ window.setInterval(() => {
     roomCode: credentials.roomCode,
     hostToken: credentials.hostToken
   }).catch(() => {
-    // Host recovery owns user-facing error reporting. Keepalive never deletes saved credentials.
+    // Saved credentials remain available for the regular keepalive or a later
+    // browser recovery event; transient signaling loss must not erase them.
   });
+}
+
+// Keep a room alive while its owning host tab is open. Credentials are session-scoped first,
+// so another tab starting a different game cannot redirect this tab's keepalive.
+window.setInterval(() => {
+  resumeHostSession();
 }, HOST_KEEPALIVE_MS);
 
 // WebKit can preserve the JavaScript objects for a page while suspending the network path.
@@ -39,12 +44,20 @@ window.addEventListener('pagehide', () => {
 });
 
 window.addEventListener('pageshow', (event) => {
+  if (currentMode() === 'host') {
+    resumeHostSession();
+    return;
+  }
   if (!clientMode()) return;
   hiddenAt = 0;
   resumeClientSession(false, shouldForceClientTransportReset('pageshow', { persisted: event.persisted }));
 });
 
 document.addEventListener('visibilitychange', () => {
+  if (currentMode() === 'host') {
+    if (document.visibilityState === 'visible') resumeHostSession();
+    return;
+  }
   if (!clientMode()) return;
   if (document.visibilityState === 'hidden') {
     hiddenAt = Date.now();
@@ -57,6 +70,10 @@ document.addEventListener('visibilitychange', () => {
 });
 
 window.addEventListener('online', () => {
+  if (currentMode() === 'host') {
+    resumeHostSession();
+    return;
+  }
   if (!clientMode()) return;
   resumeClientSession(false, shouldForceClientTransportReset('online'));
 });
