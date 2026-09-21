@@ -30,6 +30,7 @@ export function useOutsideDismiss(
     };
 
     const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const trigger = triggerRef?.current ?? null;
     const focusInitial = () => {
       const panel = panelRef.current;
       if (!panel) return;
@@ -66,7 +67,7 @@ export function useOutsideDismiss(
     return () => {
       document.removeEventListener('pointerdown', onPointerDown, true);
       if (dismissOnEscape) document.removeEventListener('keydown', onKeyDown);
-      const restore = triggerRef?.current ?? previousFocus;
+      const restore = trigger ?? previousFocus;
       if (restore?.isConnected) queueMicrotask(() => restore.focus());
     };
   }, [open, onDismiss, panelRef, triggerRef, dismissOnEscape, trapFocus]);

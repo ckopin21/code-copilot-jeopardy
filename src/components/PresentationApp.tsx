@@ -81,7 +81,7 @@ export function PresentationApp() {
       suspendClientSession();
       audio.stop();
     };
-  }, [roomCode, applySnapshot]);
+  }, [roomCode, presentationToken, applySnapshot]);
 
   const musicState = room ? musicFor(room) : null;
   useEffect(() => {
