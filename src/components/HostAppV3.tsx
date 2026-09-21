@@ -98,6 +98,27 @@ export function HostAppV3() {
     }
   }, [credentials]);
 
+  const rotatePresentationCapability = useCallback(async () => {
+    if (!credentials) return;
+    setBusy(true);
+    setError('');
+    try {
+      const result = await emitAck<{ presentationToken: string }>('host:rotate-presentation-capability', {
+        roomCode: credentials.roomCode,
+        hostToken: credentials.hostToken
+      });
+      const presentationUrl = new URL(credentials.presentationUrl);
+      presentationUrl.searchParams.set('display', result.presentationToken);
+      const updated = { ...credentials, presentationUrl: presentationUrl.toString() };
+      writeHostCredentials(updated);
+      setCredentials(updated);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not rotate the presentation link');
+    } finally {
+      setBusy(false);
+    }
+  }, [credentials]);
+
   useEffect(() => {
     fetch('/api/packs').then((response) => response.json()).then(setPacks).catch(() => setError('Could not load question packs'));
     const onState = (next: RoomSnapshot) => setRoom(next);
@@ -800,7 +821,7 @@ export function HostAppV3() {
 
       {room.phase === 'recap' && <EndgameRecap players={recapPlayers} onNewGame={() => void resetGame(false)} onMenu={goMenu} />}
 
-      {showJoin && <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Join game"><section ref={joinModalRef} className="modal-card join-modal-v2 expanded-qr-modal"><button className="modal-close" onClick={() => setShowJoin(false)} aria-label="Close">×</button><div className="section-kicker">JOIN GAME</div>{qr && <img src={qr} alt="QR code to join or reconnect to the game" />}<strong className="modal-room-code">{room.code}</strong><a href={credentials.joinUrl}>{credentials.joinUrl}</a><p>Returning players reconnect to the same reserved seat on the same phone and browser.</p></section></div>}
+      {showJoin && <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Join game"><section ref={joinModalRef} className="modal-card join-modal-v2 expanded-qr-modal"><button className="modal-close" onClick={() => setShowJoin(false)} aria-label="Close">×</button><div className="section-kicker">JOIN GAME</div>{qr && <img src={qr} alt="QR code to join or reconnect to the game" />}<strong className="modal-room-code">{room.code}</strong><a href={credentials.joinUrl}>{credentials.joinUrl}</a><p>Returning players reconnect to the same reserved seat on the same phone and browser.</p><div className="presentation-link-controls"><small>DISPLAY LINK · Anyone with this link can view the shared screen.</small><a href={credentials.presentationUrl} target="_blank" rel="noreferrer">Open presentation display</a><button className="secondary-button" disabled={busy} onClick={() => void rotatePresentationCapability()}>Rotate display link</button><p className="helper-copy">Rotating immediately disconnects displays using the old link.</p></div></section></div>}
 
       {reviewId && <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Question review"><section ref={reviewModalRef} className="modal-card review-modal-v2"><button className="modal-close" onClick={() => setReviewId(null)} aria-label="Close">×</button>{(() => {
         const entry = historyEntries.find((item) => item.questionId === reviewId);
