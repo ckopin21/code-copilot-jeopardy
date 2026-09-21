@@ -73,9 +73,10 @@ export function HostAppV3() {
   const lastPenaltySnapshotRef = useRef<RoomSnapshot | null>(null);
   const inFlightActionsRef = useRef(new Set<string>());
   const joinModalRef = useRef<HTMLElement | null>(null);
+  const joinTriggerRef = useRef<HTMLButtonElement | null>(null);
   const reviewModalRef = useRef<HTMLElement | null>(null);
 
-  useOutsideDismiss(showJoin, () => setShowJoin(false), joinModalRef);
+  useOutsideDismiss(showJoin, () => setShowJoin(false), joinModalRef, joinTriggerRef);
   useOutsideDismiss(Boolean(reviewId), () => setReviewId(null), reviewModalRef);
 
   const perform = useCallback(async (event: string, payload: Record<string, unknown> = {}): Promise<boolean> => {
@@ -668,7 +669,7 @@ export function HostAppV3() {
         <div className="mini-brand"><span>BLUE STAGE</span><strong>TRIVIA</strong></div>
         <div className="room-code">ROOM <strong>{room.code}</strong></div>
         <div className={`connection-pill ${connectionOnline ? 'online' : ''}`} role="status" aria-live="polite">{connectionOnline ? 'LIVE' : 'RECONNECTING'}</div>
-        <button className="nav-button" onClick={() => setShowJoin(true)}>Join QR</button>
+        <button ref={joinTriggerRef} className="nav-button" onClick={() => setShowJoin(true)}>Join QR</button>
         <button className="nav-button danger-ghost" onClick={() => void resetGame()}>New Game</button>
         <button className="nav-button danger-ghost" onClick={hardReset}>Reset Instance</button>
         <AudioMixer />
@@ -821,9 +822,9 @@ export function HostAppV3() {
 
       {room.phase === 'recap' && <EndgameRecap players={recapPlayers} onNewGame={() => void resetGame(false)} onMenu={goMenu} />}
 
-      {showJoin && <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Join game"><section ref={joinModalRef} className="modal-card join-modal-v2 expanded-qr-modal"><button className="modal-close" onClick={() => setShowJoin(false)} aria-label="Close">×</button><div className="section-kicker">JOIN GAME</div>{qr && <img src={qr} alt="QR code to join or reconnect to the game" />}<strong className="modal-room-code">{room.code}</strong><a href={credentials.joinUrl}>{credentials.joinUrl}</a><p>Returning players reconnect to the same reserved seat on the same phone and browser.</p><div className="presentation-link-controls"><small>DISPLAY LINK · Anyone with this link can view the shared screen.</small><a href={credentials.presentationUrl} target="_blank" rel="noreferrer">Open presentation display</a><button className="secondary-button" disabled={busy} onClick={() => void rotatePresentationCapability()}>Rotate display link</button><p className="helper-copy">Rotating immediately disconnects displays using the old link.</p></div></section></div>}
+      {showJoin && <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Join game"><section ref={joinModalRef} tabIndex={-1} className="modal-card join-modal-v2 expanded-qr-modal"><button className="modal-close" data-modal-initial-focus onClick={() => setShowJoin(false)} aria-label="Close">×</button><div className="section-kicker">JOIN GAME</div>{qr && <img src={qr} alt="QR code to join or reconnect to the game" />}<strong className="modal-room-code">{room.code}</strong><a href={credentials.joinUrl}>{credentials.joinUrl}</a><p>Returning players reconnect to the same reserved seat on the same phone and browser.</p><div className="presentation-link-controls"><small>DISPLAY LINK · Anyone with this link can view the shared screen.</small><a href={credentials.presentationUrl} target="_blank" rel="noreferrer">Open presentation display</a><button className="secondary-button" disabled={busy} onClick={() => void rotatePresentationCapability()}>Rotate display link</button><p className="helper-copy">Rotating immediately disconnects displays using the old link.</p></div></section></div>}
 
-      {reviewId && <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Question review"><section ref={reviewModalRef} className="modal-card review-modal-v2"><button className="modal-close" onClick={() => setReviewId(null)} aria-label="Close">×</button>{(() => {
+      {reviewId && <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Question review"><section ref={reviewModalRef} tabIndex={-1} className="modal-card review-modal-v2"><button className="modal-close" data-modal-initial-focus onClick={() => setReviewId(null)} aria-label="Close">×</button>{(() => {
         const entry = historyEntries.find((item) => item.questionId === reviewId);
         const tile = room.board?.questions.find((item) => item.questionId === reviewId);
         if (!entry) return <><div className="section-kicker">USED QUESTION</div><h2>{tile?.category}</h2><p>No answer history was recorded for this question.</p></>;
