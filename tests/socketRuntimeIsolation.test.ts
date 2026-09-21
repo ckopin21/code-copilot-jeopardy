@@ -614,6 +614,35 @@ describe('production socket runtime isolation', () => {
     host.destroy(); player.destroy();
   });
 
+  it('moves same-room host authority deterministically without allowing the displaced runtime to mutate', async () => {
+    const { createSocketRuntime } = await import('../src/lib/socket');
+    DeterministicPeer.peers.clear();
+    DeterministicPeer.clientConnections = [];
+    const peerFactory = (id: string | undefined) => new DeterministicPeer(id) as never;
+    location.search = '?mode=host';
+    const firstEngine = new BrowserGameEngine();
+    const firstHost = createSocketRuntime({ createPeer: peerFactory, createEngine: () => firstEngine, installBrowserHooks: false });
+    const room = await firstHost.emitAck<{ roomCode: string; hostToken: string }>('room:create', { settings: { dailyDoublesEnabled: false, finalRoundEnabled: false } });
+    location.search = '?mode=player';
+    const player = createSocketRuntime({ createPeer: peerFactory, installBrowserHooks: false });
+    const identity = await player.emitAck<{ playerId: string; reconnectToken: string }>('player:join', { roomCode: room.roomCode, name: 'Authority', avatar: '🚀', accent: '#93c5fd' });
+
+    location.search = '?mode=host';
+    const recoveredEngine = new BrowserGameEngine();
+    const replacementHost = createSocketRuntime({ createPeer: peerFactory, createEngine: () => recoveredEngine, installBrowserHooks: false });
+    await replacementHost.emitAck('host:reconnect', { roomCode: room.roomCode, hostToken: room.hostToken, allowAuthorityTakeover: true });
+    await expect(firstHost.emitAck('host:start-game', { roomCode: room.roomCode, hostToken: room.hostToken })).rejects.toThrow(/active host/i);
+
+    location.search = '?mode=player';
+    player.resumeClientSession(false, true);
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    expect(player.socket.connected).toBe(true);
+    location.search = '?mode=host';
+    await replacementHost.emitAck('host:start-game', { roomCode: room.roomCode, hostToken: room.hostToken });
+    expect(recoveredEngine.snapshot(room.roomCode)).toMatchObject({ phase: 'board', players: [expect.objectContaining({ id: identity.playerId, connected: true })] });
+    firstHost.destroy(); replacementHost.destroy(); player.destroy();
+  });
+
   it('enforces and rotates presentation capabilities through the production socket protocol', async () => {
     const { createSocketRuntime } = await import('../src/lib/socket');
     DeterministicPeer.peers.clear();
