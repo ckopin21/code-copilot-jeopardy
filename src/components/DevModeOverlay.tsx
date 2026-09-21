@@ -8,7 +8,8 @@ import { PlayerStrip } from './PlayerStrip';
 import { ScoreFlight, type ScoreFlightState } from './ScoreFlight';
 import { ComebackBoostNotice } from './ComebackBoostNotice';
 import { useOutsideDismiss } from '../lib/useOutsideDismiss';
-import { DevPresentationLab, buildDevPresentationRoom } from './DevPresentationLab';
+import { DevPresentationLab } from './DevPresentationLab';
+import { buildDevPresentationRoom } from '../lib/devPresentationRoom';
 
 type CardState = 'ready' | 'active' | 'fire' | 'cold';
 type TurnPreview = 'none' | 'board' | 'question';
