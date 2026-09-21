@@ -18,11 +18,10 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci --no-audit --no-fund
-      - run: npm install --no-save --no-audit --no-fund @playwright/test@1.55.0
       - run: npm run typecheck
       - run: npm run lint
       - run: npm test
       - run: npm run build
       - run: npx playwright install --with-deps chromium webkit
-      - run: npx playwright test --project=chromium
-      - run: npx playwright test e2e/safari-smoke.spec.ts e2e/player-card-layout.spec.ts --project=webkit
+      - run: npm run test:e2e
+      - run: npm run test:e2e:webkit
