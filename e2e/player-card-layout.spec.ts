@@ -390,6 +390,49 @@ test('avatar remains centered for 2–5 players in the normal-host cascade', asy
   }
 });
 
+for (const width of [1440, 1920]) {
+  test(`normal Host keeps larger Fire pills and full scores at ${width}px`, async ({ page }) => {
+    const panel = await openDevPanel(page, { width, height: 900 });
+    await panel.locator('.dev-stage').evaluate((element) => {
+      if (!(element instanceof HTMLElement)) return;
+      element.style.width = 'min(1800px, calc(100vw - 32px))';
+      element.style.maxWidth = 'none';
+    });
+    await setPlayerCount(panel, 5);
+    await setTurnPreview(panel, 'question');
+    await setCardState(panel, 'fire');
+    const card = panel.locator('.dev-stage [data-player-id="dev-player-2"]');
+    const name = card.locator('.player-name strong');
+    const score = card.locator('[data-player-score]');
+    await name.evaluate((node) => { node.textContent = 'Alexandria Maximilian The Third'; });
+
+    for (const value of ['-123,456', '1,234,567']) {
+      await score.evaluate((node, nextValue) => { node.textContent = nextValue; }, value);
+      const geometry = await measurePlayerCard(card);
+      expect(geometry.textBadgeOverlap).toBe(false);
+      expect(geometry.avatarBadgeOverlap).toBe(false);
+      expect(geometry.badgesContained).toBe(true);
+      expect(geometry.streakLabelTruncated).toBe(false);
+      expect(geometry.streakLabelContained).toBe(true);
+      const sizes = await card.evaluate((node) => {
+        const badge = node.querySelector('.streak-ribbon');
+        const scoreNode = node.querySelector('[data-player-score]');
+        if (!(badge instanceof HTMLElement) || !(scoreNode instanceof HTMLElement)) throw new Error('Missing score or Fire status');
+        return {
+          cardHeight: node.getBoundingClientRect().height,
+          badgeHeight: badge.getBoundingClientRect().height,
+          badgeFont: parseFloat(getComputedStyle(badge).fontSize),
+          scoreFits: scoreNode.scrollWidth <= scoreNode.clientWidth + 1
+        };
+      });
+      expect(sizes.cardHeight).toBeGreaterThanOrEqual(88);
+      expect(sizes.badgeHeight).toBeGreaterThanOrEqual(29);
+      expect(sizes.badgeFont).toBeGreaterThanOrEqual(10);
+      expect(sizes.scoreFits).toBe(true);
+    }
+  });
+}
+
 for (const viewport of [
   { width: 390, height: 844, label: 'mobile' },
   { width: 1280, height: 720, label: 'desktop' },

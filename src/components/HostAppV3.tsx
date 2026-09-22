@@ -61,6 +61,7 @@ export function HostAppV3() {
   const [reviewId, setReviewId] = useState<string | null>(null);
   const [presentationMode, setPresentationMode] = useState(false);
   const [presentationConnections, setPresentationConnections] = useState(0);
+  const [displayLinkNotice, setDisplayLinkNotice] = useState('');
   const [historyEntries, setHistoryEntries] = useState<QuestionHistoryEntry[]>([]);
   const [buzzerCountdown, setBuzzerCountdown] = useState<number | null>(null);
   const [modifierReveal, setModifierReveal] = useState<2 | 3 | null>(null);
@@ -104,6 +105,7 @@ export function HostAppV3() {
     if (!credentials) return;
     setBusy(true);
     setError('');
+    setDisplayLinkNotice('');
     try {
       const result = await emitAck<{ presentationToken: string }>('host:rotate-presentation-capability', {
         roomCode: credentials.roomCode,
@@ -114,6 +116,7 @@ export function HostAppV3() {
       const updated = { ...credentials, presentationUrl: presentationUrl.toString() };
       writeHostCredentials(updated);
       setCredentials(updated);
+      setDisplayLinkNotice('New display link ready. Open it on each display to reconnect.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not rotate the presentation link');
     } finally {
@@ -130,15 +133,23 @@ export function HostAppV3() {
     const onConnect = () => setConnectionOnline(true);
     const onDisconnect = () => setConnectionOnline(false);
     const onPresentationStatus = (status: { connectedCount?: number }) => setPresentationConnections(status.connectedCount ?? 0);
+    const onHostCredentials = (updated: HostRoomCredentials) => {
+      const active = readActiveHostCredentials();
+      if (active && active.roomCode !== updated.roomCode) return;
+      writeHostCredentials(updated);
+      setCredentials(updated);
+    };
     socket.on('room:state', onState);
     socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);
     socket.on('presentation:status', onPresentationStatus);
+    socket.on('host:credentials', onHostCredentials);
     return () => {
       socket.off('room:state', onState);
       socket.off('connect', onConnect);
       socket.off('disconnect', onDisconnect);
       socket.off('presentation:status', onPresentationStatus);
+      socket.off('host:credentials', onHostCredentials);
     };
   }, []);
 
@@ -166,15 +177,16 @@ export function HostAppV3() {
               snapshot = await emitAck<RoomSnapshot>('host:reset-game', { roomCode: parsed.roomCode, hostToken: parsed.hostToken });
               history.replaceState(null, '', stripFreshHostFlag(location.href));
             }
-            writeHostCredentials(parsed);
-            setCredentials(parsed);
+            const refreshedCredentials = readActiveHostCredentials() ?? parsed;
+            writeHostCredentials(refreshedCredentials);
+            setCredentials(refreshedCredentials);
             setRoom(snapshot);
             return;
           } catch (reconnectError) {
             const message = reconnectError instanceof Error ? reconnectError.message : 'Could not restore saved room';
             const terminal = /authorization|not found|expired/i.test(message);
             if (!terminal) {
-              // Preserve the saved room on signaling/network failures. A transient outage must
+              // Preserve the saved room on server/network failures. A transient outage must
               // never destroy the only reconnect credentials for an otherwise valid game.
               setCredentials(parsed);
               const retryHint = /another host screen/i.test(message)
@@ -491,7 +503,7 @@ export function HostAppV3() {
     await perform('host:reset-game');
   };
   const hardReset = () => {
-    if (!confirm('Reset this entire game instance? This clears the room, saved seats, scores, and cached Blue Stage state, then reloads the newest build.')) return;
+    if (!confirm('Reset Blue Stage data in this browser? This clears saved Host access on this device. The laptop server keeps this room and its scores; you may lose access to the Host role.')) return;
     audio.stop();
     void resetInstance();
   };
@@ -678,7 +690,7 @@ export function HostAppV3() {
         <div className={`connection-pill ${connectionOnline ? 'online' : ''}`} role="status" aria-live="polite">{connectionOnline ? 'LIVE' : 'RECONNECTING'}</div>
         <button ref={joinTriggerRef} className="nav-button" onClick={() => setShowJoin(true)}>Join QR</button>
         <button className="nav-button danger-ghost" onClick={() => void resetGame()}>New Game</button>
-        <button className="nav-button danger-ghost" onClick={hardReset}>Reset Instance</button>
+        <button className="nav-button danger-ghost" onClick={hardReset}>Reset This Browser</button>
         <AudioMixer />
       </header>
 
@@ -829,7 +841,7 @@ export function HostAppV3() {
 
       {room.phase === 'recap' && <EndgameRecap players={recapPlayers} onNewGame={() => void resetGame(false)} onMenu={goMenu} />}
 
-      {showJoin && <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Join game"><section ref={joinModalRef} tabIndex={-1} className="modal-card join-modal-v2 expanded-qr-modal"><button className="modal-close" data-modal-initial-focus onClick={() => setShowJoin(false)} aria-label="Close">×</button><div className="section-kicker">JOIN GAME</div>{qr && <img src={qr} alt="QR code to join or reconnect to the game" />}<strong className="modal-room-code">{room.code}</strong><a href={credentials.joinUrl}>{credentials.joinUrl}</a><p>Returning players reconnect to the same reserved seat on the same phone and browser.</p><div className="presentation-link-controls"><small>DISPLAY LINK · {presentationConnections} connected display{presentationConnections === 1 ? '' : 's'} · Anyone with this link can view the shared screen.</small><a href={credentials.presentationUrl} target="_blank" rel="noreferrer">Open presentation display</a><button className="secondary-button" disabled={busy} onClick={() => void rotatePresentationCapability()}>Rotate display link</button><p className="helper-copy">Rotating immediately disconnects displays using the old link.</p></div></section></div>}
+      {showJoin && <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Join game"><section ref={joinModalRef} tabIndex={-1} className="modal-card join-modal-v2 expanded-qr-modal"><button className="modal-close" data-modal-initial-focus onClick={() => setShowJoin(false)} aria-label="Close">×</button><div className="section-kicker">JOIN GAME</div>{qr && <img src={qr} alt="QR code to join or reconnect to the game" />}<strong className="modal-room-code">{room.code}</strong><a href={credentials.joinUrl}>{credentials.joinUrl}</a><p>Returning players reconnect to the same reserved seat on the same phone and browser.</p><div className="presentation-link-controls"><small>DISPLAY LINK · {presentationConnections} connected display{presentationConnections === 1 ? '' : 's'} · Anyone with this link can view the shared screen.</small><a href={credentials.presentationUrl} target="_blank" rel="noreferrer">Open presentation display</a><button className="secondary-button" disabled={busy} onClick={() => void rotatePresentationCapability()}>Rotate display link</button><p className="helper-copy">Use this if the link was shared by mistake. It disconnects current displays and makes the old link unusable.</p>{displayLinkNotice && <p className="helper-copy" role="status">{displayLinkNotice}</p>}</div></section></div>}
 
       {reviewId && <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Question review"><section ref={reviewModalRef} tabIndex={-1} className="modal-card review-modal-v2"><button className="modal-close" data-modal-initial-focus onClick={() => setReviewId(null)} aria-label="Close">×</button>{(() => {
         const entry = historyEntries.find((item) => item.questionId === reviewId);

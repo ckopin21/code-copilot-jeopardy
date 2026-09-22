@@ -3,36 +3,38 @@
 @media (min-width: 760px) {
   .showcase-host:not(.host-presentation-mode) .showcase-player-strip.player-strip[data-player-count] {
     width: 100%;
-    max-width: 100% !important;
+    max-width: min(1800px, calc(100vw - 32px)) !important;
     min-height: 0 !important;
-    padding: 12px 16px 10px !important;
-    gap: 12px !important;
+    padding: clamp(10px, 1.5vh, 16px) 16px !important;
+    gap: clamp(10px, 1vw, 16px) !important;
     align-items: center;
     justify-content: center;
   }
 
   .showcase-host:not(.host-presentation-mode) .showcase-player-strip.player-strip[data-player-count="1"] {
-    grid-template-columns: minmax(360px, 500px) !important;
+    grid-template-columns: minmax(0, 560px) !important;
   }
   .showcase-host:not(.host-presentation-mode) .showcase-player-strip.player-strip[data-player-count="2"] {
-    grid-template-columns: repeat(2, minmax(300px, 460px)) !important;
+    grid-template-columns: repeat(2, minmax(0, 520px)) !important;
   }
   .showcase-host:not(.host-presentation-mode) .showcase-player-strip.player-strip[data-player-count="3"] {
-    grid-template-columns: repeat(3, minmax(235px, 350px)) !important;
+    grid-template-columns: repeat(3, minmax(0, 460px)) !important;
   }
   .showcase-host:not(.host-presentation-mode) .showcase-player-strip.player-strip[data-player-count="4"] {
-    grid-template-columns: repeat(4, minmax(195px, 280px)) !important;
+    grid-template-columns: repeat(4, minmax(0, 400px)) !important;
   }
   .showcase-host:not(.host-presentation-mode) .showcase-player-strip.player-strip[data-player-count="5"] {
-    grid-template-columns: repeat(5, minmax(170px, 240px)) !important;
+    grid-template-columns: repeat(5, minmax(0, 360px)) !important;
   }
 
   .showcase-host:not(.host-presentation-mode) .showcase-player-strip.player-strip[data-player-count] .showcase-player-card.player-card {
-    min-height: 82px !important;
+    --ui-avatar-card: clamp(3.25rem, 4.6vw, 4rem);
+    --ui-status-lane: clamp(6.25rem, 7.5vw, 7.5rem);
+    min-height: clamp(88px, 11vh, 108px) !important;
     height: auto !important;
-    grid-template-columns: 52px minmax(0, 1fr) var(--ui-status-lane) !important;
-    gap: 10px !important;
-    padding: 10px 13px !important;
+    grid-template-columns: var(--ui-avatar-card) minmax(0, 1fr) var(--ui-status-lane) !important;
+    gap: clamp(8px, .8vw, 14px) !important;
+    padding: 12px clamp(11px, 1vw, 18px) !important;
     border-width: 3px !important;
     border-radius: 12px !important;
     transform: none;
@@ -43,29 +45,33 @@
   }
 
   .showcase-host:not(.host-presentation-mode) .showcase-player-strip.player-strip[data-player-count] .player-avatar-large {
-    width: 52px !important;
-    height: 52px !important;
-    font-size: 1.55rem !important;
+    width: var(--ui-avatar-card) !important;
+    height: var(--ui-avatar-card) !important;
+    font-size: clamp(1.55rem, 2.25vw, 2rem) !important;
     border-width: 2px !important;
   }
 
   .showcase-host:not(.host-presentation-mode) .showcase-player-strip.player-strip[data-player-count] .showcase-player-card .player-name {
-    font-size: .92rem !important;
+    font-size: clamp(.92rem, 1.18vw, 1.2rem) !important;
     line-height: 1.1;
   }
 
   .showcase-host:not(.host-presentation-mode) .showcase-player-strip.player-strip[data-player-count] .showcase-player-card .score {
     margin-top: 3px !important;
-    font-size: 2rem !important;
+    font-size: clamp(1.8rem, 2.5vw, 2.55rem) !important;
     line-height: 1 !important;
+  }
+
+  .showcase-host:not(.host-presentation-mode) .showcase-player-strip.player-strip[data-player-count="5"] .showcase-player-card .score {
+    font-size: clamp(1.8rem, 2vw, 2.1rem) !important;
   }
 
   /* The status lane is a real grid track. Its pill sizing follows the shared
      layout contract rather than reverting to an old corner ribbon. */
   .showcase-host:not(.host-presentation-mode) .showcase-player-strip.player-strip[data-player-count] .player-status-stack :is(.streak-ribbon, .turn-beacon, .status-pill) {
-    min-height: 24px !important;
-    padding: 5px 8px !important;
-    font-size: .62rem !important;
+    min-height: 30px !important;
+    padding: 6px 9px !important;
+    font-size: clamp(.66rem, .75vw, .8rem) !important;
     line-height: 1.1 !important;
     border-width: 1px !important;
     box-shadow: 0 2px 8px rgba(0,0,0,.28) !important;
@@ -141,6 +147,28 @@
     border-radius: 5px !important;
     font-size: .56rem !important;
     line-height: 1 !important;
+  }
+}
+
+/* A row only stays single-line while each card has room for its three tracks. */
+@media (min-width: 760px) and (max-width: 1839px) {
+  .showcase-host:not(.host-presentation-mode) .showcase-player-strip.player-strip[data-player-count="5"] {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (min-width: 1840px) {
+  .showcase-host:not(.host-presentation-mode) .showcase-player-strip.player-strip[data-player-count="5"] .showcase-player-card.player-card {
+    --ui-avatar-card: 3.25rem;
+    --ui-status-lane: 6rem;
+    gap: 8px !important;
+    padding-inline: 10px !important;
+  }
+}
+
+@media (min-width: 760px) and (max-width: 1099px) {
+  .showcase-host:not(.host-presentation-mode) .showcase-player-strip.player-strip:is([data-player-count="3"], [data-player-count="4"], [data-player-count="5"]) {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 }
 

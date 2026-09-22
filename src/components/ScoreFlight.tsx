@@ -10,6 +10,7 @@ export type ScoreFlightState = {
   delta: number;
   correct: boolean;
   comebackBonus?: number;
+  nextScore?: number;
 };
 
 function findByData(attribute: 'questionId' | 'playerScore' | 'playerId', value: string): HTMLElement | null {

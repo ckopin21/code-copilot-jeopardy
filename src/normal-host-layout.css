@@ -1,7 +1,7 @@
 /* Normal host board layout. Presentation mode intentionally remains unchanged. */
 @media (min-width: 900px) {
   :root {
-    --normal-host-stage-width: min(1540px, calc(100vw - 32px));
+    --normal-host-stage-width: min(1800px, calc(100vw - 32px));
     --normal-host-stage-edge: max(16px, calc((100vw - var(--normal-host-stage-width)) / 2));
   }
 
@@ -14,7 +14,7 @@
 
   .showcase-host:not(.host-presentation-mode) > .showcase-board-stage.game-stage {
     width: var(--normal-host-stage-width) !important;
-    max-width: 1540px !important;
+    max-width: 1800px !important;
     margin: 0 auto !important;
     padding-left: 0 !important;
     padding-right: 0 !important;

@@ -25,7 +25,7 @@ function resumeHostSession(): void {
     hostToken: credentials.hostToken
   }).catch(() => {
     // Saved credentials remain available for the regular keepalive or a later
-    // browser recovery event; transient signaling loss must not erase them.
+    // browser recovery event; transient server connection loss must not erase them.
   });
 }
 

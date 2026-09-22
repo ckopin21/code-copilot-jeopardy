@@ -99,7 +99,12 @@ class AudioEngine {
     if (this.settings.backgroundTrack !== 'dynamic') this.startSelectedMediaTrack();
 
     if (!this.context) {
-      this.context = new AudioContext();
+      const AudioContextConstructor = window.AudioContext
+        ?? (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      // Web Audio is optional on older/mobile WebKit and restricted browser contexts.
+      // Joining and scoring must still work when audio cannot be initialized.
+      if (!AudioContextConstructor) return;
+      this.context = new AudioContextConstructor();
       this.master = this.context.createGain();
       this.music = this.context.createGain();
       this.effects = this.context.createGain();

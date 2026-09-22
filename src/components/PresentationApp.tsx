@@ -7,7 +7,6 @@ import { Timer } from './Timer';
 import { audio } from '../lib/audio';
 import { scoreboardWagersVisible, turnIndicatorLabel, turnIndicatorVisible } from '../lib/gameUiRules';
 import { ScoreFlight, type ScoreFlightState } from './ScoreFlight';
-import { randomId } from '../lib/ids';
 import { gameModeDefinition } from '../shared/gameModes';
 import { freeResponseReadingTimer } from '../lib/freeResponseFlow';
 import { PlayerAvatar } from './PlayerAvatar';
@@ -23,6 +22,16 @@ function musicFor(room: RoomSnapshot) {
   return room.phase === 'lobby' ? 'lobby' as const : 'board' as const;
 }
 
+type PresentationScoreEvent = {
+  roomCode: string;
+  playerId: string;
+  delta: number;
+  previousScore: number;
+  nextScore: number;
+  questionId: string | null;
+  actionId: string;
+};
+
 export function PresentationApp() {
   const roomCode = new URLSearchParams(location.search).get('room')?.toUpperCase() ?? '';
   const presentationToken = new URLSearchParams(location.search).get('display') ?? '';
@@ -31,53 +40,82 @@ export function PresentationApp() {
   const [audioReady, setAudioReady] = useState(false);
   const [scoreFlights, setScoreFlights] = useState<ScoreFlightState[]>([]);
   const [scoreOverrides, setScoreOverrides] = useState<Record<string, number>>({});
-  const latestRoomRef = useRef<RoomSnapshot | null>(null);
+  const [connectionOnline, setConnectionOnline] = useState(socket.connected);
+  const pendingFlightsRef = useRef<ScoreFlightState[]>([]);
+  const seenScoreEventsRef = useRef(new Set<string>());
 
   const applySnapshot = useCallback((snapshot: RoomSnapshot) => {
-    const previous = latestRoomRef.current;
-    if (previous && previous.code === snapshot.code && snapshot.phase !== 'lobby') {
-      const nextFlights: ScoreFlightState[] = [];
-      const nextOverrides: Record<string, number> = {};
-      for (const player of snapshot.players) {
-        const before = previous.players.find((candidate) => candidate.id === player.id);
-        if (!before || before.score === player.score) continue;
-        nextOverrides[player.id] = before.score;
-        nextFlights.push({
-          id: randomId('presentation-score'),
-          questionId: snapshot.currentQuestion?.questionId ?? previous.currentQuestion?.questionId ?? 'presentation-score-change',
-          playerId: player.id,
-          delta: player.score - before.score,
-          correct: player.score > before.score,
-          comebackBonus: player.score > before.score && !snapshot.currentQuestion?.dailyDouble
-            ? Math.max(0, player.score - before.score - (snapshot.currentQuestion?.effectiveValue ?? previous.currentQuestion?.effectiveValue ?? 0))
-            : 0
-        });
-      }
-      if (nextFlights.length) {
-        setScoreOverrides((current) => ({ ...current, ...nextOverrides }));
-        setScoreFlights((current) => [...current, ...nextFlights]);
-      }
-    }
-    latestRoomRef.current = snapshot;
     setRoom(snapshot);
   }, []);
 
   const handleScoreImpact = useCallback((flight: ScoreFlightState) => {
-    setScoreOverrides((current) => {
-      const next = { ...current };
-      delete next[flight.playerId];
-      return next;
-    });
+    const nextScore = flight.nextScore;
+    if (nextScore !== undefined) {
+      setScoreOverrides((current) => ({ ...current, [flight.playerId]: nextScore }));
+    }
   }, []);
-  const handleScoreComplete = useCallback((flightId: string) => setScoreFlights((current) => current.filter((flight) => flight.id !== flightId)), []);
+  const handleScoreComplete = useCallback((flightId: string) => {
+    const completed = pendingFlightsRef.current.find((flight) => flight.id === flightId);
+    pendingFlightsRef.current = pendingFlightsRef.current.filter((flight) => flight.id !== flightId);
+    setScoreFlights(pendingFlightsRef.current);
+    if (completed && !pendingFlightsRef.current.some((flight) => flight.playerId === completed.playerId)) {
+      setScoreOverrides((current) => {
+        const next = { ...current };
+        delete next[completed.playerId];
+        return next;
+      });
+    }
+  }, []);
 
   useEffect(() => {
     resumeClientSession();
     const onState = (snapshot: RoomSnapshot) => applySnapshot(snapshot);
+    const onScore = (event: PresentationScoreEvent) => {
+      if (event.roomCode !== roomCode || !event.playerId || !Number.isFinite(event.delta) || event.delta === 0 || !Number.isFinite(event.previousScore) || !Number.isFinite(event.nextScore)) return;
+      const eventKey = `${event.actionId}:${event.playerId}`;
+      if (seenScoreEventsRef.current.has(eventKey)) return;
+      seenScoreEventsRef.current.add(eventKey);
+      if (seenScoreEventsRef.current.size > 256) {
+        const oldest = seenScoreEventsRef.current.values().next().value;
+        if (oldest) seenScoreEventsRef.current.delete(oldest);
+      }
+      const flight: ScoreFlightState = {
+        id: eventKey,
+        questionId: event.questionId || 'presentation-score-change',
+        playerId: event.playerId,
+        delta: event.delta,
+        correct: event.delta > 0,
+        nextScore: event.nextScore
+      };
+      pendingFlightsRef.current = [...pendingFlightsRef.current, flight];
+      setScoreFlights(pendingFlightsRef.current);
+      setScoreOverrides((current) => event.playerId in current ? current : { ...current, [event.playerId]: event.previousScore });
+    };
+    const onConnect = () => { setConnectionOnline(true); setError(''); };
+    const onDisconnect = () => {
+      setConnectionOnline(false);
+      setError('Display disconnected. Check the laptop server, or ask the Host for a new display link.');
+      pendingFlightsRef.current = [];
+      setScoreFlights([]);
+      setScoreOverrides({});
+    };
+    const onDiagnostic = (diagnostic: { kind?: string }) => {
+      if (diagnostic.kind !== 'identity-rejected') return;
+      setConnectionOnline(false);
+      setError('This display link is no longer valid. Ask the Host for the current display link.');
+    };
     socket.on('room:state', onState);
-    void emitAck<RoomSnapshot>('presentation:join', { roomCode, presentationToken }).then(applySnapshot).catch((err) => setError(err instanceof Error ? err.message : 'Could not join game'));
+    socket.on('room:score', onScore);
+    socket.on('connect', onConnect);
+    socket.on('disconnect', onDisconnect);
+    socket.on('network:diagnostic', onDiagnostic);
+    void emitAck<RoomSnapshot>('presentation:join', { roomCode, presentationToken }).then((snapshot) => { applySnapshot(snapshot); setConnectionOnline(true); setError(''); }).catch((err) => { setConnectionOnline(false); setError(err instanceof Error ? err.message : 'Could not join game'); });
     return () => {
       socket.off('room:state', onState);
+      socket.off('room:score', onScore);
+      socket.off('connect', onConnect);
+      socket.off('disconnect', onDisconnect);
+      socket.off('network:diagnostic', onDiagnostic);
       suspendClientSession();
       audio.stop();
     };
@@ -100,7 +138,7 @@ export function PresentationApp() {
     return resultPlayers.filter((player) => player.score === max);
   }, [room, resultPlayers]);
 
-  if (!room) return <main className="presentation-shell presentation-boot"><div className="brand-mark"><span>BLUE STAGE</span><strong>TRIVIA</strong></div><p>{error || 'Connecting to game…'}</p></main>;
+  if (!room || !connectionOnline) return <main className="presentation-shell presentation-boot" role="status"><div className="brand-mark"><span>BLUE STAGE</span><strong>TRIVIA</strong></div><p>{error || 'Connecting to game…'}</p></main>;
 
   const current = room.currentQuestion;
   const gameMode = gameModeDefinition(room.settings.gameMode);

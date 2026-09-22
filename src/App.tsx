@@ -4,6 +4,7 @@ import { audio } from './lib/audio';
 import { DEFAULT_MUSIC_GAIN } from './lib/musicVolumePolicy';
 import { applySavedAccessibility } from './lib/accessibility';
 import { hostPhaseLabel, readHostPreview } from './lib/hostPreview';
+import { readSavedHostCredentials } from './lib/hostCredentials';
 import { resetInstance } from './lib/resetInstance';
 import { useOutsideDismiss } from './lib/useOutsideDismiss';
 import './lib/clientLifecycle';
@@ -21,11 +22,9 @@ const PlayerApp = lazy(async () => import('./components/PlayerApp').then((module
 const PlayerEnhancements = lazy(async () => import('./components/PlayerEnhancements').then((module) => ({ default: module.PlayerEnhancements })));
 const PresentationApp = lazy(async () => import('./components/PresentationApp').then((module) => ({ default: module.PresentationApp })));
 
-const HOST_KEY = 'blue-stage-host-room';
 const AUDIO_75_MIGRATION_KEY = 'blue-stage-audio-default-75-v1';
 type AppMode = 'host' | 'player' | 'presentation';
 type MenuModal = 'how' | 'advanced' | null;
-type SavedHost = { roomCode: string };
 type WebkitDocument = Document & { webkitFullscreenElement?: Element | null; webkitExitFullscreen?: () => Promise<void> | void };
 type WebkitElement = HTMLElement & { webkitRequestFullscreen?: () => Promise<void> | void };
 
@@ -47,17 +46,6 @@ function modeUrl(mode: AppMode, fresh = false): URL {
   url.searchParams.set('mode', mode);
   if (fresh) url.searchParams.set('fresh', '1');
   return url;
-}
-
-function readSavedHost(): SavedHost | null {
-  try {
-    const raw = localStorage.getItem(HOST_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<SavedHost>;
-    return typeof parsed.roomCode === 'string' && parsed.roomCode ? { roomCode: parsed.roomCode } : null;
-  } catch {
-    return null;
-  }
 }
 
 function relativeTime(timestamp: number, now: number): string {
@@ -132,9 +120,12 @@ function Menu({ onNavigate }: { onNavigate: (mode: AppMode, fresh?: boolean) => 
   const modalTriggerRef = useRef<HTMLButtonElement | null>(null);
   const [fullscreen, setFullscreen] = useState(() => fullscreenActive());
   const [now, setNow] = useState(() => Date.now());
-  const savedHost = useMemo(() => readSavedHost(), []);
+  const savedHost = useMemo(() => {
+    try { return readSavedHostCredentials(); } catch { return null; }
+  }, []);
   const preview = useMemo(() => savedHost ? readHostPreview(savedHost.roomCode) : null, [savedHost]);
-  const hasSavedHost = Boolean(savedHost && preview);
+  const hasSavedHost = Boolean(savedHost);
+  const staticPreview = location.hostname.endsWith('.github.io');
   const fullscreenSupported = Boolean(document.fullscreenEnabled || (document.documentElement as WebkitElement).webkitRequestFullscreen);
 
   useOutsideDismiss(Boolean(modal), () => setModal(null), modalRef, modalTriggerRef);
@@ -174,8 +165,8 @@ function Menu({ onNavigate }: { onNavigate: (mode: AppMode, fresh?: boolean) => 
   };
 
   const startNewGame = () => {
-    if (hasSavedHost && savedHost && preview && preview.phase !== 'lobby') {
-      const playerCopy = preview.totalPlayers
+    if (hasSavedHost && savedHost && preview?.phase !== 'lobby') {
+      const playerCopy = preview?.totalPlayers
         ? ` Everyone stays in room ${savedHost.roomCode} with the same seats and profiles.`
         : '';
       if (!confirm(`Start a new game? The current board, scores, stats, and question history will reset.${playerCopy}`)) return;
@@ -184,28 +175,28 @@ function Menu({ onNavigate }: { onNavigate: (mode: AppMode, fresh?: boolean) => 
   };
 
   const hardReset = async () => {
-    if (!confirm('Reset this entire Blue Stage instance? This clears saved rooms, seats, scores, and cached Blue Stage data, then reloads the newest build.')) return;
+    if (!confirm('Reset Blue Stage data in this browser? This clears saved Host and player access on this device. The laptop server keeps its rooms and scores; you may lose access to your saved seat or Host role.')) return;
     setResetting(true);
     audio.stop();
     await resetInstance();
   };
 
-  const savedPhase = preview ? hostPhaseLabel(preview.phase) : 'Saved session';
-  const savedPlayers = preview ? `${preview.totalPlayers} player${preview.totalPlayers === 1 ? '' : 's'}` : 'Saved locally';
-  const savedActivity = preview ? relativeTime(preview.updatedAt, now) : 'available';
+  const savedPhase = preview ? hostPhaseLabel(preview.phase) : 'Reconnect to see current game';
+  const savedPlayers = preview ? `${preview.totalPlayers} player${preview.totalPlayers === 1 ? '' : 's'}` : 'Saved Host access';
+  const savedActivity = preview ? relativeTime(preview.updatedAt, now) : null;
 
   return <main className={`menu-shell showcase-menu menu-shell-v2${fullscreen ? ' menu-fullscreen' : ''}`} onPointerDown={activateMenuAudio}>
     <div className="menu-backdrop" aria-hidden="true"><i/><i/><i/></div>
     <section className="menu-card menu-card-v2">
       <div className="brand-mark hero-brand menu-logo-v2"><span>BLUE STAGE</span><strong>TRIVIA</strong></div>
-      <p className="menu-subtitle menu-subtitle-v2">A shared-screen game show with phone buzzers, wagers, streaks, and a dramatic finish.</p>
+      <p className="menu-subtitle menu-subtitle-v2" role={staticPreview ? 'note' : undefined}>{staticPreview ? 'Static preview only. For same-Wi-Fi multiplayer, start Blue Stage on the laptop and open its LAN Host URL.' : 'A shared-screen game show with phone buzzers, wagers, streaks, and a dramatic finish.'}</p>
 
       <div className="menu-mode-grid">
         <section className="menu-mode-section host-menu-section">
           <header><span>HOST GAME</span><small>Run the board on this screen</small></header>
           <div className="menu-actions host-menu-actions">
-            <button className={`${hasSavedHost ? 'secondary-button menu-secondary' : 'primary-button menu-primary'} menu-new-game`} onClick={startNewGame}><span>Start New Game</span><small>{hasSavedHost ? 'Keep current players and profiles' : 'Fresh room, fresh board, zero scores'}</small></button>
-            {hasSavedHost && savedHost && <article
+            <button className={`${hasSavedHost ? 'secondary-button menu-secondary' : 'primary-button menu-primary'} menu-new-game`} disabled={staticPreview} onClick={startNewGame}><span>Start New Game</span><small>{hasSavedHost ? 'Keep current players and profiles' : 'Fresh room, fresh board, zero scores'}</small></button>
+            {!staticPreview && hasSavedHost && savedHost && <article
               className="saved-game-preview saved-game-inline"
               role="button"
               tabIndex={0}
@@ -219,14 +210,14 @@ function Menu({ onNavigate }: { onNavigate: (mode: AppMode, fresh?: boolean) => 
             >
               <div className="saved-game-icon" aria-hidden="true">▶</div>
               <div className="saved-game-main"><small>CONTINUE SAVED GAME</small><strong>Room {savedHost.roomCode}</strong><span>{savedPhase}</span></div>
-              <div className="saved-game-meta"><b>{savedPlayers}</b>{preview && preview.phase !== 'lobby' && preview.phase !== 'recap' && <span>{preview.remainingQuestions} questions left</span>}<small>Last played {savedActivity}</small></div>
+              <div className="saved-game-meta"><b>{savedPlayers}</b>{preview && preview.phase !== 'lobby' && preview.phase !== 'recap' && <span>{preview.remainingQuestions} questions left</span>}{savedActivity && <small>Last played {savedActivity}</small>}</div>
             </article>}
           </div>
         </section>
 
         <section className="menu-mode-section player-menu-section">
           <header><span>JOIN GAME</span><small>Use this device as a controller</small></header>
-          <button className="secondary-button menu-secondary join-game-button" onClick={() => void onNavigate('player')}><span>Join a Game</span><small>Scan a QR code or enter the room code</small></button>
+          <button className="secondary-button menu-secondary join-game-button" disabled={staticPreview} onClick={() => void onNavigate('player')}><span>Join a Game</span><small>Scan a QR code or enter the room code</small></button>
         </section>
       </div>
 
@@ -261,8 +252,8 @@ function Menu({ onNavigate }: { onNavigate: (mode: AppMode, fresh?: boolean) => 
         <h2 id="advanced-title">Maintenance</h2>
         <p>Normal games do not require these controls.</p>
         <div className="advanced-danger-zone">
-          <div><strong>Reset Instance</strong><span>Clears every saved room, player seat, score, and Blue Stage cache on this browser.</span></div>
-          <button className="advanced-reset-button" disabled={resetting} onClick={() => void hardReset()}>{resetting ? 'Resetting…' : 'Reset Instance'}</button>
+          <div><strong>Reset This Browser</strong><span>Clears saved access and Blue Stage data on this device. Rooms and scores stay on the laptop server.</span></div>
+          <button className="advanced-reset-button" disabled={resetting} onClick={() => void hardReset()}>{resetting ? 'Resetting…' : 'Reset This Browser'}</button>
         </div>
       </section>
     </div>}
