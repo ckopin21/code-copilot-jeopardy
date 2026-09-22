@@ -27,13 +27,16 @@ function answerKeys(question: Question): Set<string> {
 
 /** Conservative semantic duplicate guard for reworded clues that target the same answer and fact. */
 export function likelyRepeatedFact(left: Question, right: Question): boolean {
+  return repeatedFactByTokens(left, right, contentTokens(left.text), contentTokens(right.text), answerKeys(left), answerKeys(right));
+}
+
+function repeatedFactByTokens(
+  left: Question, right: Question,
+  leftTokens: Set<string>, rightTokens: Set<string>,
+  leftAnswers: Set<string>, rightAnswers: Set<string>
+): boolean {
   if (left.questionType !== right.questionType && left.questionType !== 'general' && right.questionType !== 'general') return false;
-
-  const leftAnswers = answerKeys(left);
-  if (![...answerKeys(right)].some((answer) => leftAnswers.has(answer))) return false;
-
-  const leftTokens = contentTokens(left.text);
-  const rightTokens = contentTokens(right.text);
+  if (![...rightAnswers].some((answer) => leftAnswers.has(answer))) return false;
   if (!leftTokens.size || !rightTokens.size) return false;
   const shared = [...leftTokens].filter((token) => rightTokens.has(token)).length;
   if (shared < 2) return false;
@@ -42,21 +45,23 @@ export function likelyRepeatedFact(left: Question, right: Question): boolean {
 
 /** Review-only candidates. Shared answers plus subject overlap are suggestive, not proof of the same fact. */
 export function likelySimilarQuestions(packs: QuestionPack[]): Array<{ left: Question; right: Question }> {
-  const questions = packs.flatMap((pack) => pack.questions);
+  const questions = packs.flatMap((pack) => pack.questions).map((question) => ({
+    question,
+    tokens: contentTokens(question.text),
+    answers: answerKeys(question)
+  }));
   const pairs: Array<{ left: Question; right: Question }> = [];
   for (let leftIndex = 0; leftIndex < questions.length; leftIndex += 1) {
     for (let rightIndex = leftIndex + 1; rightIndex < questions.length; rightIndex += 1) {
       const left = questions[leftIndex];
       const right = questions[rightIndex];
-      if (likelyRepeatedFact(left, right)) {
-        pairs.push({ left, right });
+      if (repeatedFactByTokens(left.question, right.question, left.tokens, right.tokens, left.answers, right.answers)) {
+        pairs.push({ left: left.question, right: right.question });
         continue;
       }
-      const leftTokens = contentTokens(left.text);
-      const rightTokens = contentTokens(right.text);
-      const shared = [...leftTokens].filter((token) => rightTokens.has(token)).length;
-      if (leftTokens.size >= 4 && rightTokens.size >= 4 && shared >= 4 && shared / Math.min(leftTokens.size, rightTokens.size) >= .9) {
-        pairs.push({ left, right });
+      const shared = [...left.tokens].filter((token) => right.tokens.has(token)).length;
+      if (left.tokens.size >= 4 && right.tokens.size >= 4 && shared >= 4 && shared / Math.min(left.tokens.size, right.tokens.size) >= .9) {
+        pairs.push({ left: left.question, right: right.question });
       }
     }
   }
