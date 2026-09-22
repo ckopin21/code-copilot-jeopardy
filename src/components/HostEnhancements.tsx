@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { GAME_PRESETS } from '../shared/config';
 import type { HostRoomCredentials, RoomSnapshot } from '../shared/types';
-import { emitAck, getPlayerConnectionHealth, socket, testPlayerControllers, type PlayerConnectionHealth } from '../lib/socket';
+import { emitAck, getPlayerConnectionHealth, socket, type PlayerConnectionHealth } from '../lib/socket';
 import { audio } from '../lib/audio';
 import { readAccessibility, saveAccessibility, type AccessibilityPreferences } from '../lib/accessibility';
 import { readActiveHostCredentials } from '../lib/hostCredentials';
@@ -167,11 +167,15 @@ export function HostEnhancements() {
     }
   };
 
-  const runControllerTest = () => {
-    const reached = testPlayerControllers(room.code);
-    setTestedIds(new Set(reached));
-    setActionMessage(reached.length ? `Sent controller test to ${reached.length} phone${reached.length === 1 ? '' : 's'}.` : 'No connected phones were reachable.');
-    window.setTimeout(() => setHealth(getPlayerConnectionHealth(room.code)), 500);
+  const runControllerTest = async () => {
+    try {
+      const reached = await emitAck<string[]>('host:test-controllers', { roomCode: credentials.roomCode, hostToken: credentials.hostToken });
+      setTestedIds(new Set(reached));
+      setActionMessage(reached.length ? `Sent controller test to ${reached.length} phone${reached.length === 1 ? '' : 's'}.` : 'No connected phones were reachable.');
+      window.setTimeout(() => setHealth(getPlayerConnectionHealth(room.code)), 500);
+    } catch (error) {
+      setActionMessage(error instanceof Error ? error.message : 'Controller test failed');
+    }
   };
 
   const rename = (playerId: string, currentName: string) => {

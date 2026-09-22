@@ -37,7 +37,7 @@ window.setInterval(() => {
 
 // WebKit can preserve the JavaScript objects for a page while suspending the network path.
 // Treat page-cache restores, meaningful background resumes, and a returning network as reasons
-// to rebuild the client Peer/DataConnection instead of trusting stale "open" flags.
+// to rebuild the client socket instead of trusting stale connection flags.
 window.addEventListener('pagehide', () => {
   if (!clientMode()) return;
   suspendClientSession();

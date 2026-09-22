@@ -1,23 +1,11 @@
-import Peer, { type DataConnection } from 'peerjs';
-import QRCode from 'qrcode';
-import type { GameSettings, PlayerJoinCredentials, RoomSnapshot } from '../shared/types';
-import { QUESTION_VALUES } from '../shared/types';
-import { playerJoinSchema } from '../shared/validation';
-import { packSummaries } from '../packs';
-import { BrowserGameEngine } from './browserGameEngine';
-import { sanitizeRoomSnapshot } from './snapshotSecurity';
-import { authorizeRemoteEvent, type RemoteIdentity } from './remoteAuthorization';
+import { io, type Socket } from 'socket.io-client';
+import type { HostRoomCredentials, PlayerJoinCredentials, RoomSnapshot } from '../shared/types';
 import { randomId } from './ids';
-import { finalWagerRules } from './finalWagerRules';
-import { canClaimHostAuthority, claimHostAuthority, hasHostAuthority, hostAuthorityKey, releaseHostAuthority } from './hostTabAuthority';
 
 type Listener = (data: any) => void;
-type Identity = RemoteIdentity;
-type RequestMessage = { kind: 'request'; requestId: string; event: string; payload: Record<string, unknown> };
-type ResponseMessage = { kind: 'response'; requestId: string; ok: boolean; data?: unknown; error?: string };
-type EventMessage = { kind: 'event'; event: string; data: unknown };
-type WireMessage = RequestMessage | ResponseMessage | EventMessage;
-interface PendingRequest { resolve: (value: unknown) => void; reject: (reason: Error) => void; timeoutId: number; }
+type Request = { requestId: string; event: string; payload: Record<string, unknown> };
+type Reply = { requestId: string; ok: boolean; data?: unknown; error?: string };
+type Replay = { event: 'host:reconnect' | 'player:reconnect' | 'presentation:join'; payload: Record<string, unknown> };
 
 export interface PlayerConnectionHealth {
   playerId: string;
@@ -26,31 +14,18 @@ export interface PlayerConnectionHealth {
   quality: 'good' | 'fair' | 'stale' | 'offline';
 }
 
-const PLAYER_STALE_MS = 30000;
-const PLAYER_HEALTH_FAIR_MS = 7000;
-const PLAYER_HEALTH_STALE_MS = 15000;
-const HEARTBEAT_TIMEOUT_MS = 9000;
-const HOST_STALE_SWEEP_GRACE_MS = 10000;
-const HOST_STALE_SWEEP_STALL_MS = 6000;
+export type NetworkDiagnosticKind =
+  | 'connected' | 'disconnected' | 'connect-error' | 'reconnect-started'
+  | 'identity-restored' | 'identity-rejected' | 'request-timeout';
 
-function currentMode(): string | null { return new URLSearchParams(location.search).get('mode'); }
-function baseUrl(): string { const url = new URL('.', location.href); url.search = ''; url.hash = ''; return url.href.replace(/\/$/, ''); }
-function hostPeerId(roomCode: string): string { return `blue-stage-trivia-${roomCode.toLowerCase()}`; }
-type IceConfigWindow = typeof window & {
-  BLUE_STAGE_ICE_SERVERS?: RTCIceServer[];
-  BLUE_STAGE_ICE_CONFIG_URL?: string;
-};
+/** Operational diagnostics never include room credentials or request payloads. */
+export interface NetworkDiagnosticEvent {
+  at: number;
+  kind: NetworkDiagnosticKind;
+  role: 'host' | 'client';
+  detail?: string;
+}
 
-const DEFAULT_ICE_SERVERS: RTCIceServer[] = [
-  { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'stun:stun1.l.google.com:19302' }
-];
-
-/**
- * A complete socket protocol runtime.  The application uses the default runtime
- * exported below; tests and embedders can construct additional real runtimes
- * without sharing peers, request caches, identities, or reconnect state.
- */
 export interface SocketRuntime {
   socket: { connected: boolean; on(event: string, listener: Listener): void; off(event: string, listener: Listener): void };
   emitAck<T = unknown>(event: string, payload: unknown): Promise<T>;
@@ -63,1004 +38,233 @@ export interface SocketRuntime {
   destroy(): void;
 }
 
-export type NetworkDiagnosticKind =
-  | 'ice-configured' | 'ice-config-fallback' | 'peer-open' | 'peer-disconnected' | 'peer-closed' | 'peer-error'
-  | 'data-open' | 'data-closed' | 'data-error' | 'reconnect-scheduled' | 'reconnect-coalesced'
-  | 'reconnect-started' | 'reconnect-succeeded' | 'reconnect-failed' | 'generation-superseded'
-  | 'identity-restored' | 'identity-rejected' | 'host-authority-acquired' | 'host-authority-lost';
-
-/** A bounded, safe operational record. It deliberately contains no tokens, capabilities, ICE credentials, or payloads. */
-export interface NetworkDiagnosticEvent {
-  at: number;
-  kind: NetworkDiagnosticKind;
-  role: 'host' | 'client';
-  generation?: number;
-  detail?: string;
-  turnConfigured?: boolean;
-}
-
 export interface SocketRuntimeOptions {
-  /** Supplies the real PeerJS constructor in production or a deterministic peer in tests. */
-  createPeer?: (id: string | undefined, options: { debug: number; config: { iceServers: RTCIceServer[] } }) => Peer;
-  /** Keeps deterministic runtimes on caller-controlled engine storage/state. */
-  createEngine?: () => BrowserGameEngine;
-  /** Extra runtimes normally do not need duplicate global browser lifecycle hooks. */
-  installBrowserHooks?: boolean;
+  url?: string;
+  autoConnect?: boolean;
 }
+
+const REQUEST_TIMEOUT_MS = 8_000;
+const CONNECT_TIMEOUT_MS = 10_000;
+const EVENT_NAMES = ['room:state', 'room:score', 'host:credentials', 'presentation:status', 'player:suspended', 'player:removed', 'preflight:test'] as const;
 
 export function createSocketRuntime(options: SocketRuntimeOptions = {}): SocketRuntime {
-const makePeer = options.createPeer ?? ((id, peerOptions) => id === undefined ? new Peer(peerOptions) : new Peer(id, peerOptions));
-const installBrowserHooks = options.installBrowserHooks ?? true;
-const engine = options.createEngine?.() ?? new BrowserGameEngine();
-const listeners = new Map<string, Set<Listener>>();
-const identities = new Map<DataConnection, Identity>();
-const playerConnections = new Map<string, DataConnection>();
-const playerLastSeen = new Map<string, number>();
-const connections = new Set<DataConnection>();
-const pending = new Map<string, PendingRequest>();
-const completedRequests = new Map<DataConnection, Map<string, ResponseMessage>>();
-const completedSessionRequests = new Map<string, Map<string, ResponseMessage>>();
-const inFlightRequests = new Map<DataConnection, Map<string, Promise<void>>>();
-let hostPeer: Peer | null = null;
-let hostRoomCode = '';
-let hostAuthorityId = '';
-let clientPeer: Peer | null = null;
-let clientTransportGeneration = 0;
-let clientConnection: DataConnection | null = null;
-let clientRoomCode = '';
-let clientSuspended = false;
-let clientHostPaused = false;
-let reconnectDelayMs = 400;
-let reconnectTimer: number | null = null;
-let clientConnectPromise: { roomCode: string; promise: Promise<DataConnection> } | null = null;
-let authReplay: { event: 'player:reconnect' | 'presentation:join'; payload: Record<string, unknown> } | null = null;
-let hostStaleSweepBlockedUntil = 0;
-let lastHostStaleSweepAt = Date.now();
-let activeIceServers: RTCIceServer[] = DEFAULT_ICE_SERVERS;
-let iceConfigWarning = '';
-const networkDiagnostics: NetworkDiagnosticEvent[] = [];
-
-function turnConfigured(servers: RTCIceServer[]): boolean {
-  return servers.some((server) => {
-    const urls = Array.isArray(server.urls) ? server.urls : [server.urls];
-    return urls.some((url) => /^turns?:/i.test(url));
+  const browser = typeof window !== 'undefined';
+  const transport: Socket = io(options.url ?? (browser ? window.location.origin : 'http://127.0.0.1:3000'), {
+    autoConnect: options.autoConnect ?? browser,
+    transports: ['websocket'],
+    reconnection: true,
+    reconnectionDelay: 400,
+    reconnectionDelayMax: 5_000,
+    timeout: CONNECT_TIMEOUT_MS
   });
-}
+  const listeners = new Map<string, Set<Listener>>();
+  const socket = {
+    connected: false,
+    on(event: string, listener: Listener) {
+      const set = listeners.get(event) ?? new Set<Listener>();
+      set.add(listener);
+      listeners.set(event, set);
+    },
+    off(event: string, listener: Listener) { listeners.get(event)?.delete(listener); }
+  };
+  const diagnostics: NetworkDiagnosticEvent[] = [];
+  const role = () => browser && new URLSearchParams(window.location.search).get('mode') === 'host' ? 'host' as const : 'client' as const;
+  let replay: Replay | null = null;
+  let suspended = false;
+  let hostPaused = false;
+  let destroyed = false;
+  let restoring: Promise<void> = Promise.resolve();
+  let lastRoom: RoomSnapshot | null = null;
+  let presentationCount = 0;
+  let health: PlayerConnectionHealth[] = [];
+  let lastHealthRequestAt = 0;
+  const inFlight = new Map<string, Promise<unknown>>();
 
-function recordDiagnostic(kind: NetworkDiagnosticKind, role: 'host' | 'client', fields: Omit<NetworkDiagnosticEvent, 'at' | 'kind' | 'role'> = {}): void {
-  const entry = { at: Date.now(), kind, role, ...fields } satisfies NetworkDiagnosticEvent;
-  networkDiagnostics.push(entry);
-  if (networkDiagnostics.length > 200) networkDiagnostics.shift();
-  emitLocal('network:diagnostic', entry);
-}
+  function emitLocal(event: string, data?: unknown): void {
+    for (const listener of listeners.get(event) ?? []) listener(data);
+  }
 
-function connectionFailureHint(): string {
-  if (iceConfigWarning) return ` ${iceConfigWarning}`;
-  if (!turnConfigured(activeIceServers)) return ' This deployment is using STUN only; restrictive or mobile networks may require a TURN relay.';
-  return '';
-}
+  function record(kind: NetworkDiagnosticKind, detail?: string): void {
+    diagnostics.push({ at: Date.now(), kind, role: role(), detail });
+    if (diagnostics.length > 200) diagnostics.shift();
+    emitLocal('network:diagnostic', diagnostics[diagnostics.length - 1]);
+  }
 
-function emitLocal(event: string, data?: unknown): void { for (const listener of listeners.get(event) ?? []) listener(data); }
-const socket = {
-  connected: false,
-  on(event: string, listener: Listener) { const set = listeners.get(event) ?? new Set<Listener>(); set.add(listener); listeners.set(event, set); },
-  off(event: string, listener: Listener) { listeners.get(event)?.delete(listener); }
-};
-async function resolveIceServers(): Promise<RTCIceServer[]> {
-  const role = currentMode() === 'host' ? 'host' : 'client';
-  const runtime = window as IceConfigWindow;
-  const custom = runtime.BLUE_STAGE_ICE_SERVERS;
-  if (custom?.length) {
-    activeIceServers = custom;
-    iceConfigWarning = '';
-    recordDiagnostic('ice-configured', role, { detail: 'runtime-override', turnConfigured: turnConfigured(custom) });
-    return custom;
+  function waitForConnection(): Promise<void> {
+    if (destroyed) return Promise.reject(new Error('Connection closed'));
+    if (suspended) return Promise.reject(new Error('Connection is paused'));
+    if (transport.connected) return Promise.resolve();
+    transport.connect();
+    return new Promise((resolve, reject) => {
+      const timeout = globalThis.setTimeout(() => { cleanup(); reject(new Error('Could not connect to the laptop game server. Check Wi-Fi and the server window.')); }, CONNECT_TIMEOUT_MS);
+      const connected = () => { cleanup(); resolve(); };
+      const cleanup = () => { globalThis.clearTimeout(timeout); transport.off('connect', connected); };
+      transport.on('connect', connected);
+      if (transport.connected) connected();
+    });
   }
-  const endpoint = runtime.BLUE_STAGE_ICE_CONFIG_URL || import.meta.env.VITE_ICE_CONFIG_URL;
-  if (!endpoint) {
-    activeIceServers = DEFAULT_ICE_SERVERS;
-    iceConfigWarning = '';
-    recordDiagnostic('ice-configured', role, { detail: 'default-stun', turnConfigured: false });
-    return DEFAULT_ICE_SERVERS;
-  }
-  try {
-    const response = await fetch(endpoint, { cache: 'no-store', credentials: 'omit', headers: { accept: 'application/json' } });
-    if (!response.ok) throw new Error(`ICE config request failed with ${response.status}`);
-    const body = await response.json() as { iceServers?: RTCIceServer[] } | RTCIceServer[];
-    const servers = Array.isArray(body) ? body : body.iceServers;
-    if (!servers?.length) throw new Error('ICE config response did not include iceServers');
-    activeIceServers = servers;
-    iceConfigWarning = '';
-    recordDiagnostic('ice-configured', role, { detail: 'credential-endpoint', turnConfigured: turnConfigured(servers) });
-    return servers;
-  } catch {
-    activeIceServers = DEFAULT_ICE_SERVERS;
-    iceConfigWarning = 'The secure relay configuration could not be loaded; retrying with STUN only.';
-    recordDiagnostic('ice-config-fallback', role, { detail: 'credential-endpoint-unavailable', turnConfigured: false });
-    return DEFAULT_ICE_SERVERS;
-  }
-}
-async function peerOptions() {
-  const iceServers = await resolveIceServers();
-  return { debug: 0, config: { iceServers } };
-}
-function failMessage(error: unknown): string { return error instanceof Error ? error.message : 'Unknown error'; }
-function presetWager(wager: number, includeZero = false): boolean {
-  return (includeZero && wager === 0) || QUESTION_VALUES.includes(wager as (typeof QUESTION_VALUES)[number]);
-}
-function requiredGameStartedAt(payload: Record<string, unknown>): number {
-  const value = Number(payload.gameStartedAt);
-  if (!Number.isFinite(value) || value <= 0) throw new Error('Missing or stale game context');
-  return value;
-}
-function requiredQuestionId(payload: Record<string, unknown>): string {
-  const value = String(payload.questionId ?? '');
-  if (!value) throw new Error('Missing or stale question context');
-  return value;
-}
-function ownsHostAuthority(roomCode = hostRoomCode): boolean {
-  const normalized = roomCode.toUpperCase();
-  return Boolean(normalized && hostPeer && hostRoomCode === normalized && !hostPeer.destroyed && hostAuthorityId && hasHostAuthority(normalized, hostAuthorityId));
-}
-function requireHostAuthority(roomCode: string): void {
-  if (!ownsHostAuthority(roomCode)) throw new Error('This tab is no longer the active host for this room');
-}
 
-function sendEvent(connection: DataConnection, event: string, data: unknown): void {
-  if (connection.open) connection.send({ kind: 'event', event, data } satisfies EventMessage);
-}
-function emitRoom(roomCode: string): void {
-  let snapshot: RoomSnapshot;
-  try { snapshot = engine.snapshot(roomCode); } catch { return; }
-  if (hostRoomCode === roomCode) emitLocal('room:state', sanitizeRoomSnapshot(snapshot, 'host'));
-  for (const connection of connections) {
-    const identity = identities.get(connection);
-    if (!identity || identity.roomCode !== roomCode) continue;
-    sendEvent(connection, 'room:state', sanitizeRoomSnapshot(snapshot, identity.role, identity.playerId));
-  }
-}
-function bindIdentity(connection: DataConnection, identity: Identity): void {
-  identities.set(connection, identity);
-  if (identity.role === 'presentation') {
-    emitPresentationStatus(identity.roomCode);
-    return;
-  }
-  if (identity.role !== 'player' || !identity.playerId) return;
-  const prior = playerConnections.get(identity.playerId);
-  playerConnections.set(identity.playerId, connection);
-  playerLastSeen.set(identity.playerId, Date.now());
-  if (prior && prior !== connection) { identities.delete(prior); try { prior.close(); } catch { /* ignore duplicate close */ } }
-}
-function handleConnectionClosed(connection: DataConnection): void {
-  connections.delete(connection);
-  const identity = identities.get(connection);
-  identities.delete(connection);
-  if (identity?.role === 'presentation') {
-    emitPresentationStatus(identity.roomCode);
-    return;
-  }
-  if (!identity || identity.role !== 'player' || !identity.playerId) return;
-  if (playerConnections.get(identity.playerId) !== connection) return;
-  playerConnections.delete(identity.playerId);
-  playerLastSeen.delete(identity.playerId);
-  if (!ownsHostAuthority(identity.roomCode)) return;
-  try { engine.setPlayerConnected(identity.roomCode, identity.playerId, false); emitRoom(identity.roomCode); } catch { /* stale room */ }
-}
-function closePlayerConnection(playerId: string, event?: 'player:suspended' | 'player:removed'): void {
-  const connection = playerConnections.get(playerId);
-  playerLastSeen.delete(playerId);
-  if (!connection) return;
-  if (event) sendEvent(connection, event, { playerId });
-  playerConnections.delete(playerId);
-  identities.delete(connection);
-  window.setTimeout(() => { try { connection.close(); } catch { /* ignore */ } }, event ? 60 : 0);
-}
-
-/** Host-only connection freshness. Phones refresh lastSeen on their regular reconnect heartbeat. */
-function getPlayerConnectionHealth(roomCode: string): PlayerConnectionHealth[] {
-  let snapshot: RoomSnapshot;
-  try { snapshot = engine.snapshot(roomCode); } catch { return []; }
-  const now = Date.now();
-  return snapshot.players.map((player) => {
-    const seen = playerLastSeen.get(player.id);
-    const ageMs = seen == null ? null : Math.max(0, now - seen);
-    const connection = playerConnections.get(player.id);
-    const connected = Boolean(player.connected && connection?.open);
-    const quality: PlayerConnectionHealth['quality'] = !connected ? 'offline' : ageMs == null || ageMs > PLAYER_HEALTH_STALE_MS ? 'stale' : ageMs > PLAYER_HEALTH_FAIR_MS ? 'fair' : 'good';
-    return { playerId: player.id, connected, ageMs, quality };
-  });
-}
-
-/** Sends an immediate controller-test event to every live phone. Returns the player ids reached. */
-function testPlayerControllers(roomCode: string): string[] {
-  const reached: string[] = [];
-  const sentAt = Date.now();
-  for (const [playerId, connection] of playerConnections) {
-    const identity = identities.get(connection);
-    if (!identity || identity.roomCode !== roomCode.toUpperCase() || !connection.open) continue;
-    sendEvent(connection, 'preflight:test', { sentAt, playerId });
-    reached.push(playerId);
-  }
-  return reached;
-}
-
-async function dispatchHost(event: string, payload: Record<string, unknown>, connection?: DataConnection): Promise<unknown> {
-  const roomCode = String(payload.roomCode ?? '').toUpperCase();
-  const hostToken = String(payload.hostToken ?? '');
-  switch (event) {
-    case 'room:create': throw new Error('Room creation is only available on the host screen');
-    case 'host:reconnect': {
-      engine.reconnectHost(roomCode, hostToken);
-      engine.setHostConnected(roomCode, true);
-      return sanitizeRoomSnapshot(engine.snapshot(roomCode), 'host');
-    }
-    case 'presentation:join': {
-      const snapshot = engine.presentationSnapshot(roomCode, String(payload.presentationToken ?? ''));
-      if (connection) bindIdentity(connection, { roomCode: snapshot.code, role: 'presentation' });
-      return sanitizeRoomSnapshot(snapshot, 'presentation');
-    }
-    case 'host:rotate-presentation-capability': {
-      const presentationToken = engine.rotatePresentationCapability(roomCode, hostToken);
-      for (const connection of connections) {
-        const identity = identities.get(connection);
-        if (identity?.roomCode === roomCode && identity.role === 'presentation') {
-          identities.delete(connection);
-          try { connection.close(); } catch { /* revoked display */ }
-        }
-      }
-      return { presentationToken };
-    }
-    case 'player:join': {
-      if (!connection) throw new Error('Player join requires a phone connection');
-      const input = playerJoinSchema.parse(payload);
-      const credentials = engine.joinPlayer(input.roomCode.toUpperCase(), input);
-      bindIdentity(connection, { roomCode: credentials.roomCode, role: 'player', playerId: credentials.playerId });
-      emitRoom(credentials.roomCode);
-      return credentials;
-    }
-    case 'player:reconnect': {
-      if (!connection) throw new Error('Player reconnect requires a phone connection');
-      const credentials = engine.reconnectPlayer(roomCode, String(payload.playerId ?? ''), String(payload.reconnectToken ?? ''));
-      bindIdentity(connection, { roomCode: credentials.roomCode, role: 'player', playerId: credentials.playerId });
-      emitRoom(credentials.roomCode);
-      return credentials;
-    }
-    case 'player:heartbeat': return null;
-    case 'host:update-settings': {
-      const updates = (payload.updates ?? {}) as Partial<GameSettings>;
-      return engine.updateSettings(roomCode, hostToken, updates);
-    }
-    case 'host:start-game': return engine.startGame(roomCode, hostToken);
-    case 'host:reset-game': return engine.resetGame(roomCode, hostToken);
-    case 'host:select-question': return engine.selectQuestion(roomCode, hostToken, String(payload.questionId ?? ''), payload.dailyDoublePlayerId ? String(payload.dailyDoublePlayerId) : undefined);
-    case 'host:cancel-question': return engine.cancelQuestion(roomCode, hostToken);
-    case 'host:daily-double-wager': {
-      const wager = Number(payload.wager);
-      if (!presetWager(wager)) throw new Error('Choose one of the preset Daily Double wagers');
-      return engine.setDailyDoubleWager(roomCode, hostToken, wager);
-    }
-    case 'host:open-buzzers': return engine.openBuzzers(roomCode, hostToken);
-    case 'host:close-buzzers': return engine.closeBuzzers(roomCode, hostToken);
-    case 'host:local-buzz': return engine.localBuzz(roomCode, hostToken, String(payload.playerId ?? ''));
-    case 'host:resolve-answer': return engine.resolveAnswer(roomCode, hostToken, String(payload.playerId ?? ''), Boolean(payload.correct));
-    case 'host:resolve-text': return engine.resolveTextResponse(roomCode, hostToken, String(payload.playerId ?? ''), Boolean(payload.correct));
-    case 'host:confirm-text-grades': return engine.confirmTextResponses(roomCode, hostToken);
-    case 'host:reveal-answer': return engine.revealAnswer(roomCode, hostToken);
-    case 'host:advance-board': return engine.advanceToBoard(roomCode, hostToken);
-    case 'host:adjust-score': return engine.adjustScore(roomCode, hostToken, String(payload.playerId ?? ''), Number(payload.delta));
-    case 'host:undo-last-score': return engine.undoLastScoreAction(roomCode, hostToken);
-    case 'host:rename-player': return engine.renamePlayer(roomCode, hostToken, String(payload.playerId ?? ''), String(payload.name ?? ''));
-    case 'host:set-turn-player': return engine.setTurnPlayer(roomCode, hostToken, String(payload.playerId ?? ''));
-    case 'host:suspend-player': {
-      const playerId = String(payload.playerId ?? '');
-      engine.suspendPlayer(roomCode, hostToken, playerId);
-      closePlayerConnection(playerId, 'player:suspended');
-      return null;
-    }
-    case 'host:remove-player': {
-      const playerId = String(payload.playerId ?? '');
-      engine.removePlayer(roomCode, hostToken, playerId);
-      closePlayerConnection(playerId, 'player:removed');
-      return null;
-    }
-    case 'host:pause': return engine.pause(roomCode, hostToken);
-    case 'host:resume': return engine.resume(roomCode, hostToken);
-    case 'host:start-timer': return engine.startTimer(roomCode, hostToken);
-    case 'host:stop-timer': return engine.stopTimer(roomCode, hostToken);
-    case 'host:begin-final-wagers': return engine.beginFinalWagers(roomCode, hostToken);
-    case 'host:open-final-question': return engine.openFinalQuestion(roomCode, hostToken);
-    case 'host:begin-final-review': return engine.beginFinalReview(roomCode, hostToken, payload.forceClose === true);
-    case 'host:resolve-final': return engine.resolveFinalAnswer(roomCode, hostToken, String(payload.playerId ?? ''), typeof payload.correct === 'boolean' ? payload.correct : undefined);
-    case 'host:end-game': return engine.endGame(roomCode, hostToken);
-    case 'player:buzz': {
-      const result = engine.buzz(
-        roomCode,
-        String(payload.playerId ?? ''),
-        String(payload.reconnectToken ?? ''),
-        requiredQuestionId(payload),
-        requiredGameStartedAt(payload)
-      );
-      return { accepted: result.accepted, reason: result.reason };
-    }
-    case 'player:text-response': return engine.submitTextResponse(
-      roomCode,
-      String(payload.playerId ?? ''),
-      String(payload.reconnectToken ?? ''),
-      String(payload.answer ?? ''),
-      requiredQuestionId(payload),
-      requiredGameStartedAt(payload)
-    );
-    case 'player:daily-double-wager': {
-      const playerId = String(payload.playerId ?? '');
-      const reconnectToken = String(payload.reconnectToken ?? '');
-      const wager = Number(payload.wager);
-      const questionId = requiredQuestionId(payload);
-      const gameStartedAt = requiredGameStartedAt(payload);
-      if (!presetWager(wager)) throw new Error('Choose one of the preset Daily Double wagers');
-      return engine.submitDailyDoubleWager(roomCode, playerId, reconnectToken, wager, questionId, gameStartedAt);
-    }
-    case 'player:final-wager': {
-      const playerId = String(payload.playerId ?? '');
-      const reconnectToken = String(payload.reconnectToken ?? '');
-      const wager = Number(payload.wager);
-      const gameStartedAt = requiredGameStartedAt(payload);
-      engine.reconnectPlayer(roomCode, playerId, reconnectToken);
-      const snapshot = engine.snapshot(roomCode);
-      const player = snapshot.players.find((candidate) => candidate.id === playerId);
-      if (!player) throw new Error('Player not found');
-      const rules = finalWagerRules(snapshot, playerId);
-      const allIn = rules.allInAllowed && wager === player.score;
-      if (!presetWager(wager, true) && !allIn) throw new Error('Choose an available preset or All In');
-      if (wager > rules.maxWager) throw new Error(`Final wager is capped at ${rules.maxWager.toLocaleString()}`);
-      engine.submitFinalWager(roomCode, playerId, reconnectToken, wager, gameStartedAt);
-      return null;
-    }
-    case 'player:final-answer': {
-      engine.submitFinalAnswer(
-        roomCode,
-        String(payload.playerId ?? ''),
-        String(payload.reconnectToken ?? ''),
-        String(payload.answer ?? ''),
-        requiredGameStartedAt(payload)
-      );
-      return null;
-    }
-    default: throw new Error(`Unsupported game event: ${event}`);
-  }
-}
-
-async function handleHostRequest(connection: DataConnection, message: RequestMessage): Promise<void> {
-  const prior = completedRequests.get(connection)?.get(message.requestId);
-  if (prior) {
-    if (connection.open) connection.send(prior);
-    return;
-  }
-  const sessionPrior = completedSessionRequests.get(requestSessionKey(identities.get(connection)) ?? '')?.get(message.requestId);
-  if (sessionPrior) {
-    if (connection.open) connection.send(sessionPrior);
-    return;
-  }
-  const active = inFlightRequests.get(connection)?.get(message.requestId);
-  if (active) {
-    await active;
-    const completed = completedRequests.get(connection)?.get(message.requestId);
-    if (completed && connection.open) connection.send(completed);
-    return;
-  }
-  let finishRequest: () => void = () => {};
-  const work = new Promise<void>((resolve) => { finishRequest = resolve; });
-  const activeRequests = inFlightRequests.get(connection) ?? new Map<string, Promise<void>>();
-  activeRequests.set(message.requestId, work);
-  inFlightRequests.set(connection, activeRequests);
-  const requestRoomCode = String(message.payload.roomCode ?? '').toUpperCase();
-  if (!ownsHostAuthority(requestRoomCode)) {
-    if (connection.open) connection.send({ kind: 'response', requestId: message.requestId, ok: false, error: 'Host authority moved to another tab' } satisfies ResponseMessage);
-    activeRequests.delete(message.requestId);
-    if (!activeRequests.size) inFlightRequests.delete(connection);
-    finishRequest();
-    window.setTimeout(() => { try { connection.close(); } catch { /* stale connection */ } }, 0);
-    return;
-  }
-  const identity = identities.get(connection);
-  if (identity?.role === 'player' && identity.playerId) playerLastSeen.set(identity.playerId, Date.now());
-  try {
-    authorizeRemoteEvent(identity, message.event, message.payload);
-    const data = await dispatchHost(message.event, message.payload, connection);
-    const response = { kind: 'response', requestId: message.requestId, ok: true, data } satisfies ResponseMessage;
-    cacheCompletedRequest(connection, message.requestId, response);
-    connection.send(response);
-    const roomCode = String(message.payload.roomCode ?? '').toUpperCase();
-    if (roomCode && message.event !== 'player:heartbeat') emitRoom(roomCode);
-  } catch (error) {
-    const response = { kind: 'response', requestId: message.requestId, ok: false, error: failMessage(error) } satisfies ResponseMessage;
-    cacheCompletedRequest(connection, message.requestId, response);
-    if (connection.open) connection.send(response);
-  } finally {
-    activeRequests.delete(message.requestId);
-    if (!activeRequests.size) inFlightRequests.delete(connection);
-    finishRequest();
-  }
-}
-function getPresentationConnectionCount(roomCode: string): number {
-  const normalized = roomCode.toUpperCase();
-  return [...connections].filter((connection) => connection.open && identities.get(connection)?.roomCode === normalized && identities.get(connection)?.role === 'presentation').length;
-}
-function emitPresentationStatus(roomCode: string): void {
-  emitLocal('presentation:status', { roomCode: roomCode.toUpperCase(), connectedCount: getPresentationConnectionCount(roomCode) });
-}
-function requestSessionKey(identity: Identity | undefined): string | null {
-  if (!identity) return null;
-  return `${identity.roomCode}:${identity.role}:${identity.playerId ?? ''}`;
-}
-function cacheCompletedRequest(connection: DataConnection, requestId: string, response: ResponseMessage): void {
-  const responses = completedRequests.get(connection) ?? new Map<string, ResponseMessage>();
-  responses.set(requestId, response);
-  completedRequests.set(connection, responses);
-  if (responses.size > 128) responses.delete(responses.keys().next().value!);
-  const key = requestSessionKey(identities.get(connection));
-  if (!key) return;
-  const sessionResponses = completedSessionRequests.get(key) ?? new Map<string, ResponseMessage>();
-  sessionResponses.set(requestId, response);
-  completedSessionRequests.set(key, sessionResponses);
-  if (sessionResponses.size > 128) sessionResponses.delete(sessionResponses.keys().next().value!);
-}
-function attachHostConnection(connection: DataConnection): void {
-  connections.add(connection);
-  connection.on('open', () => recordDiagnostic('data-open', 'host'));
-  connection.on('data', (data) => { const message = data as WireMessage; if (message?.kind === 'request') void handleHostRequest(connection, message); });
-  connection.on('close', () => { recordDiagnostic('data-closed', 'host'); completedRequests.delete(connection); inFlightRequests.delete(connection); handleConnectionClosed(connection); });
-  connection.on('error', () => { recordDiagnostic('data-error', 'host'); completedRequests.delete(connection); inFlightRequests.delete(connection); handleConnectionClosed(connection); });
-}
-async function createHostPeerOnce(roomCode: string, allowAuthorityTakeover: boolean): Promise<void> {
-  const options = await peerOptions();
-  return new Promise((resolve, reject) => {
-    const peer = makePeer(hostPeerId(roomCode), options);
-    let settled = false;
-    let hostSignalRetryTimer: number | null = null;
-    let hostSignalReconnectAttempts = 0;
-    const scheduleHostSignalReconnect = () => {
-      if (hostSignalRetryTimer !== null || peer.destroyed || hostPeer !== peer) return;
-      hostSignalRetryTimer = window.setTimeout(() => {
-        hostSignalRetryTimer = null;
-        if (peer.destroyed || hostPeer !== peer || !peer.disconnected) return;
-        hostSignalReconnectAttempts += 1;
-        // PeerJS can remain permanently disconnected after a signaling socket
-        // failure. Recreating the deterministic room Peer is safer than leaving
-        // a valid persisted room registered to an unusable Peer object.
-        if (hostSignalReconnectAttempts >= 3) {
-          try { peer.destroy(); } catch { /* close handler starts replacement */ }
+  async function sendOnce(request: Request): Promise<unknown> {
+    await waitForConnection();
+    return new Promise((resolve, reject) => {
+      const timeout = globalThis.setTimeout(() => {
+        record('request-timeout', request.event);
+        reject(new Error('The game server did not respond'));
+      }, REQUEST_TIMEOUT_MS);
+      transport.emit('game:request', request, (reply: Reply) => {
+        globalThis.clearTimeout(timeout);
+        if (!reply || reply.requestId !== request.requestId) {
+          reject(new Error('Invalid game server acknowledgement'));
           return;
         }
-        try { peer.reconnect(); } catch { /* retry below */ }
-        if (peer.disconnected && !peer.destroyed) scheduleHostSignalReconnect();
-      }, 1000);
-    };
-    const finishError = (error: unknown) => {
-      if (settled) return;
-      settled = true;
-      try { peer.destroy(); } catch { /* ignore */ }
-      reject(error instanceof Error ? error : new Error('Could not start host connection'));
-    };
-    peer.on('open', () => {
-      recordDiagnostic('peer-open', 'host');
-      if (hostSignalRetryTimer !== null) {
-        window.clearTimeout(hostSignalRetryTimer);
-        hostSignalRetryTimer = null;
-      }
-      hostSignalReconnectAttempts = 0;
-      if (settled) {
-        if (hostPeer === peer && hostRoomCode === roomCode) {
-          socket.connected = true;
-          emitLocal('connect');
-          emitRoom(roomCode);
-        }
-        return;
-      }
-      if (!canClaimHostAuthority(roomCode, hostAuthorityId, allowAuthorityTakeover)) {
-        finishError(new Error('Another host screen is active in this browser'));
-        return;
-      }
-      hostStaleSweepBlockedUntil = Date.now() + HOST_STALE_SWEEP_GRACE_MS;
-      socket.connected = true;
-      emitLocal('connect');
-      settled = true;
-      const previousPeer = hostPeer;
-      const authorityId = randomId('host-authority');
-      claimHostAuthority(roomCode, authorityId);
-      hostPeer = peer;
-      hostRoomCode = roomCode;
-      hostAuthorityId = authorityId;
-      recordDiagnostic('host-authority-acquired', 'host');
-      if (previousPeer && previousPeer !== peer) { try { previousPeer.destroy(); } catch { /* ignore */ } }
-      peer.on('connection', attachHostConnection);
-      peer.on('disconnected', () => {
-        if (hostPeer !== peer) return;
-        socket.connected = false;
-        emitLocal('disconnect');
-        scheduleHostSignalReconnect();
+        if (reply.ok) resolve(reply.data);
+        else reject(new Error(reply.error ?? 'Request failed'));
       });
-      peer.on('close', () => {
-        if (hostSignalRetryTimer !== null) {
-          window.clearTimeout(hostSignalRetryTimer);
-          hostSignalRetryTimer = null;
-        }
-        releaseHostAuthority(roomCode, authorityId);
-        if (hostPeer !== peer) return;
-        hostPeer = null;
-        hostAuthorityId = '';
-        socket.connected = false;
-        emitLocal('disconnect');
-        window.setTimeout(() => {
-          if (hostRoomCode !== roomCode || hostPeer) return;
-          void startHostPeer(roomCode, true, false).catch(() => {
-            // Keep the persisted room intact. The host UI remains in recovery mode
-            // and another retry will occur on the regular host keepalive.
-          });
-        }, 500);
-      });
-      peer.on('error', () => { if (peer.disconnected && !peer.destroyed) scheduleHostSignalReconnect(); });
-      resolve();
     });
-    peer.on('error', finishError);
-    window.setTimeout(() => finishError(new Error('Timed out starting the host connection')), 8000);
-  });
-}
-function hostPeerIdIsTaken(error: unknown): boolean {
-  const type = typeof error === 'object' && error !== null && 'type' in error
-    ? String((error as { type?: unknown }).type ?? '')
-    : '';
-  return type === 'unavailable-id' || /ID .+ is taken/i.test(failMessage(error));
-}
-function bodyAllowsHostTakeover(payload: Record<string, unknown>): boolean {
-  return payload.allowAuthorityTakeover === true;
-}
-
-async function startHostPeer(roomCode: string, retryUnavailable: boolean, allowAuthorityTakeover: boolean): Promise<void> {
-  if (!canClaimHostAuthority(roomCode, hostAuthorityId, allowAuthorityTakeover)) {
-    if (hostPeer && hostRoomCode === roomCode) {
-      const stalePeer = hostPeer;
-      hostPeer = null;
-      hostAuthorityId = '';
-      socket.connected = false;
-      for (const connection of connections) {
-        try { connection.close(); } catch { /* stale connection */ }
-      }
-      try { stalePeer.destroy(); } catch { /* stale peer */ }
-      emitLocal('disconnect');
-    }
-    throw new Error('Another host screen is active in this browser');
-  }
-  if (hostPeer && hostRoomCode === roomCode && !hostPeer.destroyed) {
-    if (ownsHostAuthority(roomCode)) {
-      if (hostPeer.disconnected) { try { hostPeer.reconnect(); } catch { /* keep existing connections */ } }
-      socket.connected = !hostPeer.disconnected;
-      return;
-    }
-    const stalePeer = hostPeer;
-    hostPeer = null;
-    hostAuthorityId = '';
-    socket.connected = false;
-    try { stalePeer.destroy(); } catch { /* stale peer */ }
-  }
-  let lastError: Error | null = null;
-  let sawPeerIdTaken = false;
-  let takeoverAuthorityId = '';
-  const attempts = retryUnavailable ? 12 : 1;
-
-  try {
-    for (let attempt = 0; attempt < attempts; attempt += 1) {
-      try {
-        await createHostPeerOnce(roomCode, allowAuthorityTakeover);
-        return;
-      } catch (error) {
-        lastError = error instanceof Error ? error : new Error('Could not start host connection');
-        const peerIdTaken = hostPeerIdIsTaken(error);
-        sawPeerIdTaken ||= peerIdTaken;
-        if (!retryUnavailable) break;
-
-        if (peerIdTaken && allowAuthorityTakeover && !takeoverAuthorityId) {
-          // A saved room opened in a second tab can legitimately collide with the first tab's
-          // PeerJS id. Claiming local authority tells the old tab to release that peer so the
-          // saved room can move to this tab instead of getting stuck in an "ID is taken" loop.
-          takeoverAuthorityId = randomId('host-takeover');
-          claimHostAuthority(roomCode, takeoverAuthorityId);
-        }
-
-        await new Promise((resolve) => window.setTimeout(resolve, peerIdTaken ? 650 : 500));
-      }
-    }
-  } finally {
-    if (takeoverAuthorityId) releaseHostAuthority(roomCode, takeoverAuthorityId);
   }
 
-  if (sawPeerIdTaken) {
-    throw new Error('Another host screen is still using this saved room. Close that host screen, then retry');
-  }
-  throw lastError ?? new Error('Could not start host connection');
-}
-function attachClientConnection(connection: DataConnection): void {
-  connection.on('open', () => recordDiagnostic('data-open', 'client', { generation: clientTransportGeneration }));
-  connection.on('data', (data) => {
-    if (clientConnection !== connection) return;
-    const message = data as WireMessage;
-    if (message?.kind === 'response') {
-      const request = pending.get(message.requestId);
-      if (!request) return;
-      pending.delete(message.requestId);
-      window.clearTimeout(request.timeoutId);
-      if (message.ok) request.resolve(message.data); else request.reject(new Error(message.error ?? 'Request failed'));
-      return;
-    }
-    if (message?.kind === 'event') {
-      if (message.event === 'player:suspended') {
-        clientHostPaused = true;
-        clientSuspended = true;
-      }
-      if (message.event === 'player:removed') {
-        clientHostPaused = false;
-        clientSuspended = true;
-        authReplay = null;
-      }
-      socket.connected = message.event !== 'player:suspended' && message.event !== 'player:removed';
-      emitLocal(message.event, message.data);
-    }
-  });
-  const closed = () => {
-    if (clientConnection !== connection) return;
-    recordDiagnostic('data-closed', 'client', { generation: clientTransportGeneration });
-    clientConnection = null;
-    socket.connected = false;
-    emitLocal('disconnect');
-    for (const [requestId, request] of pending) {
-      pending.delete(requestId);
-      window.clearTimeout(request.timeoutId);
-      request.reject(new Error('Connection interrupted'));
-    }
-    scheduleClientReconnect();
-  };
-  connection.on('close', closed);
-  connection.on('error', closed);
-}
-async function createClientPeer(expectedGeneration: number): Promise<Peer> {
-  if (expectedGeneration !== clientTransportGeneration) throw new Error('Connection refresh superseded');
-  if (clientPeer && !clientPeer.destroyed) {
-    if (clientPeer.open && !clientPeer.disconnected) return clientPeer;
-    try { clientPeer.destroy(); } catch { /* recreate a clean signaling peer */ }
-    clientPeer = null;
-  }
-  const options = await peerOptions();
-  if (expectedGeneration !== clientTransportGeneration) throw new Error('Connection refresh superseded');
-  return new Promise((resolve, reject) => {
-    const peer = makePeer(undefined, options);
-    clientPeer = peer;
-    let settled = false;
-    peer.on('open', () => {
-      recordDiagnostic('peer-open', 'client', { generation: expectedGeneration });
-      if (clientPeer !== peer || expectedGeneration !== clientTransportGeneration) return;
-      if (clientConnection?.open) socket.connected = true;
-      if (!settled) { settled = true; resolve(peer); }
-    });
-    peer.on('disconnected', () => {
-      if (clientPeer !== peer || expectedGeneration !== clientTransportGeneration) return;
-      if (!clientConnection?.open) socket.connected = false;
-      try { peer.reconnect(); } catch { if (!clientConnection?.open) scheduleClientReconnect(); }
-    });
-    peer.on('error', (error) => {
-      if (clientPeer !== peer || expectedGeneration !== clientTransportGeneration) return;
-      if (!settled) { settled = true; reject(error instanceof Error ? error : new Error('Could not connect to signaling')); }
-      else if (clientRoomCode && !clientConnection?.open) scheduleClientReconnect();
-    });
-    peer.on('close', () => {
-      if (clientPeer !== peer || expectedGeneration !== clientTransportGeneration) return;
-      if (!clientConnection?.open) socket.connected = false;
-      if (clientRoomCode && !clientConnection?.open) scheduleClientReconnect();
-    });
-    window.setTimeout(() => { if (!settled) { settled = true; reject(new Error('Timed out connecting to signaling')); } }, 8000);
-  });
-}
-function destroyClientPeer(invalidateTransport = true): void {
-  if (invalidateTransport) clientTransportGeneration += 1;
-  const peer = clientPeer;
-  clientPeer = null;
-  if (!peer) return;
-  try { peer.destroy(); } catch { /* stale signaling peer */ }
-}
-
-function rejectPendingRequests(message: string): void {
-  for (const [requestId, request] of pending) {
-    pending.delete(requestId);
-    window.clearTimeout(request.timeoutId);
-    request.reject(new Error(message));
-  }
-}
-
-function dropClientConnection(connection: DataConnection, resetSignaling = false): void {
-  if (clientConnection !== connection) return;
-  clientConnection = null;
-  socket.connected = false;
-  emitLocal('disconnect');
-  rejectPendingRequests('Connection interrupted');
-  try { connection.close(); } catch { /* ignore stale close */ }
-  if (resetSignaling) destroyClientPeer();
-  scheduleClientReconnect();
-}
-
-function forceClientTransportRefresh(): void {
-  const connection = clientConnection;
-  const wasConnected = socket.connected || Boolean(connection?.open);
-  clientConnection = null;
-  clientConnectPromise = null;
-  if (reconnectTimer !== null) {
-    window.clearTimeout(reconnectTimer);
-    reconnectTimer = null;
-  }
-  socket.connected = false;
-  rejectPendingRequests('Connection refreshing');
-  try { connection?.close(); } catch { /* stale data connection */ }
-  destroyClientPeer();
-  if (wasConnected) emitLocal('disconnect');
-}
-function sendRequestOn(connection: DataConnection, event: string, payload: Record<string, unknown>, timeoutMs = 8000, dropOnTimeout = true): Promise<unknown> {
-  return new Promise((resolve, reject) => {
-    if (!connection.open) { reject(new Error('Host connection is not open')); return; }
-    const requestId = randomId('request');
-    const timeoutId = window.setTimeout(() => {
-      pending.delete(requestId);
-      reject(new Error('Host did not respond'));
-      if (dropOnTimeout) dropClientConnection(connection, true);
-    }, timeoutMs);
-    pending.set(requestId, { resolve, reject, timeoutId });
-    connection.send({ kind: 'request', requestId, event, payload } satisfies RequestMessage);
-  });
-}
-async function openConnectionToHost(targetRoom: string): Promise<DataConnection> {
-  if (clientConnection && !clientConnection.open) {
-    const staleConnection = clientConnection;
-    clientConnection = null;
-    try { staleConnection.close(); } catch { /* already closed */ }
-  }
-  if (clientConnection?.open && clientRoomCode === targetRoom) return clientConnection;
-  if (clientConnection?.open && clientRoomCode && clientRoomCode !== targetRoom) {
-    try { clientConnection.close(); } catch { /* ignore */ }
-    clientConnection = null;
-    authReplay = null;
-  }
-  clientRoomCode = targetRoom;
-  const generation = clientTransportGeneration;
-  const peer = await createClientPeer(generation);
-  if (generation !== clientTransportGeneration || clientRoomCode !== targetRoom) {
-    throw new Error('Connection refresh superseded');
-  }
-  return await new Promise<DataConnection>((resolve, reject) => {
-    const connection = peer.connect(hostPeerId(targetRoom), { reliable: true, serialization: 'json' });
-    let settled = false;
-    attachClientConnection(connection);
-    connection.on('open', () => {
-      if (settled) return;
-      if (clientSuspended || generation !== clientTransportGeneration || clientRoomCode !== targetRoom) {
-        settled = true;
-        try { connection.close(); } catch { /* ignore */ }
-        reject(new Error(clientSuspended ? 'Connection is paused' : 'Connection refresh superseded'));
-        return;
-      }
-      settled = true;
-      clientConnection = connection;
-      socket.connected = true;
-      reconnectDelayMs = 400;
-      emitLocal('connect');
-      const finish = async () => {
-        if (authReplay) {
-          try {
-            await sendRequestOn(connection, authReplay.event, authReplay.payload, 6000);
-          } catch (error) {
-            dropClientConnection(connection);
-            reject(error instanceof Error ? error : new Error('Could not restore session'));
-            return;
-          }
-        }
-        resolve(connection);
-      };
-      void finish();
-    });
-    connection.on('error', (error) => {
-      if (settled) return;
-      settled = true;
-      try { connection.close(); } catch { /* ignore failed connection */ }
-      const detail = error instanceof Error ? error.message : 'Could not connect to host.';
-      reject(new Error(`${detail}${connectionFailureHint()}`));
-    });
-    window.setTimeout(() => {
-      if (settled) return;
-      settled = true;
-      try { connection.close(); } catch { /* ignore */ }
-      reject(new Error(`Could not find that game. Confirm the host page is open.${connectionFailureHint()}`));
-    }, 6500);
-  });
-}
-async function connectToHost(roomCode: string): Promise<DataConnection> {
-  if (clientSuspended) throw new Error('Connection is paused');
-  const targetRoom = roomCode.toUpperCase();
-  if (clientConnection?.open && clientRoomCode === targetRoom) return clientConnection;
-  if (clientConnectPromise?.roomCode === targetRoom) return clientConnectPromise.promise;
-  const promise = openConnectionToHost(targetRoom).finally(() => {
-    if (clientConnectPromise?.promise === promise) clientConnectPromise = null;
-  });
-  clientConnectPromise = { roomCode: targetRoom, promise };
-  return promise;
-}
-function scheduleClientReconnect(): void {
-  if (clientSuspended || !clientRoomCode || clientConnection?.open) return;
-  if (reconnectTimer !== null) { recordDiagnostic('reconnect-coalesced', 'client', { generation: clientTransportGeneration }); return; }
-  recordDiagnostic('reconnect-scheduled', 'client', { generation: clientTransportGeneration });
-  reconnectTimer = window.setTimeout(() => {
-    reconnectTimer = null;
-    recordDiagnostic('reconnect-started', 'client', { generation: clientTransportGeneration });
-    void connectToHost(clientRoomCode).catch(() => {
-      recordDiagnostic('reconnect-failed', 'client', { generation: clientTransportGeneration });
-      reconnectDelayMs = Math.min(5000, Math.round(reconnectDelayMs * 1.7));
-      scheduleClientReconnect();
-    });
-  }, reconnectDelayMs);
-}
-async function clientRequest(event: string, payload: Record<string, unknown>): Promise<unknown> {
-  const roomCode = String(payload.roomCode ?? clientRoomCode).toUpperCase();
-  if (!roomCode) throw new Error('Enter a room code');
-  const connection = await connectToHost(roomCode);
-  const result = await sendRequestOn(
-    connection,
-    event,
-    payload,
-    event === 'player:heartbeat' ? HEARTBEAT_TIMEOUT_MS : 8000,
-    event !== 'player:heartbeat'
-  );
-  if (event === 'player:join' || event === 'player:reconnect') {
-    const credentials = result as PlayerJoinCredentials;
-    authReplay = { event: 'player:reconnect', payload: { roomCode: credentials.roomCode, playerId: credentials.playerId, reconnectToken: credentials.reconnectToken } };
-  } else if (event === 'presentation:join') {
-    authReplay = { event: 'presentation:join', payload };
-  }
-  return result;
-}
-function suspendClientSession(): void {
-  clientSuspended = true;
-  clientConnectPromise = null;
-  if (reconnectTimer !== null) {
-    window.clearTimeout(reconnectTimer);
-    reconnectTimer = null;
-  }
-  const connection = clientConnection;
-  clientConnection = null;
-  const wasConnected = socket.connected || Boolean(connection?.open);
-  socket.connected = false;
-  rejectPendingRequests('Connection closed');
-  try { connection?.close(); } catch { /* already closed */ }
-  destroyClientPeer();
-  if (wasConnected) emitLocal('disconnect');
-}
-function resumeClientSession(forceHostPause = false, forceTransportReset = false): void {
-  if (clientHostPaused && !forceHostPause) return;
-  if (forceHostPause) clientHostPaused = false;
-  clientSuspended = false;
-  reconnectDelayMs = 400;
-  if (forceTransportReset && clientRoomCode) forceClientTransportRefresh();
-  if (clientRoomCode && !clientConnection?.open) scheduleClientReconnect();
-}
-async function createHostRoom(payload: Record<string, unknown>): Promise<unknown> {
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    const settings = (payload.settings ?? {}) as Partial<GameSettings>;
-    const credentials = engine.createRoom(String(payload.baseUrl ?? baseUrl()), settings);
+  async function request(event: string, payload: Record<string, unknown>, waitForReplay = true): Promise<unknown> {
+    if (waitForReplay) await restoring;
+    const envelope: Request = { requestId: randomId('request'), event, payload };
     try {
-      await startHostPeer(credentials.roomCode, false, true);
-      engine.setHostConnected(credentials.roomCode, true);
-      emitRoom(credentials.roomCode);
-      return credentials;
-    } catch {
-      engine.deleteRoom(credentials.roomCode);
+      return await sendOnce(envelope);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '';
+      if (!/did not respond|could not connect/i.test(message) || suspended || destroyed) throw error;
+      if (waitForReplay) await restoring;
+      return sendOnce(envelope);
     }
   }
-  throw new Error('Could not reserve a multiplayer room. Try again.');
-}
-async function hostRequest(event: string, payload: Record<string, unknown>): Promise<unknown> {
-  if (event === 'room:create') return createHostRoom(payload);
-  const roomCode = String(payload.roomCode ?? '').toUpperCase();
-  if (event === 'host:reconnect') {
-    await startHostPeer(roomCode, true, bodyAllowsHostTakeover(payload));
-    requireHostAuthority(roomCode);
-  } else if (event.startsWith('host:')) {
-    requireHostAuthority(roomCode);
-  }
-  const result = await dispatchHost(event, payload);
-  if (roomCode) emitRoom(roomCode);
-  return result;
-}
-async function emitAck<T = unknown>(event: string, payload: unknown): Promise<T> {
-  const body = (payload ?? {}) as Record<string, unknown>;
-  const result = currentMode() === 'host' ? await hostRequest(event, body) : await clientRequest(event, body);
-  return result as T;
-}
-function jsonResponse(value: unknown, status = 200): Response {
-  return new Response(JSON.stringify(value), { status, headers: { 'content-type': 'application/json' } });
-}
-function installHistoryBaseGuard(): void {
-  const original = history.replaceState.bind(history);
-  history.replaceState = ((data: unknown, unused: string, url?: string | URL | null) => {
-    if (typeof url === 'string' && url.startsWith('/?mode=')) {
-      const current = new URL(location.href);
-      return original(data, unused, `${current.pathname}${url.slice(1)}`);
+
+  function updateReplay(event: string, payload: Record<string, unknown>, result: unknown): void {
+    if (event === 'room:create') {
+      const credentials = result as HostRoomCredentials;
+      replay = { event: 'host:reconnect', payload: { roomCode: credentials.roomCode, hostToken: credentials.hostToken } };
+    } else if (event === 'host:reconnect') {
+      replay = { event, payload: { roomCode: payload.roomCode, hostToken: payload.hostToken } };
+    } else if (event === 'player:join' || event === 'player:reconnect') {
+      const credentials = result as PlayerJoinCredentials;
+      replay = { event: 'player:reconnect', payload: { roomCode: credentials.roomCode, playerId: credentials.playerId, reconnectToken: credentials.reconnectToken } };
+    } else if (event === 'presentation:join') {
+      replay = { event, payload: { roomCode: payload.roomCode, presentationToken: payload.presentationToken } };
     }
-    return original(data, unused, url);
-  }) as History['replaceState'];
-}
-function installVirtualApi(): void {
-  const nativeFetch = window.fetch.bind(window);
-  window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
-    const requestUrl = typeof input === 'string' ? new URL(input, location.href) : input instanceof URL ? input : new URL(input.url, location.href);
-    if (requestUrl.pathname === '/api/packs' || requestUrl.pathname.endsWith('/api/packs')) return jsonResponse(packSummaries());
-    if (requestUrl.pathname === '/api/network' || requestUrl.pathname.endsWith('/api/network')) return jsonResponse({ baseUrl: baseUrl(), p2p: true });
-    if (requestUrl.pathname === '/api/qr' || requestUrl.pathname.endsWith('/api/qr')) {
-      const value = requestUrl.searchParams.get('value');
-      if (!value) return jsonResponse({ error: 'A valid URL is required' }, 400);
-      try {
-        const dataUrl = await QRCode.toDataURL(value, { margin: 1, width: 320 });
-        return jsonResponse({ dataUrl });
-      } catch {
-        return jsonResponse({ error: 'Could not generate QR code' }, 500);
+  }
+
+  transport.on('connect', () => {
+    if (destroyed || suspended) return;
+    record('connected');
+    restoring = (async () => {
+      if (replay) {
+        record('reconnect-started');
+        try {
+          await request(replay.event, replay.payload, false);
+          record('identity-restored');
+        } catch {
+          record('identity-rejected');
+          return;
+        }
       }
+      socket.connected = true;
+      emitLocal('connect');
+    })();
+  });
+  transport.on('disconnect', () => {
+    socket.connected = false;
+    record('disconnected');
+    emitLocal('disconnect');
+  });
+  transport.on('connect_error', () => record('connect-error'));
+
+  for (const event of EVENT_NAMES) {
+    transport.on(event, (data: unknown) => {
+      if (event === 'room:state') {
+        lastRoom = data as RoomSnapshot;
+        if (browser && role() === 'host') {
+          try {
+            window.localStorage.setItem(`blue-stage-host-preview-${lastRoom.code}`, JSON.stringify({
+              roomCode: lastRoom.code,
+              phase: lastRoom.phase,
+              connectedPlayers: lastRoom.players.filter((player) => player.connected).length,
+              totalPlayers: lastRoom.players.length,
+              remainingQuestions: lastRoom.remainingQuestions,
+              updatedAt: Date.now(),
+              gameStartedAt: lastRoom.gameStartedAt
+            }));
+          } catch { /* a private browsing storage failure must not break gameplay */ }
+        }
+        health = lastRoom.players.map((player) => ({
+          playerId: player.id,
+          connected: player.connected,
+          ageMs: player.connected ? 0 : null,
+          quality: player.connected ? 'good' : 'offline'
+        }));
+      } else if (event === 'presentation:status') {
+        presentationCount = Number((data as { connectedCount?: number })?.connectedCount ?? 0);
+      } else if (event === 'player:suspended') {
+        hostPaused = true;
+        suspended = true;
+        socket.connected = false;
+        transport.disconnect();
+      } else if (event === 'player:removed') {
+        replay = null;
+        suspended = true;
+        socket.connected = false;
+        transport.disconnect();
+      }
+      emitLocal(event, data);
+    });
+  }
+
+  async function emitAck<T = unknown>(event: string, payload: unknown): Promise<T> {
+    if (event.startsWith('host:') || event === 'room:create') {
+      suspended = false;
+      if (!transport.connected) transport.connect();
     }
-    return nativeFetch(input, init);
-  };
-}
-if (installBrowserHooks) {
-installHistoryBaseGuard();
-installVirtualApi();
-document.addEventListener('visibilitychange', () => {
-  if (!hostRoomCode || !ownsHostAuthority(hostRoomCode)) return;
-  if (document.visibilityState === 'visible') hostStaleSweepBlockedUntil = Date.now() + HOST_STALE_SWEEP_GRACE_MS;
-});
-window.addEventListener('focus', () => {
-  if (hostRoomCode && ownsHostAuthority(hostRoomCode)) hostStaleSweepBlockedUntil = Date.now() + HOST_STALE_SWEEP_GRACE_MS;
-});
-window.addEventListener('storage', (event) => {
-  if (!hostRoomCode || !hostAuthorityId || event.key !== hostAuthorityKey(hostRoomCode) || ownsHostAuthority(hostRoomCode)) return;
-  const stalePeer = hostPeer;
-  hostPeer = null;
-  hostAuthorityId = '';
-  socket.connected = false;
-  emitLocal('disconnect');
-  for (const connection of connections) {
-    try { connection.close(); } catch { /* stale connection */ }
+    const body = (payload ?? {}) as Record<string, unknown>;
+    const key = event === 'room:create' ? `${event}:${JSON.stringify(body)}` : '';
+    if (key && inFlight.has(key)) return inFlight.get(key) as Promise<T>;
+    const work = request(event, body, !['room:create', 'host:reconnect', 'player:join', 'player:reconnect', 'presentation:join'].includes(event))
+      .then((result) => { updateReplay(event, body, result); return result; })
+      .finally(() => { if (key) inFlight.delete(key); });
+    if (key) inFlight.set(key, work);
+    return work as Promise<T>;
   }
-  try { stalePeer?.destroy(); } catch { /* stale peer */ }
-});
-window.setInterval(() => {
-  if (!hostRoomCode || !ownsHostAuthority(hostRoomCode)) return;
-  for (const changedRoom of engine.tick()) {
-    if (changedRoom === hostRoomCode) emitRoom(changedRoom);
+
+  function suspendClientSession(): void {
+    suspended = true;
+    socket.connected = false;
+    transport.disconnect();
   }
-}, 250);
-window.setInterval(() => {
-  if (!hostRoomCode || !ownsHostAuthority(hostRoomCode)) return;
-  const now = Date.now();
-  const sweepWasDelayed = now - lastHostStaleSweepAt > HOST_STALE_SWEEP_STALL_MS;
-  lastHostStaleSweepAt = now;
-  if (sweepWasDelayed) hostStaleSweepBlockedUntil = Math.max(hostStaleSweepBlockedUntil, now + HOST_STALE_SWEEP_GRACE_MS);
-  if (document.visibilityState === 'hidden' || now < hostStaleSweepBlockedUntil) return;
-  for (const [playerId, connection] of playerConnections) {
-    const identity = identities.get(connection);
-    if (!identity || identity.roomCode !== hostRoomCode) continue;
-    if (now - (playerLastSeen.get(playerId) ?? now) <= PLAYER_STALE_MS) continue;
-    playerConnections.delete(playerId);
-    playerLastSeen.delete(playerId);
-    identities.delete(connection);
-    try { connection.close(); } catch { /* already stale */ }
-    try { engine.setPlayerConnected(identity.roomCode, playerId, false); } catch { /* stale room */ }
+
+  function resumeClientSession(forceHostPause = false, forceTransportReset = false): void {
+    if (hostPaused && !forceHostPause) return;
+    if (forceHostPause) hostPaused = false;
+    suspended = false;
+    if (forceTransportReset) transport.disconnect();
+    transport.connect();
   }
-  emitRoom(hostRoomCode);
-}, 2000);
-window.setInterval(() => {
-  if (hostRoomCode && ownsHostAuthority(hostRoomCode)) emitRoom(hostRoomCode);
-}, 1500);
-}
+
+  function getPlayerConnectionHealth(roomCode: string): PlayerConnectionHealth[] {
+    if (lastRoom?.code !== roomCode.toUpperCase()) return [];
+    const hostToken = replay?.event === 'host:reconnect' ? replay.payload.hostToken : undefined;
+    const now = Date.now();
+    if (hostToken && now - lastHealthRequestAt >= 1_000) {
+      lastHealthRequestAt = now;
+      void request('host:get-player-health', { roomCode, hostToken })
+        .then((result) => { if (Array.isArray(result)) health = result as PlayerConnectionHealth[]; })
+        .catch(() => {});
+    }
+    return health.slice();
+  }
+
+  function testPlayerControllers(roomCode: string): string[] {
+    const reached = lastRoom?.code === roomCode.toUpperCase()
+      ? lastRoom.players.filter((player) => player.connected).map((player) => player.id)
+      : [];
+    const hostToken = replay?.event === 'host:reconnect' ? replay.payload.hostToken : undefined;
+    if (hostToken) void request('host:test-controllers', { roomCode, hostToken }).catch(() => {});
+    return reached;
+  }
 
   return {
     socket,
@@ -1068,36 +272,21 @@ window.setInterval(() => {
     suspendClientSession,
     resumeClientSession,
     getPlayerConnectionHealth,
-    getNetworkDiagnostics: () => networkDiagnostics.slice(),
-    getPresentationConnectionCount,
+    getNetworkDiagnostics: () => diagnostics.slice(),
+    getPresentationConnectionCount: (roomCode) => lastRoom?.code === roomCode.toUpperCase() ? presentationCount : 0,
     testPlayerControllers,
     destroy() {
-      suspendClientSession();
-      if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
-      reconnectTimer = null;
-      for (const connection of connections) {
-        try { connection.close(); } catch { /* best-effort runtime teardown */ }
-      }
-      connections.clear();
-      identities.clear();
-      playerConnections.clear();
-      playerLastSeen.clear();
-      completedRequests.clear();
-      completedSessionRequests.clear();
-      inFlightRequests.clear();
+      destroyed = true;
+      suspended = true;
+      replay = null;
+      transport.removeAllListeners();
+      transport.disconnect();
       listeners.clear();
-      if (hostRoomCode && hostAuthorityId) releaseHostAuthority(hostRoomCode, hostAuthorityId);
-      try { hostPeer?.destroy(); } catch { /* best-effort runtime teardown */ }
-      hostPeer = null;
-      hostRoomCode = '';
-      hostAuthorityId = '';
       socket.connected = false;
     }
   };
 }
 
-// Preserve the original application-facing singleton API.  It is deliberately
-// just one instance of the same production runtime used by concurrent tests.
 const defaultRuntime = createSocketRuntime();
 export const socket = defaultRuntime.socket;
 export const emitAck = defaultRuntime.emitAck;

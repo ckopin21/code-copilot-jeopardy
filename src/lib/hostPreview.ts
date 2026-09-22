@@ -1,8 +1,6 @@
-import type { GamePhase, RoomState } from '../shared/types';
+import type { GamePhase } from '../shared/types';
 
-const ENGINE_STORAGE_KEY = 'blue-stage-p2p-engine-v2';
-const ROOM_TTL_MS = 24 * 60 * 60 * 1000;
-
+/** A display-only cache. The laptop server remains the source of truth. */
 export interface HostPreview {
   roomCode: string;
   phase: GamePhase;
@@ -13,40 +11,15 @@ export interface HostPreview {
   gameStartedAt: number | null;
 }
 
-type PersistedRoomRecord = { state?: RoomState };
-type PersistedRoomEnvelope = { version?: unknown; rooms?: unknown };
-
-function readRecords(raw: string): PersistedRoomRecord[] {
-  const parsed = JSON.parse(raw) as PersistedRoomRecord[] | PersistedRoomEnvelope;
-  // Legacy arrays remain readable until the normal persistence cycle upgrades
-  // them to the explicit versioned envelope.
-  if (Array.isArray(parsed)) return parsed;
-  if (parsed?.version === 1 && Array.isArray(parsed.rooms)) return parsed.rooms as PersistedRoomRecord[];
-  return [];
-}
-
 export function readHostPreview(roomCode: string): HostPreview | null {
   try {
-    const raw = localStorage.getItem(ENGINE_STORAGE_KEY);
+    const raw = localStorage.getItem(`blue-stage-host-preview-${roomCode}`);
     if (!raw) return null;
-    const records = readRecords(raw);
-    const state = records.find((record) => record.state?.code === roomCode)?.state;
-    if (!state) return null;
-
-    const activityFromExpiry = Math.max(state.createdAt, state.expiresAt - ROOM_TTL_MS);
-    const updatedAt = Math.max(activityFromExpiry, state.gameStartedAt ?? 0, state.gameEndedAt ?? 0);
-    return {
-      roomCode: state.code,
-      phase: state.phase,
-      connectedPlayers: state.players.filter((player) => player.connected).length,
-      totalPlayers: state.players.length,
-      remainingQuestions: state.remainingQuestions,
-      updatedAt,
-      gameStartedAt: state.gameStartedAt,
-    };
-  } catch {
-    return null;
-  }
+    const value = JSON.parse(raw) as Partial<HostPreview>;
+    return value.roomCode === roomCode && typeof value.phase === 'string' &&
+      typeof value.totalPlayers === 'number' && typeof value.remainingQuestions === 'number' &&
+      typeof value.updatedAt === 'number' ? value as HostPreview : null;
+  } catch { return null; }
 }
 
 export function hostPhaseLabel(phase: HostPreview['phase']): string {

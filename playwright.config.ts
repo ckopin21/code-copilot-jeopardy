@@ -15,10 +15,10 @@ export default defineConfig({
     { name: 'webkit', use: { browserName: 'webkit' } }
   ],
   webServer: {
-    // Use the same Node binary that launched Playwright. This keeps local desktop
-    // runs reliable when Node is supplied by a managed runtime instead of PATH.
-    command: `${process.execPath} node_modules/vite/bin/vite.js --host 127.0.0.1 --port 4173`,
-    url: 'http://127.0.0.1:4173',
+    // Run the actual authoritative server and WebSocket path in both browsers.
+    command: `${process.execPath} node_modules/tsx/dist/cli.mjs server/index.ts --dev`,
+    env: { PORT: '4173', HOST: '127.0.0.1', BLUE_STAGE_BASE_URL: 'http://127.0.0.1:4173' },
+    url: 'http://127.0.0.1:4173/api/health',
     reuseExistingServer: false
   }
 });

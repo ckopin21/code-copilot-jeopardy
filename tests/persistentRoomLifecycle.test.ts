@@ -18,13 +18,6 @@ describe('persistent room lifecycle regression', () => {
     expect(host).toContain("localStorage.removeItem(`blue-stage-history-${parsed.roomCode}`)");
   });
 
-  it('keeps host authority maintenance active while the host is on the menu route', () => {
-    const socket = read('../src/lib/socket.ts');
-    expect(socket).toContain("if (!hostRoomCode || !ownsHostAuthority(hostRoomCode)) return;");
-    expect(socket).toContain("if (hostRoomCode && ownsHostAuthority(hostRoomCode)) emitRoom(hostRoomCode);");
-    expect(socket).not.toContain("if (currentMode() !== 'host' || !hostRoomCode || !ownsHostAuthority(hostRoomCode)) return;");
-  });
-
   it('offers Start New Game from completed-game surfaces', () => {
     const recap = read('../src/components/EndgameRecap.tsx');
     expect(recap).toContain('Start New Game');

@@ -1,6 +1,9 @@
 node_modules/
 dist-client/
 dist-server/
+.data/
+test-results/
+playwright-report/
 .env
 .DS_Store
 coverage/

@@ -47,10 +47,10 @@ function secureEqual(a: string, b: string): boolean {
 function defaultStats() {
   return { correct: 0, incorrect: 0, longestStreak: 0, longestColdStreak: 0, dailyDoublesFound: 0, biggestWager: 0, fastestBuzzMs: null, pointsGained: 0, pointsLost: 0 };
 }
-function loadRooms(): { rooms: RoomRecord[]; readable: boolean } {
+function loadRooms(storage: Storage): { rooms: RoomRecord[]; readable: boolean } {
   try {
     return {
-      rooms: recoverRoomStorage(localStorage) as unknown as RoomRecord[],
+      rooms: recoverRoomStorage(storage) as unknown as RoomRecord[],
       readable: true
     };
   } catch {
@@ -73,9 +73,9 @@ export class BrowserGameEngine {
   private seenQuestionIds = new Set<string>();
   private persistenceHealthy = true;
 
-  constructor(private readonly random: RandomSource = new MathRandomSource(), private readonly roomTtlMs = ROOM_TTL_MS) {
+  constructor(private readonly random: RandomSource = new MathRandomSource(), private readonly roomTtlMs = ROOM_TTL_MS, private readonly storage: Storage = localStorage) {
     const now = Date.now();
-    const loaded = loadRooms();
+    const loaded = loadRooms(storage);
     for (const record of loaded.rooms) {
       try {
       if (record.state.expiresAt <= now) continue;
@@ -173,9 +173,9 @@ export class BrowserGameEngine {
     try {
       for (const room of this.rooms.values()) room.state.revision = (room.state.revision ?? 0) + 1;
       const serialized = serializeStoredRooms([...this.rooms.values()]);
-      const previous = localStorage.getItem(STORAGE_KEY);
-      if (previous && previous !== serialized && isValidStoredRoomPayload(previous)) localStorage.setItem(STORAGE_BACKUP_KEY, previous);
-      localStorage.setItem(STORAGE_KEY, serialized);
+      const previous = this.storage.getItem(STORAGE_KEY);
+      if (previous && previous !== serialized && isValidStoredRoomPayload(previous)) this.storage.setItem(STORAGE_BACKUP_KEY, previous);
+      this.storage.setItem(STORAGE_KEY, serialized);
       this.reportPersistence(true);
     } catch {
       // Keep the in-memory game running, but make recovery failure visible to the host.
@@ -328,6 +328,16 @@ export class BrowserGameEngine {
     const room = this.room(roomCode);
     if (!presentationToken || !secureEqual(room.presentationToken, presentationToken)) throw new Error('Invalid presentation capability');
     return this.snapshot(roomCode);
+  }
+  hostCredentials(roomCode: string, hostToken: string, baseUrl: string): HostRoomCredentials {
+    const room = this.hostRoom(roomCode, hostToken);
+    const root = baseUrl.replace(/\/$/, '');
+    return {
+      roomCode: room.state.code,
+      hostToken,
+      joinUrl: `${root}/?mode=player&room=${room.state.code}`,
+      presentationUrl: `${root}/?mode=presentation&room=${room.state.code}&display=${room.presentationToken}`
+    };
   }
   rotatePresentationCapability(roomCode: string, hostToken: string): string {
     const room = this.hostRoom(roomCode, hostToken);
