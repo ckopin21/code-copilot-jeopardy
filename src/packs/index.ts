@@ -39,6 +39,25 @@ export function likelyRepeatedFact(left: Question, right: Question): boolean {
   return shared / Math.min(leftTokens.size, rightTokens.size) >= 0.6;
 }
 
+/** Review-only candidates: close wording without the same accepted answer is not a deterministic duplicate. */
+export function likelySimilarQuestions(packs: QuestionPack[]): Array<{ left: Question; right: Question }> {
+  const questions = packs.flatMap((pack) => pack.questions);
+  const pairs: Array<{ left: Question; right: Question }> = [];
+  for (let leftIndex = 0; leftIndex < questions.length; leftIndex += 1) {
+    for (let rightIndex = leftIndex + 1; rightIndex < questions.length; rightIndex += 1) {
+      const left = questions[leftIndex];
+      const right = questions[rightIndex];
+      const leftTokens = contentTokens(left.text);
+      const rightTokens = contentTokens(right.text);
+      const shared = [...leftTokens].filter((token) => rightTokens.has(token)).length;
+      if (leftTokens.size >= 4 && rightTokens.size >= 4 && shared / Math.min(leftTokens.size, rightTokens.size) >= .9 && !likelyRepeatedFact(left, right)) {
+        pairs.push({ left, right });
+      }
+    }
+  }
+  return pairs;
+}
+
 export function validatePackCatalog(packs: QuestionPack[]): QuestionPack[] {
   const packIds = new Set<string>();
   const questionIds = new Set<string>();
@@ -80,6 +99,12 @@ export function validatePackCatalog(packs: QuestionPack[]): QuestionPack[] {
       if (!likelyRepeatedFact(left, right)) continue;
       throw new Error(`Likely repeated fact across packs: ${left.id} and ${right.id}. Give rewordings the same factKey or replace one clue.`);
     }
+  }
+
+  // Similar clues with different accepted answers are legitimate sometimes. Do
+  // not reject them; make review visible in CI/test output instead.
+  for (const { left, right } of likelySimilarQuestions(packs)) {
+    console.warn(`Near-duplicate question review: ${left.id} and ${right.id} have highly similar clue wording.`);
   }
 
   return packs;

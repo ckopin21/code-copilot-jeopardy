@@ -2,6 +2,20 @@
 
 Blue Stage uses built-in TypeScript packs under `src/packs/`. These packs are bundled into the static application and work with the authoritative browser game engine.
 
+## Canonical authoring instructions for ChatGPT
+
+When asking ChatGPT to add questions, give it this file and ask it to use **only** the explicit `category(..., { 100: question(...), ... })` format in the target `src/packs/*.ts` file. It must not edit `src/packs/generatedRegistry.ts`, `src/packs/index.ts`, game code, or the registry script.
+
+- A pack filename and `id` use lowercase kebab-case; export exactly one `somethingPack` made by `buildPack(...)`.
+- Each category has exactly `100`, `200`, `300`, `400`, `500`, and `1000`; adding more content means adding a complete category, not a partial row.
+- Every clue and accepted answer is nonblank. Use an answer array only for genuinely accepted alternatives, never formatting/capitalization variants.
+- IDs are generated; never write question IDs manually. `finalQuestionId`, when used, must reference a generated question in that same pack.
+- Use only `responseMode: 'buzz' | 'text'` and `dailyDoubleEligible: true | false`; unsupported fields/configuration are prohibited.
+- Search all `src/packs/*.ts` first. Exact normalized clue/answer pairs and explicit `factKey` repeats fail. Give true rewordings of the same fact the same `factKey` so validation rejects them; replace one clue instead.
+- Highly similar clues with different answers are reported as **Near-duplicate question review** warnings. Review them and retain only legitimately distinct facts.
+
+After every content change run `npm test && npm run build`. These commands regenerate the registry and fail on malformed packs, IDs, values, missing data, invalid references, and deterministic duplicates. Commit the regenerated registry only when `git diff` shows that the generator changed it.
+
 ## Fastest way to add a pack
 
 1. Copy `src/packs/_pack.template.ts.example` to a new `.ts` file in `src/packs/`, for example `src/packs/geography.ts`.
@@ -85,6 +99,8 @@ All fields are optional. `finalQuestionId` is validated against questions in tha
 - question text or an accepted answer is blank
 
 The catalog additionally rejects duplicate pack IDs, duplicate question IDs, questions whose `packId` does not match their pack, and invalid `finalQuestionId` references.
+
+It also rejects repeated normalized clue text, repeated `factKey` values, and likely rewordings that share accepted answers. Formatting-only accepted-answer variants in a single clue are normalized to one answer. Highly similar clues with different answers are emitted as a clear `Near-duplicate question review` warning for human review rather than blocked automatically.
 
 These checks run during normal typecheck/test/build flows because the generated registry is imported by the application.
 

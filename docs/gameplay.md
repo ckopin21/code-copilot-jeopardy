@@ -61,7 +61,7 @@ Fullscreen presentation is an in-page board view. Questions remain selectable th
 5. Host reveals the accepted answer.
 6. Host marks the response Correct or Incorrect.
 7. Score state is resolved by the engine.
-8. On the host display, the awarded/lost number travels to the player score card, the visible score changes on impact, and the card performs a centered heartbeat pulse.
+8. On the host display, the awarded/lost number travels to the visible target player score card, the visible score changes on impact, and the card performs a centered positive/negative impact pulse. This applies in normal and in-page Presentation Mode; reduced-motion uses a brief non-moving highlight.
 9. The game returns to the board when grading is complete.
 10. The used tile records who answered and whether the result was correct or incorrect.
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildPack, category, difficultyForValue, normalizeQuestionIdentity, question } from '../src/packs/buildPack';
-import { builtInPacks, likelyRepeatedFact, validatePackCatalog } from '../src/packs';
+import { builtInPacks, likelyRepeatedFact, likelySimilarQuestions, validatePackCatalog } from '../src/packs';
 import { QUESTION_VALUES } from '../src/shared/types';
 
 const meta = {
@@ -104,5 +104,26 @@ describe('question pack catalog', () => {
       1000: question('Different 1000?', 'D')
     });
     expect(() => buildPack(meta, [repeated])).toThrow(/repeats the same fact/i);
+  });
+
+  it('rejects malformed authoring input with the pack/category/value location', () => {
+    expect(() => buildPack(meta, [category('Broken', {
+      100: question('Valid?', 'Yes'), 200: question('Valid 2?', 'Two'), 300: question('Valid 3?', 'Three'),
+      400: question('Valid 4?', 'Four'), 500: question('Valid 5?', 'Five'), 1000: question('Valid 6?', 'Six'), 700: question('Unsupported?', 'No')
+    } as never)])).toThrow(/Broken.*unsupported value/i);
+    const normalizedAlternatives = buildPack(meta, [category('Answers', {
+      100: question('Same answer?', ['Yes', ' yes! ']), 200: question('Two?', 'Two'), 300: question('Three?', 'Three'),
+      400: question('Four?', 'Four'), 500: question('Five?', 'Five'), 1000: question('Six?', 'Six')
+    })]);
+    expect(normalizedAlternatives.questions[0].acceptedAnswers).toHaveLength(1);
+  });
+
+  it('reports close but non-identical clues for review without blocking legitimate related questions', () => {
+    const template = builtInPacks[0].questions[0];
+    const left = { ...template, id: 'review-left', packId: 'review', text: 'Which planet is known as the red planet in our solar system?', acceptedAnswers: ['Mars'], factKey: 'mars-red' };
+    const right = { ...template, id: 'review-right', packId: 'review', text: 'Which planet is known as the red planet in the solar system?', acceptedAnswers: ['Earth'], factKey: 'earth-red' };
+    const reviewPack = { ...builtInPacks[0], id: 'review', finalQuestionId: undefined, questions: [left, right] };
+    expect(likelySimilarQuestions([reviewPack])).toEqual([expect.objectContaining({ left, right })]);
+    expect(() => validatePackCatalog([reviewPack])).not.toThrow();
   });
 });

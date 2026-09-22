@@ -12,8 +12,8 @@
 }
 
 /* The arriving score token should feel like it physically lands on the number. */
-.presentation-shell [data-player-score].score-impact-pulse-correct,
-.board-presentation-mode [data-player-score].score-impact-pulse-correct {
+.presentation-shell [data-player-score].score-impact-active.score-impact-positive,
+.board-presentation-mode [data-player-score].score-impact-active.score-impact-positive {
   position: relative;
   z-index: 12;
   display: inline-block;
@@ -21,8 +21,8 @@
   animation: presentationScoreHeartbeatGood .78s cubic-bezier(.18,.86,.2,1.08) both !important;
 }
 
-.presentation-shell [data-player-score].score-impact-pulse-wrong,
-.board-presentation-mode [data-player-score].score-impact-pulse-wrong {
+.presentation-shell [data-player-score].score-impact-active.score-impact-negative,
+.board-presentation-mode [data-player-score].score-impact-active.score-impact-negative {
   position: relative;
   z-index: 12;
   display: inline-block;
@@ -30,13 +30,13 @@
   animation: presentationScoreHeartbeatBad .78s cubic-bezier(.18,.86,.2,1.08) both !important;
 }
 
-.presentation-shell [data-player-id].score-impact-correct,
-.board-presentation-mode [data-player-id].score-impact-correct {
+.presentation-shell [data-player-id]:has([data-player-score].score-impact-active.score-impact-positive),
+.board-presentation-mode [data-player-id]:has([data-player-score].score-impact-active.score-impact-positive) {
   animation: presentationCardImpactGood .78s cubic-bezier(.18,.86,.2,1.08) both !important;
 }
 
-.presentation-shell [data-player-id].score-impact-wrong,
-.board-presentation-mode [data-player-id].score-impact-wrong {
+.presentation-shell [data-player-id]:has([data-player-score].score-impact-active.score-impact-negative),
+.board-presentation-mode [data-player-id]:has([data-player-score].score-impact-active.score-impact-negative) {
   animation: presentationCardImpactBad .78s cubic-bezier(.18,.86,.2,1.08) both !important;
 }
 

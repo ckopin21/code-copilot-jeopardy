@@ -31,6 +31,7 @@ export function category(name: string, questions: ValueMappedQuestions): Categor
 }
 
 function assertNonEmpty(value: string, label: string): string {
+  if (typeof value !== 'string') throw new Error(`${label} must be a non-empty string`);
   const trimmed = value.trim();
   if (!trimmed) throw new Error(`${label} cannot be empty`);
   return trimmed;
@@ -94,6 +95,7 @@ export function buildPack(
   const questions: Question[] = [];
 
   categories.forEach((categoryData, categoryIndex) => {
+    if (!categoryData || typeof categoryData !== 'object') throw new Error(`${meta.id} category ${categoryIndex + 1} is malformed`);
     const categoryName = assertNonEmpty(categoryData.name, `${meta.id} category name`);
     const categoryKey = categoryName.toLocaleLowerCase();
     if (categoryNames.has(categoryKey)) throw new Error(`${meta.id} contains duplicate category: ${categoryName}`);
@@ -102,13 +104,28 @@ export function buildPack(
     if (Array.isArray(categoryData.questions) && categoryData.questions.length !== QUESTION_VALUES.length) {
       throw new Error(`${meta.id}/${categoryName} must contain exactly ${QUESTION_VALUES.length} questions`);
     }
+    if (!Array.isArray(categoryData.questions)) {
+      const suppliedValues = Object.keys(categoryData.questions).map(Number);
+      const unexpected = suppliedValues.filter((value) => !QUESTION_VALUES.includes(value as QuestionValue));
+      if (unexpected.length) throw new Error(`${meta.id}/${categoryName} contains unsupported value(s): ${unexpected.join(', ')}`);
+      const missing = QUESTION_VALUES.filter((value) => !(value in categoryData.questions));
+      if (missing.length) throw new Error(`${meta.id}/${categoryName} is missing value(s): ${missing.join(', ')}`);
+    }
 
     QUESTION_VALUES.forEach((value, index) => {
       const seed = normalizeSeed(categoryData, index);
       const text = assertNonEmpty(seed.text, `${meta.id}/${categoryName}/${value} question`);
-      const acceptedAnswers = (Array.isArray(seed.answers) ? seed.answers : [seed.answers])
-        .map((answer) => assertNonEmpty(answer, `${meta.id}/${categoryName}/${value} answer`));
+      const acceptedAnswers = [...new Map((Array.isArray(seed.answers) ? seed.answers : [seed.answers])
+        .map((answer) => {
+          const cleaned = assertNonEmpty(answer, `${meta.id}/${categoryName}/${value} answer`);
+          return [normalizeQuestionIdentity(cleaned), cleaned] as const;
+        })).values()];
+      if (!acceptedAnswers.length) throw new Error(`${meta.id}/${categoryName}/${value} needs at least one accepted answer`);
       const tags = seed.tags ?? [];
+      if (!Array.isArray(tags) || tags.some((tag) => typeof tag !== 'string' || !tag.trim())) throw new Error(`${meta.id}/${categoryName}/${value} has invalid tags`);
+      if (seed.responseMode && seed.responseMode !== 'buzz' && seed.responseMode !== 'text') throw new Error(`${meta.id}/${categoryName}/${value} has unsupported responseMode`);
+      if (seed.dailyDoubleEligible !== undefined && typeof seed.dailyDoubleEligible !== 'boolean') throw new Error(`${meta.id}/${categoryName}/${value} dailyDoubleEligible must be boolean`);
+      if (seed.questionType && !['person', 'place', 'time', 'title', 'term', 'number', 'object', 'organization', 'event', 'general'].includes(seed.questionType)) throw new Error(`${meta.id}/${categoryName}/${value} has unsupported questionType`);
       const questionType = seed.questionType ?? inferQuestionType(text);
       const factKey = normalizeQuestionIdentity(seed.factKey ?? text);
       if (factKeys.has(factKey)) throw new Error(`${meta.id} repeats the same fact: ${text}`);

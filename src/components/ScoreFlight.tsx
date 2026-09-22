@@ -19,7 +19,11 @@ function findByData(attribute: 'questionId' | 'playerScore' | 'playerId', value:
     const rect = element.getBoundingClientRect();
     return rect.width > 0 && rect.height > 0 && getComputedStyle(element).visibility !== 'hidden';
   });
-  return visible.at(-1) ?? matches.at(-1) ?? null;
+  // The host board remains mounted behind the presentation board. Prefer the
+  // topmost presentation surface so a score flight lands on the card viewers
+  // can actually see, not its hidden normal-host twin.
+  const presentationMatch = visible.filter((element) => element.closest('.board-presentation-mode, .presentation-shell')).at(-1);
+  return presentationMatch ?? visible.at(-1) ?? matches.at(-1) ?? null;
 }
 
 export function ScoreFlight({ flight, onImpact, onComplete }: { flight: ScoreFlightState; onImpact: (flight: ScoreFlightState) => void; onComplete: (id: string) => void }) {

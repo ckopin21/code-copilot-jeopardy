@@ -1,40 +1,39 @@
-/* Use desktop space efficiently: compact in-game host scores and controls. */
-
-/* Normal host mode gets a compact scoreboard. Presentation mode keeps its larger cards. */
+/* Normal host scores should use the available desktop surface without stealing
+   presentation-mode's independently tuned scale. */
 @media (min-width: 760px) {
   .showcase-host:not(.host-presentation-mode) .showcase-player-strip.player-strip[data-player-count] {
     width: 100%;
     max-width: 100% !important;
     min-height: 0 !important;
-    padding: 7px 12px 6px !important;
-    gap: 7px !important;
+    padding: 12px 16px 10px !important;
+    gap: 12px !important;
     align-items: center;
     justify-content: center;
   }
 
   .showcase-host:not(.host-presentation-mode) .showcase-player-strip.player-strip[data-player-count="1"] {
-    grid-template-columns: minmax(250px, 320px) !important;
+    grid-template-columns: minmax(360px, 500px) !important;
   }
   .showcase-host:not(.host-presentation-mode) .showcase-player-strip.player-strip[data-player-count="2"] {
-    grid-template-columns: repeat(2, minmax(230px, 320px)) !important;
+    grid-template-columns: repeat(2, minmax(300px, 460px)) !important;
   }
   .showcase-host:not(.host-presentation-mode) .showcase-player-strip.player-strip[data-player-count="3"] {
-    grid-template-columns: repeat(3, minmax(190px, 280px)) !important;
+    grid-template-columns: repeat(3, minmax(235px, 350px)) !important;
   }
   .showcase-host:not(.host-presentation-mode) .showcase-player-strip.player-strip[data-player-count="4"] {
-    grid-template-columns: repeat(4, minmax(170px, 245px)) !important;
+    grid-template-columns: repeat(4, minmax(195px, 280px)) !important;
   }
   .showcase-host:not(.host-presentation-mode) .showcase-player-strip.player-strip[data-player-count="5"] {
-    grid-template-columns: repeat(5, minmax(150px, 220px)) !important;
+    grid-template-columns: repeat(5, minmax(170px, 240px)) !important;
   }
 
   .showcase-host:not(.host-presentation-mode) .showcase-player-strip.player-strip[data-player-count] .showcase-player-card.player-card {
-    min-height: 52px !important;
-    height: 52px !important;
-    grid-template-columns: 34px minmax(0, 1fr) auto !important;
-    gap: 7px !important;
-    padding: 6px 9px !important;
-    border-width: 2px !important;
+    min-height: 82px !important;
+    height: auto !important;
+    grid-template-columns: 52px minmax(0, 1fr) var(--ui-status-lane) !important;
+    gap: 10px !important;
+    padding: 10px 13px !important;
+    border-width: 3px !important;
     border-radius: 12px !important;
     transform: none;
   }
@@ -44,40 +43,51 @@
   }
 
   .showcase-host:not(.host-presentation-mode) .showcase-player-strip.player-strip[data-player-count] .player-avatar-large {
-    width: 34px !important;
-    height: 34px !important;
-    font-size: 1.1rem !important;
-    border-width: 1px !important;
+    width: 52px !important;
+    height: 52px !important;
+    font-size: 1.55rem !important;
+    border-width: 2px !important;
   }
 
   .showcase-host:not(.host-presentation-mode) .showcase-player-strip.player-strip[data-player-count] .showcase-player-card .player-name {
-    font-size: .7rem !important;
-    line-height: 1.05;
+    font-size: .92rem !important;
+    line-height: 1.1;
   }
 
   .showcase-host:not(.host-presentation-mode) .showcase-player-strip.player-strip[data-player-count] .showcase-player-card .score {
-    margin-top: 1px !important;
-    font-size: 1.22rem !important;
+    margin-top: 3px !important;
+    font-size: 2rem !important;
     line-height: 1 !important;
   }
 
-  .showcase-host:not(.host-presentation-mode) .showcase-player-strip.player-strip[data-player-count] .streak.neutral {
-    height: auto !important;
-    font-size: .48rem !important;
-    line-height: 1;
+  /* The status lane is a real grid track. Its pill sizing follows the shared
+     layout contract rather than reverting to an old corner ribbon. */
+  .showcase-host:not(.host-presentation-mode) .showcase-player-strip.player-strip[data-player-count] .player-status-stack :is(.streak-ribbon, .turn-beacon, .status-pill) {
+    min-height: 24px !important;
+    padding: 5px 8px !important;
+    font-size: .62rem !important;
+    line-height: 1.1 !important;
+    border-width: 1px !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,.28) !important;
   }
 
-  /* Streak status stays inside the card instead of reserving a tall row above it. */
-  .showcase-host:not(.host-presentation-mode) .showcase-player-strip.player-strip[data-player-count] .streak-ribbon {
-    top: 3px !important;
-    left: auto !important;
-    right: 6px !important;
-    transform: none !important;
-    max-width: 45% !important;
-    padding: 2px 5px !important;
-    border-width: 1px !important;
-    font-size: .43rem !important;
-    box-shadow: 0 2px 7px rgba(0,0,0,.28) !important;
+  .showcase-host:not(.host-presentation-mode) .showcase-player-strip.player-strip[data-player-count] .player-status-stack {
+    inline-size: var(--ui-status-lane) !important;
+    width: var(--ui-status-lane) !important;
+    max-width: none !important;
+  }
+
+  .showcase-host:not(.host-presentation-mode) .showcase-player-strip.player-strip[data-player-count] .player-status-stack .streak-ribbon {
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+  }
+
+  /* A legacy ribbon keyframe translates from an absolute-position origin.
+     In the flow-based status lane that translation crosses into the identity
+     column, so retain the pulse without moving the pill. */
+  .showcase-host:not(.host-presentation-mode) .showcase-player-strip.player-strip[data-player-count] .player-status-stack .streak-ribbon {
+    animation: stackedStreakRibbonPulse .72s ease-in-out infinite alternate !important;
   }
 
   .showcase-host:not(.host-presentation-mode) .showcase-player-card.player-card.is-fire::after,
@@ -136,16 +146,16 @@
 
 @media (max-height: 720px) and (min-width: 760px) {
   .showcase-host:not(.host-presentation-mode) .showcase-player-strip.player-strip[data-player-count] {
-    padding-block: 4px !important;
+    padding-block: 7px !important;
   }
   .showcase-host:not(.host-presentation-mode) .showcase-player-strip.player-strip[data-player-count] .showcase-player-card.player-card {
-    min-height: 46px !important;
-    height: 46px !important;
+    min-height: 68px !important;
+    height: auto !important;
   }
   .showcase-host:not(.host-presentation-mode) .showcase-player-strip.player-strip[data-player-count] .player-avatar-large {
-    width: 30px !important;
-    height: 30px !important;
-    font-size: 1rem !important;
+    width: 42px !important;
+    height: 42px !important;
+    font-size: 1.3rem !important;
   }
 
   .showcase-host .score-controls-v2 > div {

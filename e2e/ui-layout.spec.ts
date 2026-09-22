@@ -338,7 +338,15 @@ test('DEV visual lab fullscreen uses the exact lab element and real presentation
 
   await lab.getByRole('button', { name: 'Score +', exact: true }).click();
   await expect(lab.locator('.score-flight-token')).toBeVisible();
-  await lab.getByRole('button', { name: 'Clear previews', exact: true }).click();
+  const presentationScore = lab.locator('.board-presentation-mode [data-player-score="dev-player-2"]');
+  await expect(presentationScore).toHaveClass(/score-impact-active.*score-impact-positive/, { timeout: 3500 });
+  await expect.poll(() => presentationScore.evaluate((element) => getComputedStyle(element).animationName)).toMatch(/presentationScoreSingleImpactGood|presentationScoreHeartbeatGood/);
+  await expect(presentationScore).not.toHaveClass(/score-impact-active/, { timeout: 3500 });
+
+  await lab.getByRole('button', { name: 'Score −', exact: true }).click();
+  await expect(presentationScore).toHaveClass(/score-impact-active.*score-impact-negative/, { timeout: 3500 });
+  await expect.poll(() => presentationScore.evaluate((element) => getComputedStyle(element).animationName)).toMatch(/presentationScoreSingleImpactBad|presentationScoreHeartbeatBad/);
+  await expect(presentationScore).not.toHaveClass(/score-impact-active/, { timeout: 3500 });
 
   await lab.getByRole('button', { name: '2× reveal', exact: true }).click();
   await expect(lab.locator('.modifier-reveal-overlay')).toBeVisible();
