@@ -1,8 +1,8 @@
 # Blue Stage Trivia
 
-A shared-screen browser trivia game with a host display and up to five phone controllers. The deployed version runs on GitHub Pages: the host browser owns the game state and player phones connect directly with PeerJS/WebRTC.
+A shared-screen trivia game with a Host display and up to five phone controllers. For multiplayer, the user's laptop runs the authoritative Node + Socket.IO server; Host, phones, and Presentation connect over the same Wi-Fi/LAN.
 
-Live game:
+GitHub Pages hosts a static preview, not the multiplayer server:
 
 ```text
 https://ckopin21.github.io/code-copilot-jeopardy/
@@ -32,7 +32,7 @@ https://ckopin21.github.io/code-copilot-jeopardy/
 - player customization for avatar, accent, buzzer sound, score effect, and victory effect
 - reduced-motion, larger-text, increased-contrast, and sound-caption accessibility support
 - built-in question packs with automatic pack registration and validation; pack availability is filtered by game mode and one pack is selected per game
-- mobile/WebKit recovery that rebuilds stale PeerJS/WebRTC transports after bfcache restore, meaningful background resume, or network return
+- mobile/WebKit recovery that reconnects and reauthenticates after bfcache restore, background resume, or network return
 
 ## Documentation
 
@@ -41,17 +41,22 @@ The maintained documentation index is [`docs/README.md`](docs/README.md).
 - [`docs/gameplay.md`](docs/gameplay.md) — complete game/rule flow
 - [`docs/experience.md`](docs/experience.md) — player customization, host controls, presets, undo, recovery, awards, accessibility
 - [`docs/architecture.md`](docs/architecture.md) — runtime, state ownership, storage, UI architecture
-- [`docs/networking.md`](docs/networking.md) — WebRTC/PeerJS, reconnects, reserved seats, failure behavior
+- [`docs/networking.md`](docs/networking.md) — Socket.IO, reconnects, reserved seats, LAN troubleshooting
 - [`docs/question-packs.md`](docs/question-packs.md) — easiest way to add questions and packs
 - [`docs/development.md`](docs/development.md) — repository layout, tests, CI, deployment, change checklist
 
-## Runtime: GitHub Pages + PeerJS
+## Run a multiplayer game on the laptop
 
-The build is static. `src/lib/browserGameEngine.ts` is the authoritative game engine and stores active room state in the host browser. `src/lib/socket.ts` connects phones and presentation screens to the host over PeerJS/WebRTC.
+Install Node.js 22+ once, then run:
 
-There is one game engine and one multiplayer authority path. The former alternate Node/Socket.IO backend was removed so tests, local builds, and production cannot drift between separate implementations.
+```bash
+npm ci
+npm start
+```
 
-The host page is the live room endpoint. If it closes, phones cannot keep playing until the host page is reopened and restores the saved room.
+`npm start` builds the app and starts its HTTP/Socket.IO server on port 3000, listening on the LAN. Open the printed Host URL on the laptop. Allow Node.js through Windows Firewall for **Private** networks if prompted. Put the laptop and phones on the same reachable Wi-Fi; the Host shows a room code, player Join URL/QR, and an optional Presentation link. Keep the server process running during the game. `npm run dev` starts the same server with Vite for development. [Start here](START-HERE.md) has the short setup and connection checklist.
+
+The laptop server owns rooms, gameplay, and scoring through `src/lib/browserGameEngine.ts`. The browser Host is an authenticated client; refreshing it leaves the room on the server. Phones and a remote Presentation browser connect through `src/lib/socket.ts`, the Socket.IO client adapter. Normal same-room gameplay needs no public Internet after dependencies and assets are installed. GitHub Pages cannot host the Node server and is only useful as a static preview or landing page.
 
 ### Game flow
 
@@ -71,7 +76,7 @@ See [`docs/gameplay.md`](docs/gameplay.md) for exact behavior.
 
 ## Reconnect behavior
 
-A joined phone receives a stable player ID and reconnect token stored in that browser. If the phone intentionally leaves, refreshes, loses connectivity, or disappears without a clean WebRTC close, its seat remains reserved until it returns or the host permanently removes/resets it. The host also uses an authenticated heartbeat timeout to detect stale mobile tabs.
+A joined phone receives a stable player ID and reconnect token stored in that browser. If the phone leaves the page, refreshes, loses connectivity, or disappears without a clean socket close, its seat remains reserved until it returns or the Host permanently removes it. The server uses authenticated heartbeats to detect stale mobile tabs.
 
 Disconnected players disappear from the connected-player strip but retain score and seat state. **Pause seat** deliberately disconnects a controller while keeping that state; **Remove** deletes the player and reconnect identity. Connected-player-only phases do not wait forever on disconnected phones.
 
@@ -135,20 +140,18 @@ category('Category', {
 
 See [`docs/question-packs.md`](docs/question-packs.md) for all options and validation rules.
 
-## Install and development
+## Development and validation
 
 Requires Node.js 22+.
 
-```bash
-npm ci
-npm run dev
-```
+Run `npm run dev` for live development on the same laptop server architecture.
 
 Useful commands:
 
 ```bash
 npm run packs:sync
 npm run typecheck
+npm run typecheck:server
 npm run lint
 npm test
 npm run build
@@ -162,11 +165,11 @@ Tests exercise the production `BrowserGameEngine`, multiplayer snapshot privacy,
 
 GitHub Actions uses the committed lockfile, runs typecheck, lint, Vitest, and a production build, then runs Playwright in Chromium. Selected Safari/mobile and player-card regressions also run in WebKit.
 
-Real device/network behavior still needs smoke testing for camera scanning, haptics, audio unlock behavior, and WebRTC routes that depend on the user's NAT/firewall/TURN environment.
+Real physical devices still need smoke testing for camera scanning, haptics, audio unlock, Wi-Fi reachability, screen lock, and Safari/Android lifecycle behavior. Playwright WebKit is not a physical iPhone.
 
 ## Security/authority model
 
-The host browser is authoritative for room/game state. Player actions are authorized with stable player IDs and reconnect tokens. Phones request actions but do not directly mutate scores or game phases.
+The laptop server is authoritative for room/game state. Host actions require a secret Host token and the current Host socket. Player actions require stable player IDs and reconnect tokens. Phones request actions but do not directly mutate scores or game phases; remote Presentation is read-only and uses a revocable display capability.
 
 Snapshots are sanitized by role before being sent. Hidden clue answers/explanations, unrevealed typed-response details, and future Final responses are withheld from player/presentation clients until their reveal phase.
 
@@ -176,4 +179,4 @@ React renders names/questions as text, avoiding raw HTML injection for normal co
 
 **New Game / Reset Game** keeps the room, active controller connections, reserved seats, and player profiles, but resets the board, scores, statistics, current phase, and question history. Phones receive the lobby state immediately. Returning the host to the main menu uses in-app navigation; active gameplay is paused first so timers do not continue off-screen.
 
-**Reset Instance** clears saved Blue Stage host/player/game state and reloads the current application build cleanly.
+**Reset Instance** clears browser-side saved credentials/preferences and reloads the current application build. The laptop server's persisted room data is separate; removing it requires stopping the server and intentionally deleting its local `.data/rooms.json` file.

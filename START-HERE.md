@@ -1,36 +1,27 @@
 # Start here
 
-## Fastest way to play
+## Play on the same Wi-Fi
 
-Open the deployed game:
+1. Connect the laptop, phones, and optional TV/presentation browser to the same reachable Wi-Fi network.
+2. Install Node.js 22+ on the laptop. In this repository, run `npm ci` once and then `npm start` for a game. Keep that server window open.
+3. Open the Host URL printed by the server, usually `http://192.168.x.x:3000/?mode=host`. Create or continue a room.
+4. If Windows asks, allow Node.js through Windows Firewall on the **Private** network profile.
+5. Show the Host's QR code or player Join URL. Players scan it or enter the room code from their phones.
+6. Open the Host's Presentation link on a TV/browser if desired. The link is read-only and can be rotated by the Host.
 
-```text
-https://ckopin21.github.io/code-copilot-jeopardy/
-```
+The laptop owns the game. Host, phones, and Presentation send actions or receive snapshots through its Socket.IO server. Host or phone refreshes recover while the server stays running. Once installed, ordinary LAN gameplay does not need public Internet, PeerJS, STUN, TURN, or WebRTC.
 
-Choose **Start New Game** on the host computer. Players join from phones using the QR code or room code. The game uses direct browser-to-browser PeerJS/WebRTC connections, so the host page must remain open.
+## Windows or Mac launcher
 
-## Run locally on Windows
+The repository also includes `START-WINDOWS.bat` and `START-MAC.command`. They install locked dependencies if needed, build the game, run `npm start`, and try to open a laptop LAN URL. The launchers may build once before `npm start` builds again; this takes extra time but does not change gameplay. Keep the game server window open. On Mac, run `chmod +x START-MAC.command` once if the downloaded launcher is not executable.
 
-1. Click **Code** → **Download ZIP**.
-2. Extract the ZIP.
-3. Double-click **START-WINDOWS.bat**.
-4. The launcher installs the locked dependencies, builds the static app, starts Vite Preview, and opens a reachable LAN URL when one is available.
-5. Keep the launcher/game window open while playing.
+## If a phone cannot join
 
-## Run locally on Mac
+- Try the numeric LAN URL printed by the server, rather than `localhost` or the GitHub Pages preview. The phone must be able to reach the laptop's port 3000.
+- Check that the laptop and phone are on the same Wi-Fi. Guest Wi-Fi may isolate devices from one another.
+- Allow Node.js through the Windows **Private** firewall profile. A Public network profile may block inbound connections.
+- Disconnect a VPN temporarily if it redirects local traffic.
+- If the laptop has several network adapters and the printed address is wrong, set `BLUE_STAGE_BASE_URL` to the reachable `http://<laptop-LAN-IP>:3000` before starting the server.
+- Confirm the server window is still open. If it stopped, restart `npm start` and let the saved Host/phone credentials reconnect.
 
-1. Click **Code** → **Download ZIP**.
-2. Extract the ZIP.
-3. Open Terminal in the extracted folder.
-4. Run `chmod +x START-MAC.command` once.
-5. Double-click **START-MAC.command** afterward.
-6. The launcher opens the Mac's LAN address when available so phone QR links point back to the host computer instead of `localhost`.
-
-## Local phones
-
-Keep phones and the host computer on a network where they can reach one another. The local launcher listens on all interfaces and tries to open the host through its LAN IPv4 address. Firewall, guest-network/client-isolation, VPN, or restrictive WebRTC/NAT settings can still block connections.
-
-Node.js 22+ is required for local build/preview use. It is not required just to use the deployed GitHub Pages game.
-
-For architecture, networking, question packs, and development details, see [`docs/README.md`](docs/README.md).
+The [networking guide](docs/networking.md) explains reconnects and troubleshooting. GitHub Pages is a static preview only; it does not run the multiplayer server.

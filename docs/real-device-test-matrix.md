@@ -1,57 +1,49 @@
-# Real-device and network test matrix
+# Real-device and LAN test matrix
 
-This procedure complements deterministic runtime tests. It does **not** turn desktop browsers or Playwright WebKit into proof of physical iPhone Safari, carrier NAT, or TURN relay behavior.
+This procedure verifies the supported same-Wi-Fi Socket.IO game on physical devices. Desktop Playwright WebKit covers some Safari-like lifecycle behavior; it is not a physical iPhone Safari test. Do not mark a physical device row passed based on a desktop simulator.
 
-## Before testing
+## Prepare the game
 
-Deploy the exact commit under test over HTTPS. Record commit, deployed URL, browser version, device model/OS, host and controller network type, and whether `VITE_ICE_CONFIG_URL` is configured. Never record reconnect tokens, presentation capabilities, or TURN credentials. The public build variable must name only an HTTPS credential-minting endpoint that returns short-lived ICE servers and permits the deployed origin.
+1. On a Windows laptop, install dependencies and run `npm start` at the exact commit under test. Record the commit, Node version, port, printed LAN Host URL, Windows network profile, and browser/device versions. Keep reconnect tokens, Host tokens, and Presentation capability URLs out of logs and screenshots.
+2. Connect laptop, iPhone, Android phone, and optional TV browser to the same reachable Wi-Fi. Open the numeric Host URL printed by the server. Confirm `/api/network` reports the reachable LAN address.
+3. Allow Node.js through Windows Firewall on the Private profile. Check guest-network client isolation and VPN state before interpreting a failed join as a game defect.
+4. Create a room, join two phones by QR or room code, and connect a remote Presentation browser through the Host's display link.
 
-## Test cases
+For every scenario record expected/observed state, time to recover, duplicate players (yes/no), preserved seat/profile/score/question (yes/no), Presentation sync (yes/no), and whether a new player can join afterward. A long Connecting/Reconnecting loop or a lost room is a failure. Redact connection URLs if they include the display capability.
 
-Use a Windows/desktop HTTPS host in Chrome or Edge unless a row says otherwise. Start every case with a fresh room, record the room code separately from credentials, and retain a screen recording plus a redacted diagnostic-event export. A pass requires the stated behavior **and** no duplicate roster entry; a failure is any permanent Connecting/Reconnecting state, lost authoritative state, or a room that rejects a new controller after recovery.
+## Scenarios
 
-| Scenario | Action | Expected result | Record |
-| --- | --- | --- | --- |
-| Same Wi-Fi iPhone Safari | Join, buzz, score, lock briefly, return | Same seat reconnects; score/question remain | reconnect time, duplicate seat, state preserved |
-| Same Wi-Fi Android Chrome | Join alongside iPhone, background/return | Controllers remain usable or recover independently | reconnect time, roster correctness |
-| Different Wi-Fi | Host/controller on separate networks | Join/gameplay work; note direct vs relay diagnostics | network pair, relay configuration |
-| Cellular transition | iPhone Wi-Fi to cellular and back | Transport rebuilds or stays healthy; never falsely connected | each transition, recovery path |
-| Airplane interruption | Drop one controller, restore network | Automatic recovery first; manual recovery remains possible | retry count, seat/profile preservation |
-| Host interruption | Hide/restore, refresh/recover host, temporary network loss | Saved room recoverable; controllers reclaim state | room reachability, new join afterward |
-| Mass recovery | Drop two controllers during active clue; restore together | No duplicates; scores/question retained; third player joins | all recovery times, third join result |
-| Presentation | Join display, rotate capability, retry old/new URLs | Old display closes; new works; players/privacy unaffected | display count, privacy result |
+| Scenario | Action | Expected result |
+| --- | --- | --- |
+| Windows LAN startup | Start the server and open printed URL from laptop and phone | Both load from laptop; Join QR contains reachable LAN address |
+| iPhone Safari | Join, buzz, score, lock screen, return, reload | Same ID, seat, profile, score, and active room return |
+| Android Chrome | Join beside iPhone, background/return and reload | Independent recovery without duplicate player |
+| Host refresh | Refresh/close/reopen Host while server stays up | Same room and board recover; phones and Presentation remain attached |
+| Presentation refresh | Reload display during board, scoring, and Final | Current authorized display resynchronizes; hidden Final answers remain hidden |
+| Single phone loss | Toggle Wi-Fi, wait through one failed reconnect, restore | Later retry succeeds with same seat and no duplicate action |
+| Mass disconnect | Drop both phones during an active clue, then restore | Profiles, scores, seats, and question survive; stale sockets cannot act; third phone joins |
+| Screen lock/background | Lock/unlock each phone and resume Safari/Chrome | Socket reconnects and application identity is restored |
+| Score retry | Cause acknowledgement loss/retry while scoring or buzzing | The action applies once; all screens show the same score |
+| Display rotation | Rotate link while display is connected; retry old/new links | Old display disconnects and cannot rejoin; new link works; phones unaffected |
+| Server restart | Stop/restart Node without deleting `.data/rooms.json` | Valid nonexpired room restores; clients reconnect with saved credentials |
+| Network obstacle | Try wrong Wi-Fi, guest Wi-Fi, VPN, or blocked firewall | Failure is diagnosed; normal join works after route/firewall correction |
 
-### Exact lifecycle procedure
+During an active clue, also test app switching for about 10 seconds, a 60-second background interval, a 60-second lock, browser Back/Forward, and a full reload. A first reconnect failure should not discard saved credentials. After recovering, score a question and start a new game in the same room to verify the session remains useful.
 
-For iPhone Safari and Android Chrome, run each action with two joined controllers during an active clue: switch apps for 10 seconds, background for 60 seconds, lock/unlock for 60 seconds, reload the controller, then repeat after 5 minutes where the operating system permits. Return to the page and wait up to 20 seconds for an existing healthy channel or a restored reserved seat. Save the player screen, host roster, current clue/score, and safe events (`peer-*`, `data-*`, `reconnect-*`, `generation-superseded`).
+The Presentation test must inspect its state before Final reveal: unrevealed answers, other players' private typed responses, and future Final review answers must be absent. The display must never be able to submit Host or player mutations.
 
-For Wi-Fi-to-cellular, cellular-to-Wi-Fi, and airplane-mode tests, make the switch while the buzzer is open. For host loss, disable the host network for 30 seconds or reload the host tab, restore it, then require both controllers to recover and a third new controller to join. For failed-first-retry, restore the network only after one failed automatic reconnect attempt has been visibly recorded.
+## Evidence and limits
 
-For presentation, use a second screen or browser with the current presentation URL, verify that Final answers are absent before host reveal, rotate the capability from the host, show that the old URL cannot reconnect, and show that the replacement URL can. Capture only redacted URLs/screenshots.
+Record browser console/network errors and safe server logs without request payloads or tokens. Classify failures as LAN reachability, firewall/VPN/client isolation, server lifecycle, socket reconnect, identity/authorization, stale request, or UI lifecycle. The old external PeerJS-reservation smoke tested public signaling and is retired with that transport. Its useful product behavior is covered by local Socket.IO and WebKit regressions; it is not required for LAN gameplay.
 
-For every row record: environment, browser/device, host/controller networks, expected and observed result, reconnect time, duplicated players (yes/no), state preserved (yes/no), room still joinable (yes/no), new player joins (yes/no), and safe diagnostic kinds. Classify failures as signaling, ICE/TURN, data channel, identity authorization, host authority, or lifecycle recovery; do not paste secrets into reports.
-
-## Optional external checks
-
-Run `BLUE_STAGE_REAL_PEERJS=1 npx playwright test e2e/real-peerjs-smoke.spec.ts --project=chromium` only when external public signaling access is intended. A public-service outage is an environment result, not deterministic product failure. There is no relay-only command because real relay verification needs externally provisioned TURN credentials; when available, repeat different-network, mass-recovery, and reload rows and retain only safe diagnostic evidence.
-
-## Safe diagnostics and TURN evidence
-
-For a local or support-session capture, attach a listener to the runtime's `network:diagnostic` event or read its bounded `getNetworkDiagnostics()` result in DevTools. Retain only `at`, `kind`, `role`, `generation`, `detail`, and `turnConfigured`. Do not export request payloads, local storage, URLs containing capabilities, reconnect tokens, or ICE credentials. Useful kinds are `peer-open`, `peer-disconnected`, `peer-closed`, `peer-error`, `data-open`, `data-closed`, `data-error`, `reconnect-scheduled`, `reconnect-coalesced`, `reconnect-started`, `reconnect-failed`, `ice-configured`, and `ice-config-fallback`.
-
-Before relay testing, verify the HTTPS ICE endpoint returns an `iceServers` array containing STUN plus short-lived `turn:` or `turns:` credentials and accepts no browser cookies. A relay-only experiment must live in a disposable test harness using `iceTransportPolicy: 'relay'`; never enable it in the shipping app. Save a redacted browser WebRTC-internals report showing a relay candidate, then repeat join, buzz, score, disconnect/reconnect, and a post-recovery join.
+Normal same-room play needs no public Internet after installation. Cross-network, cellular-only, restrictive NAT, STUN, and TURN routes are outside the supported architecture and should not be presented as release gates or successes. Camera scanning, haptics, audio unlock, real Safari background behavior, Android background behavior, and actual Wi-Fi/firewall conditions still require physical-device evidence.
 
 ## Release record
 
 | Environment | Status | Evidence / limitation |
 | --- | --- | --- |
-| Desktop host + desktop controller | Partially verified | Deterministic runtime and opt-in public-service smoke coverage |
-| Desktop host + Android | Not verified | Requires physical device/network run |
-| Desktop host + iPhone Safari | Not verified | Playwright WebKit is not iOS Safari |
-| Same Wi-Fi | Not verified | Requires iPhone/Android physical run |
-| Cellular and cross-network | Not verified | Requires physical carrier/remote-network run |
-| Player reload / host recovery / mass disconnect | Partially verified | Deterministic production-runtime coverage |
-| Restrictive NAT | Not verified | Requires representative network and TURN fallback evidence |
-| Symmetric NAT / Private Relay-like path | Not verified | Requires representative network and relay evidence |
-| STUN direct path | Partially verified | Default configuration and deterministic browser-path validation; no external route proof |
-| TURN relay | Not verified | Requires provisioned TURN service and relay observation |
+| Local Node server and desktop browsers | Record per release | Server integration and Chromium/WebKit browser runs |
+| Windows laptop + iPhone Safari | Not verified here | Requires physical device and LAN run |
+| Windows laptop + Android Chrome | Not verified here | Requires physical device and LAN run |
+| TV/remote Presentation | Not verified here | Requires a separate display browser and capability/privacy check |
+| Guest Wi-Fi, VPN, Windows Firewall | Not verified here | Requires representative local network conditions |

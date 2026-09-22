@@ -1,6 +1,6 @@
 # Game experience systems
 
-This document covers the host/player quality-of-life layer built on top of the authoritative `BrowserGameEngine`.
+This document covers the Host/player quality-of-life layer built on top of the server's authoritative `BrowserGameEngine`.
 
 ## Permanent player seats
 
@@ -46,14 +46,14 @@ The controls use the same authenticated host event path as the primary host UI.
 
 Connection health is derived from authenticated phone check-ins already used by stale-phone detection. Each connected phone is classified as ready/fair/stale/offline from the age of its last authenticated request.
 
-**Test All Phones** sends a live event over every open player data connection. A reached phone:
+**Test All Phones** sends a live Socket.IO event to every connected phone. A reached phone:
 
 1. shows a controller-test confirmation
 2. triggers a short haptic pattern where supported
 3. plays a confirmation sound after audio unlock where supported
 4. immediately refreshes its authenticated reconnect/check-in
 
-This verifies the data channel and player identity path. It is not a synthetic Internet speed benchmark; the freshness display is intentionally based on the real game connection.
+This verifies the game socket and player identity path. It is not an Internet speed benchmark; freshness comes from the real game connection.
 
 ## Game presets
 
@@ -79,9 +79,9 @@ The engine keeps one authoritative pre-scoring checkpoint. It is created immedia
 
 ## Automatic recovery
 
-Room state is persisted by the browser game engine after authoritative mutations. Active timers persist an absolute `endsAt` and recover their remaining time after host reload. Player reconnect credentials remain separate on each phone.
+Room state is persisted by the laptop server after authoritative mutations. Active timers persist an absolute `endsAt` and recover their remaining time after a server restart. Player reconnect credentials remain separate on each phone.
 
-The host panel's **Saved continuously** status describes this existing engine persistence; it is not a cloud backup. Closing the host removes the live WebRTC endpoint until that host browser restores the room.
+The Host panel's **Saved continuously** status describes the server's local `.data/rooms.json` persistence; it is not a cloud backup. Refreshing or closing the Host browser leaves the room live while the laptop server runs.
 
 ## Question balancing
 
@@ -143,8 +143,6 @@ Host and phone controls expose local display preferences for:
 
 Preferences are stored on that browser/device and applied through root data attributes, so they persist across menu/game routes without changing gameplay for other devices.
 
-## Network relay limitation
+## LAN connection
 
-The default P2P transport uses public STUN and cannot relay traffic through restrictive NAT/firewall combinations. Production TURN support is therefore configured through an HTTPS ICE-credential endpoint, preferably via `VITE_ICE_CONFIG_URL` (or `window.BLUE_STAGE_ICE_CONFIG_URL` at runtime). Each newly created PeerJS peer can fetch fresh short-lived TURN credentials with `cache: no-store`.
-
-`window.BLUE_STAGE_ICE_SERVERS` remains available for local/private testing or already-short-lived credentials. Long-lived TURN secrets must never be embedded in the GitHub Pages bundle. If the credential endpoint fails, the app falls back to STUN-only behavior and surfaces that limitation in connection errors. See `networking.md` for the exact contract.
+Phones, Host, and remote Presentation connect to the laptop's local Socket.IO server. They need a reachable LAN route, not a public relay. The Join QR uses a numeric LAN address; Windows Firewall, a Public network profile, guest-network client isolation, or a VPN may block access. See [networking.md](networking.md) for connection and recovery details.

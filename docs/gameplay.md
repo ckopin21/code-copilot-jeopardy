@@ -2,7 +2,7 @@
 
 ## Players and room lifecycle
 
-A room supports 0–5 player seats. Zero-player games can be used as practice/presentation mode. A joined phone receives a stable player ID and reconnect token. If a phone disconnects or leaves to the menu, the player is removed from the visible connected-player strip but the seat, score, statistics, and identity remain reserved. Returning from the same browser restores that seat when the host room still exists.
+A room supports 0–5 player seats. The laptop server owns the room and game state; the Host browser, phones, and remote Presentation are clients. Zero-player games can be used as practice/presentation mode. A joined phone receives a stable player ID and reconnect token. If a phone disconnects or leaves to the menu, the player is removed from the visible connected-player strip but the seat, score, statistics, and identity remain reserved. Returning from the same browser restores that seat while the server room remains valid.
 
 The host has two different player-management actions:
 
