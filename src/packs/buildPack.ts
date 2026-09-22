@@ -41,8 +41,8 @@ export function normalizeQuestionIdentity(value: string): string {
   return value
     .normalize('NFKD')
     .replace(/[\u0300-\u036f]/g, '')
-    .toLocaleLowerCase()
-    .replace(/[^a-z0-9]+/g, ' ')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
     .trim()
     .replace(/\s+/g, ' ');
 }
@@ -66,6 +66,7 @@ function normalizeSeed(categoryData: CategoryData, index: number): QuestionSeed 
   if (Array.isArray(categoryData.questions)) {
     const tuple = categoryData.questions[index];
     if (!tuple) throw new Error(`${categoryData.name} is missing the ${value}-point question`);
+    if (!Array.isArray(tuple) || tuple.length < 2 || tuple.length > 5) throw new Error(`${categoryData.name}/${value} question must be a two-to-five-field tuple`);
     const [text, answers, explanation, tags, responseMode] = tuple;
     return { text, answers, explanation, tags, responseMode, dailyDoubleEligible: true };
   }
@@ -88,7 +89,14 @@ export function buildPack(
   assertNonEmpty(meta.title, `${meta.id} title`);
   assertNonEmpty(meta.theme, `${meta.id} theme`);
   assertNonEmpty(meta.description, `${meta.id} description`);
-  if (!categories.length) throw new Error(`${meta.id} must contain at least one category`);
+  if (!['easy', 'medium', 'hard', 'mixed'].includes(meta.difficulty)) throw new Error(`${meta.id} has invalid difficulty`);
+  if (!Number.isInteger(meta.approximateMinutes) || meta.approximateMinutes < 1) throw new Error(`${meta.id} approximateMinutes must be a positive integer`);
+  if (meta.supportedGameModes !== undefined && (!Array.isArray(meta.supportedGameModes) || !meta.supportedGameModes.length ||
+    meta.supportedGameModes.some((mode) => mode !== 'classic' && mode !== 'free-response') ||
+    new Set(meta.supportedGameModes).size !== meta.supportedGameModes.length)) {
+    throw new Error(`${meta.id} supportedGameModes must contain unique supported modes`);
+  }
+  if (!Array.isArray(categories) || !categories.length) throw new Error(`${meta.id} must contain at least one category`);
 
   const categoryNames = new Set<string>();
   const factKeys = new Set<string>();
@@ -97,7 +105,7 @@ export function buildPack(
   categories.forEach((categoryData, categoryIndex) => {
     if (!categoryData || typeof categoryData !== 'object') throw new Error(`${meta.id} category ${categoryIndex + 1} is malformed`);
     const categoryName = assertNonEmpty(categoryData.name, `${meta.id} category name`);
-    const categoryKey = categoryName.toLocaleLowerCase();
+    const categoryKey = normalizeQuestionIdentity(categoryName);
     if (categoryNames.has(categoryKey)) throw new Error(`${meta.id} contains duplicate category: ${categoryName}`);
     categoryNames.add(categoryKey);
 
@@ -105,8 +113,9 @@ export function buildPack(
       throw new Error(`${meta.id}/${categoryName} must contain exactly ${QUESTION_VALUES.length} questions`);
     }
     if (!Array.isArray(categoryData.questions)) {
-      const suppliedValues = Object.keys(categoryData.questions).map(Number);
-      const unexpected = suppliedValues.filter((value) => !QUESTION_VALUES.includes(value as QuestionValue));
+      if (!categoryData.questions || typeof categoryData.questions !== 'object') throw new Error(`${meta.id}/${categoryName} questions must be a value map or tuple array`);
+      const suppliedValues = Object.keys(categoryData.questions);
+      const unexpected = suppliedValues.filter((value) => !QUESTION_VALUES.includes(Number(value) as QuestionValue));
       if (unexpected.length) throw new Error(`${meta.id}/${categoryName} contains unsupported value(s): ${unexpected.join(', ')}`);
       const missing = QUESTION_VALUES.filter((value) => !(value in categoryData.questions));
       if (missing.length) throw new Error(`${meta.id}/${categoryName} is missing value(s): ${missing.join(', ')}`);
@@ -114,6 +123,7 @@ export function buildPack(
 
     QUESTION_VALUES.forEach((value, index) => {
       const seed = normalizeSeed(categoryData, index);
+      if (!seed || typeof seed !== 'object') throw new Error(`${meta.id}/${categoryName}/${value} question is malformed`);
       const text = assertNonEmpty(seed.text, `${meta.id}/${categoryName}/${value} question`);
       const acceptedAnswers = [...new Map((Array.isArray(seed.answers) ? seed.answers : [seed.answers])
         .map((answer) => {
@@ -121,13 +131,16 @@ export function buildPack(
           return [normalizeQuestionIdentity(cleaned), cleaned] as const;
         })).values()];
       if (!acceptedAnswers.length) throw new Error(`${meta.id}/${categoryName}/${value} needs at least one accepted answer`);
+      if (seed.explanation !== undefined) assertNonEmpty(seed.explanation, `${meta.id}/${categoryName}/${value} explanation`);
       const tags = seed.tags ?? [];
       if (!Array.isArray(tags) || tags.some((tag) => typeof tag !== 'string' || !tag.trim())) throw new Error(`${meta.id}/${categoryName}/${value} has invalid tags`);
       if (seed.responseMode && seed.responseMode !== 'buzz' && seed.responseMode !== 'text') throw new Error(`${meta.id}/${categoryName}/${value} has unsupported responseMode`);
       if (seed.dailyDoubleEligible !== undefined && typeof seed.dailyDoubleEligible !== 'boolean') throw new Error(`${meta.id}/${categoryName}/${value} dailyDoubleEligible must be boolean`);
       if (seed.questionType && !['person', 'place', 'time', 'title', 'term', 'number', 'object', 'organization', 'event', 'general'].includes(seed.questionType)) throw new Error(`${meta.id}/${categoryName}/${value} has unsupported questionType`);
+      if (seed.factKey !== undefined) assertNonEmpty(seed.factKey, `${meta.id}/${categoryName}/${value} factKey`);
       const questionType = seed.questionType ?? inferQuestionType(text);
       const factKey = normalizeQuestionIdentity(seed.factKey ?? text);
+      if (!factKey) throw new Error(`${meta.id}/${categoryName}/${value} factKey has no letters or numbers`);
       if (factKeys.has(factKey)) throw new Error(`${meta.id} repeats the same fact: ${text}`);
       factKeys.add(factKey);
 
@@ -148,6 +161,13 @@ export function buildPack(
       });
     });
   });
+
+  if (meta.categoryOrder !== undefined) {
+    if (!Array.isArray(meta.categoryOrder) || new Set(meta.categoryOrder).size !== meta.categoryOrder.length ||
+      meta.categoryOrder.some((name) => !categoryNames.has(normalizeQuestionIdentity(name)))) {
+      throw new Error(`${meta.id} categoryOrder must contain unique names from this pack`);
+    }
+  }
 
   return { ...meta, questions };
 }

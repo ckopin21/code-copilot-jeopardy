@@ -7,7 +7,7 @@ For full details, see [`../../docs/question-packs.md`](../../docs/question-packs
 1. Copy `_pack.template.ts.example` to a new `.ts` file in this folder.
 2. Rename the exported pack, metadata ID/title/theme/description, and categories.
 3. Fill every category with `100`, `200`, `300`, `400`, `500`, and `1000` questions.
-4. Run `npm test` or `npm run build`.
+4. Run `npm run packs:sync`, `npm run questions:check`, `npm run typecheck`, and `npm run build`.
 
 No registry file needs to be edited. `scripts/generate-pack-registry.mjs` discovers the new pack automatically.
 
@@ -28,4 +28,4 @@ category('Category Name', {
 
 A playable category is always a complete six-value set. To expand a pack, add another complete category. To replace a question, edit only its explicit point-value entry.
 
-The builder/catalog validation catches missing values, blank text/answers, duplicate categories, duplicate pack IDs, duplicate question IDs, and mismatched `packId` values during normal validation/builds.
+The builder/catalog validation catches missing values, blank text/answers, invalid modes and metadata, duplicate categories, duplicate pack IDs, duplicate question IDs, and mismatched `packId` values. `npm run questions:check` also prints near-duplicate review candidates and detects registry drift.

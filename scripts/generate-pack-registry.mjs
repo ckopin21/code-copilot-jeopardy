@@ -6,6 +6,10 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const packDir = path.join(root, 'src', 'packs');
 const output = path.join(packDir, 'generatedRegistry.ts');
 const excluded = new Set(['buildPack.ts', 'generatedRegistry.ts', 'index.ts']);
+const checkOnly = process.argv.includes('--check');
+if (process.argv.some((argument, index) => index > 1 && argument !== '--check')) {
+  throw new Error('Usage: node scripts/generate-pack-registry.mjs [--check]');
+}
 
 const files = (await readdir(packDir))
   .filter((name) => name.endsWith('.ts') && !name.startsWith('_') && !excluded.has(name))
@@ -14,11 +18,11 @@ const files = (await readdir(packDir))
 const registrations = [];
 for (const file of files) {
   const source = await readFile(path.join(packDir, file), 'utf8');
-  const match = source.match(/export\s+const\s+([A-Za-z_$][\w$]*Pack)\s*=/);
-  if (!match) {
+  const matches = [...source.matchAll(/export\s+const\s+([A-Za-z_$][\w$]*Pack)\s*=/g)];
+  if (matches.length !== 1) {
     throw new Error(`${file} must export one built-in pack as "export const somethingPack = buildPack(...)"`);
   }
-  registrations.push({ file: file.replace(/\.ts$/, ''), exportName: match[1] });
+  registrations.push({ file: file.replace(/\.ts$/, ''), exportName: matches[0][1] });
 }
 
 if (!registrations.length) throw new Error('No built-in question packs were found');
@@ -31,4 +35,12 @@ const generated = [
   ''
 ].join('\n');
 
-await writeFile(output, generated, 'utf8');
+const existing = await readFile(output, 'utf8').catch((error) => {
+  if (error.code === 'ENOENT') return null;
+  throw error;
+});
+// Git may check out the tracked registry with CRLF on Windows.
+if (existing?.replace(/\r\n/g, '\n') !== generated) {
+  if (checkOnly) throw new Error('Question pack registry is stale. Run npm run packs:sync and commit src/packs/generatedRegistry.ts.');
+  await writeFile(output, generated, 'utf8');
+}

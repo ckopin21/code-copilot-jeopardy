@@ -1,4 +1,5 @@
 import type { GameMode, PackSummary, Question, QuestionPack } from '../shared/types';
+import { packSchema } from '../shared/validation';
 import { normalizeQuestionIdentity } from './buildPack';
 import { generatedBuiltInPacks } from './generatedRegistry';
 
@@ -39,7 +40,7 @@ export function likelyRepeatedFact(left: Question, right: Question): boolean {
   return shared / Math.min(leftTokens.size, rightTokens.size) >= 0.6;
 }
 
-/** Review-only candidates: close wording without the same accepted answer is not a deterministic duplicate. */
+/** Review-only candidates. Shared answers plus subject overlap are suggestive, not proof of the same fact. */
 export function likelySimilarQuestions(packs: QuestionPack[]): Array<{ left: Question; right: Question }> {
   const questions = packs.flatMap((pack) => pack.questions);
   const pairs: Array<{ left: Question; right: Question }> = [];
@@ -47,10 +48,14 @@ export function likelySimilarQuestions(packs: QuestionPack[]): Array<{ left: Que
     for (let rightIndex = leftIndex + 1; rightIndex < questions.length; rightIndex += 1) {
       const left = questions[leftIndex];
       const right = questions[rightIndex];
+      if (likelyRepeatedFact(left, right)) {
+        pairs.push({ left, right });
+        continue;
+      }
       const leftTokens = contentTokens(left.text);
       const rightTokens = contentTokens(right.text);
       const shared = [...leftTokens].filter((token) => rightTokens.has(token)).length;
-      if (leftTokens.size >= 4 && rightTokens.size >= 4 && shared / Math.min(leftTokens.size, rightTokens.size) >= .9 && !likelyRepeatedFact(left, right)) {
+      if (leftTokens.size >= 4 && rightTokens.size >= 4 && shared >= 4 && shared / Math.min(leftTokens.size, rightTokens.size) >= .9) {
         pairs.push({ left, right });
       }
     }
@@ -63,48 +68,46 @@ export function validatePackCatalog(packs: QuestionPack[]): QuestionPack[] {
   const questionIds = new Set<string>();
   const factOwners = new Map<string, string>();
   const promptOwners = new Map<string, string>();
-  const catalogQuestions: Question[] = [];
 
   for (const pack of packs) {
+    const parsed = packSchema.safeParse(pack);
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      const questionIndex = issue.path[0] === 'questions' && typeof issue.path[1] === 'number' ? issue.path[1] : undefined;
+      const question = questionIndex === undefined ? undefined : pack.questions?.[questionIndex];
+      const location = question ? `${pack.id}/${question.category}/${question.value} (${question.id})` : pack.id;
+      throw new Error(`Malformed question content at ${location}: ${issue.path.join('.')} ${issue.message}`);
+    }
     if (packIds.has(pack.id)) throw new Error(`Duplicate question pack id: ${pack.id}`);
     packIds.add(pack.id);
     if (!pack.questions.length) throw new Error(`${pack.id} has no questions`);
     if (pack.finalQuestionId && !pack.questions.some((question) => question.id === pack.finalQuestionId)) {
       throw new Error(`${pack.id} finalQuestionId does not reference a question in the pack`);
     }
+    const categories = new Set(pack.questions.map((question) => normalizeQuestionIdentity(question.category)));
+    if (pack.categoryOrder && (new Set(pack.categoryOrder.map(normalizeQuestionIdentity)).size !== pack.categoryOrder.length ||
+      pack.categoryOrder.some((name) => !categories.has(normalizeQuestionIdentity(name))))) {
+      throw new Error(`${pack.id} categoryOrder contains a duplicate or unknown category`);
+    }
 
     for (const question of pack.questions) {
       if (question.packId !== pack.id) throw new Error(`${question.id} points to pack ${question.packId}, expected ${pack.id}`);
       if (questionIds.has(question.id)) throw new Error(`Duplicate question id: ${question.id}`);
       questionIds.add(question.id);
-      if (!question.questionType) throw new Error(`${question.id} is missing questionType metadata`);
-      if (!question.factKey) throw new Error(`${question.id} is missing factKey metadata`);
-
-      const promptKey = normalizeQuestionIdentity(question.text);
+      // Ignore separators as well as case and punctuation: "what's" and "whats"
+      // or "ice cream" and "icecream" are formatting variants for this guard.
+      const promptKey = normalizeQuestionIdentity(question.text).replaceAll(' ', '');
+      if (!promptKey) throw new Error(`${pack.id}/${question.category}/${question.value} (${question.id}) has no searchable question text`);
       const promptOwner = promptOwners.get(promptKey);
       if (promptOwner) throw new Error(`Repeated question text across packs: ${promptOwner} and ${question.id}`);
       promptOwners.set(promptKey, question.id);
 
-      const factOwner = factOwners.get(question.factKey);
+      const factKey = normalizeQuestionIdentity(question.factKey);
+      if (!factKey) throw new Error(`${pack.id}/${question.category}/${question.value} (${question.id}) has no searchable factKey`);
+      const factOwner = factOwners.get(factKey);
       if (factOwner) throw new Error(`Repeated fact across packs: ${factOwner} and ${question.id}. Reworded versions of a fact must share a factKey.`);
-      factOwners.set(question.factKey, question.id);
-      catalogQuestions.push(question);
+      factOwners.set(factKey, question.id);
     }
-  }
-
-  for (let leftIndex = 0; leftIndex < catalogQuestions.length; leftIndex += 1) {
-    const left = catalogQuestions[leftIndex];
-    for (let rightIndex = leftIndex + 1; rightIndex < catalogQuestions.length; rightIndex += 1) {
-      const right = catalogQuestions[rightIndex];
-      if (!likelyRepeatedFact(left, right)) continue;
-      throw new Error(`Likely repeated fact across packs: ${left.id} and ${right.id}. Give rewordings the same factKey or replace one clue.`);
-    }
-  }
-
-  // Similar clues with different accepted answers are legitimate sometimes. Do
-  // not reject them; make review visible in CI/test output instead.
-  for (const { left, right } of likelySimilarQuestions(packs)) {
-    console.warn(`Near-duplicate question review: ${left.id} and ${right.id} have highly similar clue wording.`);
   }
 
   return packs;

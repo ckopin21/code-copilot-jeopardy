@@ -15,28 +15,35 @@ export const playerJoinSchema = z.object({
 });
 
 export const questionSchema = z.object({
-  id: z.string().min(1),
-  packId: z.string().min(1),
-  category: z.string().min(1),
-  text: z.string().min(3),
-  acceptedAnswers: z.array(z.string().min(1)).min(1),
-  alternateAnswers: z.array(z.string().min(1)).optional(),
+  id: z.string().trim().min(1),
+  packId: z.string().trim().min(1),
+  category: z.string().trim().min(1),
+  text: z.string().trim().min(3),
+  acceptedAnswers: z.array(z.string().trim().min(1)).min(1),
+  alternateAnswers: z.array(z.string().trim().min(1)).optional(),
   value: z.number().int().refine((value) => QUESTION_VALUES.includes(value as QuestionValue), 'Unsupported question value'),
   difficulty: z.enum(['easy', 'medium', 'hard']),
-  explanation: z.string().optional(),
+  questionType: z.enum(['person', 'place', 'time', 'title', 'term', 'number', 'object', 'organization', 'event', 'general']),
+  factKey: z.string().trim().min(1),
+  explanation: z.string().trim().min(1).optional(),
   dailyDoubleEligible: z.boolean().optional(),
   responseMode: z.enum(['buzz', 'text']).optional(),
-  tags: z.array(z.string()).default([])
+  tags: z.array(z.string().trim().min(1))
 });
 
 export const packSchema = z.object({
-  id: z.string().regex(/^[a-z0-9-]+$/),
-  title: z.string().min(1).max(80),
-  theme: z.string().min(1).max(80),
-  description: z.string().min(1).max(300),
+  id: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+  title: z.string().trim().min(1),
+  theme: z.string().trim().min(1),
+  description: z.string().trim().min(1),
   difficulty: z.enum(['easy', 'medium', 'hard', 'mixed']),
-  approximateMinutes: z.number().int().min(5).max(180),
-  questions: z.array(questionSchema).min(12)
+  approximateMinutes: z.number().int().positive(),
+  supportedGameModes: z.array(z.enum(['classic', 'free-response'])).min(1).refine((modes) => new Set(modes).size === modes.length, 'Duplicate game mode').optional(),
+  categoryOrder: z.array(z.string().trim().min(1)).optional(),
+  finalQuestionId: z.string().trim().min(1).optional(),
+  accentColor: z.string().trim().min(1).optional(),
+  titleArt: z.string().trim().min(1).optional(),
+  questions: z.array(questionSchema).min(1)
 });
 
 export const buzzSchema = z.object({ roomCode: z.string(), playerId: z.string(), reconnectToken: z.string() });

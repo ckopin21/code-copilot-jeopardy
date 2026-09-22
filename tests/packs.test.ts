@@ -70,7 +70,8 @@ describe('question pack catalog', () => {
 
     const leftPack = { ...builtInPacks[0], id: 'left-pack', finalQuestionId: undefined, questions: [left] };
     const rightPack = { ...builtInPacks[1], id: 'right-pack', finalQuestionId: undefined, questions: [reworded] };
-    expect(() => validatePackCatalog([leftPack, rightPack])).toThrow(/likely repeated fact/i);
+    expect(likelySimilarQuestions([leftPack, rightPack])).toEqual([expect.objectContaining({ left, right: reworded })]);
+    expect(() => validatePackCatalog([leftPack, rightPack])).not.toThrow();
   });
 
   it('scales difficulty consistently with clue value', () => {
@@ -125,5 +126,45 @@ describe('question pack catalog', () => {
     const reviewPack = { ...builtInPacks[0], id: 'review', finalQuestionId: undefined, questions: [left, right] };
     expect(likelySimilarQuestions([reviewPack])).toEqual([expect.objectContaining({ left, right })]);
     expect(() => validatePackCatalog([reviewPack])).not.toThrow();
+  });
+
+  it('reports built-in near duplicates with both locations and clue text for editorial review', () => {
+    for (const { left, right } of likelySimilarQuestions(builtInPacks)) {
+      console.warn(`Near-duplicate review: ${left.packId}/${left.category}/${left.value} (${left.id}) "${left.text}" -> ${right.packId}/${right.category}/${right.value} (${right.id}) "${right.text}"`);
+    }
+  });
+
+  it('rejects malformed pack metadata and compiled question fields at their location', () => {
+    expect(() => buildPack({ ...meta, supportedGameModes: ['invalid'] as never }, [completeCategory()])).toThrow(/test-pack supportedGameModes/);
+    expect(() => buildPack({ ...meta, categoryOrder: ['Absent'] }, [completeCategory()])).toThrow(/test-pack categoryOrder/);
+    expect(() => buildPack(meta, [category('Broken', {
+      ...completeCategory().questions,
+      400: question('Broken response?', 'Answer', { responseMode: 'invalid' as never })
+    } as never)])).toThrow(/test-pack\/Broken\/400.*responseMode/);
+    const pack = buildPack(meta, [completeCategory()]);
+    const malformed = { ...pack, questions: [{ ...pack.questions[0], value: 700 as never }] };
+    expect(() => validatePackCatalog([malformed])).toThrow(/test-pack\/Category\/700.*value/);
+  });
+
+  it('rejects normalized punctuation, case, and spacing duplicates across packs', () => {
+    const first = buildPack(meta, [completeCategory()]);
+    const repeated = buildPack({ ...meta, id: 'other-pack' }, [completeCategory()]);
+    repeated.questions[0] = {
+      ...repeated.questions[0],
+      text: '  QUESTION100!!! ',
+      factKey: 'unique-key'
+    };
+    expect(() => validatePackCatalog([first, repeated])).toThrow(/Repeated question text.*test-pack-1-1.*other-pack-1-1/);
+  });
+
+  it('normalizes fact keys even when a compiled pack bypasses the builder', () => {
+    const first = buildPack(meta, [completeCategory()]);
+    const second = buildPack({ ...meta, id: 'other-pack' }, [category('Other', {
+      100: question('Distinct clue one?', 'One'), 200: question('Distinct clue two?', 'Two'),
+      300: question('Distinct clue three?', 'Three'), 400: question('Distinct clue four?', 'Four'),
+      500: question('Distinct clue five?', 'Five'), 1000: question('Distinct clue six?', 'Six')
+    })]);
+    second.questions[0].factKey = '  QUESTION, 100!!! ';
+    expect(() => validatePackCatalog([first, second])).toThrow(/Repeated fact.*test-pack-1-1.*other-pack-1-1/);
   });
 });

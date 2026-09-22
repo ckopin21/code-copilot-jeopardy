@@ -1,27 +1,27 @@
 # Question packs
 
-Blue Stage uses built-in TypeScript packs under `src/packs/`. These packs are bundled into the static application and work with the authoritative browser game engine.
+Blue Stage uses built-in TypeScript packs under `src/packs/`. This page is the source of truth for adding and checking question content.
 
 ## Canonical authoring instructions for ChatGPT
 
-When asking ChatGPT to add questions, give it this file and ask it to use **only** the explicit `category(..., { 100: question(...), ... })` format in the target `src/packs/*.ts` file. It must not edit `src/packs/generatedRegistry.ts`, `src/packs/index.ts`, game code, or the registry script.
+When asking ChatGPT to add questions, give it this file and ask it to use the explicit `category(..., { 100: question(...), ... })` format in the target `src/packs/*.ts` file. The pack source is the only question content to edit. `src/packs/generatedRegistry.ts` is generated; do not edit it by hand.
 
 - A pack filename and `id` use lowercase kebab-case; export exactly one `somethingPack` made by `buildPack(...)`.
-- Each category has exactly `100`, `200`, `300`, `400`, `500`, and `1000`; adding more content means adding a complete category, not a partial row.
+- Each category has exactly `100`, `200`, `300`, `400`, `500`, and `1000`; adding 30 questions means appending five complete categories. Append new categories after existing ones so generated IDs remain stable.
 - Every clue and accepted answer is nonblank. Use an answer array only for genuinely accepted alternatives, never formatting/capitalization variants.
 - IDs are generated; never write question IDs manually. `finalQuestionId`, when used, must reference a generated question in that same pack.
 - Use only `responseMode: 'buzz' | 'text'` and `dailyDoubleEligible: true | false`; unsupported fields/configuration are prohibited.
-- Search all `src/packs/*.ts` first. Exact normalized clue/answer pairs and explicit `factKey` repeats fail. Give true rewordings of the same fact the same `factKey` so validation rejects them; replace one clue instead.
-- Highly similar clues with different answers are reported as **Near-duplicate question review** warnings. Review them and retain only legitimately distinct facts.
+- Search all `src/packs/*.ts` first. Exact and normalized clue repeats fail, including changes only to case, punctuation, accents, or whitespace. Explicit `factKey` repeats also fail. If two clues test the same fact with different wording, give them the same `factKey`, then replace one clue.
+- Similar wording or a shared answer plus substantial subject overlap is a **review candidate**, not proof of duplication. The question audit prints both clue locations and texts. Review each candidate; keep related clues that test different facts.
 
-After every content change run `npm test && npm run build`. These commands regenerate the registry and fail on malformed packs, IDs, values, missing data, invalid references, and deterministic duplicates. Commit the regenerated registry only when `git diff` shows that the generator changed it.
+After every content change run `npm run packs:sync`, `npm run questions:check`, `npm run typecheck`, and `npm run build`. The checks fail on malformed packs, IDs, values, missing data, invalid references, deterministic duplicates, and registry drift. Read any near-duplicate review lines before committing. Commit the generated registry when the generator changes it.
 
 ## Fastest way to add a pack
 
 1. Copy `src/packs/_pack.template.ts.example` to a new `.ts` file in `src/packs/`, for example `src/packs/geography.ts`.
 2. Change the metadata and questions.
 3. Export exactly one pack with a name ending in `Pack`, for example `export const geographyPack = buildPack(...)`.
-4. Run any normal development command (`npm run dev`, `npm run typecheck`, `npm test`, or `npm run build`). The pack registry is generated automatically.
+4. Run `npm run packs:sync`, then `npm run questions:check`. Normal development commands also refresh the registry automatically.
 
 You do **not** edit `src/packs/index.ts` when adding a pack. `scripts/generate-pack-registry.mjs` discovers pack files and writes `src/packs/generatedRegistry.ts`.
 
@@ -29,6 +29,7 @@ You can also run the registry directly:
 
 ```bash
 npm run packs:sync
+npm run packs:check
 ```
 
 ## Recommended authoring format
@@ -62,7 +63,7 @@ export const geographyPack = buildPack({
 }, categories);
 ```
 
-`buildPack()` generates question IDs as `<pack-id>-<category-number>-<question-number>`, so the example above reserves the first category's sixth question when that question was not already used on the board.
+`buildPack()` generates question IDs as `<pack-id>-<category-number>-<question-number>`, so the example above reserves the first category's sixth question when that question was not already used on the board. Reordering existing categories changes their IDs; append new categories instead.
 
 The older tuple-array format used by the original built-in packs remains supported for compatibility, but the explicit value-map format above is preferred for new work.
 
@@ -86,6 +87,10 @@ All fields are optional. `finalQuestionId` is validated against questions in tha
 - `tags`: arbitrary tags; `typed` or `free-response` implies text response unless `responseMode` is supplied
 - `responseMode`: `buzz` or `text`
 - `dailyDoubleEligible`: defaults to `true`
+- `questionType`: optional answer type override; otherwise inferred
+- `factKey`: optional semantic identity; use the same key for rewordings of the same underlying fact
+
+Use `supportedGameModes: ['classic']`, `['free-response']`, or both when a pack is intended for those modes. Omission defaults to Classic. Free Response packs use `['free-response']` and the game applies typed answers for that mode.
 
 ## Built-in validation
 
@@ -100,9 +105,9 @@ All fields are optional. `finalQuestionId` is validated against questions in tha
 
 The catalog additionally rejects duplicate pack IDs, duplicate question IDs, questions whose `packId` does not match their pack, and invalid `finalQuestionId` references.
 
-It also rejects repeated normalized clue text, repeated `factKey` values, and likely rewordings that share accepted answers. Formatting-only accepted-answer variants in a single clue are normalized to one answer. Highly similar clues with different answers are emitted as a clear `Near-duplicate question review` warning for human review rather than blocked automatically.
+It also rejects repeated normalized clue text and repeated `factKey` values. Formatting-only accepted-answer variants in a single clue are normalized to one answer. Rewordings with shared answers and strongly similar clues are surfaced for human review, since topic overlap alone cannot prove that two clues test the same fact.
 
-These checks run during normal typecheck/test/build flows because the generated registry is imported by the application.
+These checks run during normal typecheck/test/build flows because the generated registry is imported by the application. `npm run questions:check` prints near-duplicate candidates and checks the committed registry. CI runs the same check.
 
 ## Supported values and difficulty
 
@@ -128,4 +133,4 @@ If you want more total questions without changing existing categories, add anoth
 
 ## Custom pack support
 
-There is currently no runtime JSON upload endpoint. The old Node/Express custom-pack import path was removed with the duplicate server runtime. New packs should be added under `src/packs/`, validated by the existing pack builder/tests, and deployed with the application.
+There is currently no runtime JSON upload endpoint. Add new packs under `src/packs/`, validate them with `npm run questions:check`, and include them in the application build.

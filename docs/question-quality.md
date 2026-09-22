@@ -22,11 +22,11 @@ Every compiled question also records a `factKey`.
 
 - By default, `factKey` is derived from normalized question text.
 - Exact or punctuation-only question repeats are rejected automatically.
-- Catalog validation also compares questions across packs and rejects likely rewordings when they target the same accepted answer and substantially overlap on subject terms. Very similar clues with different answers are printed as `Near-duplicate question review` warnings, so legitimate related questions remain possible but cannot be silently overlooked.
+- Catalog validation reports likely rewordings when they target the same accepted answer and substantially overlap on subject terms. Very similar clues with different answers are also printed as `Near-duplicate review` warnings. Review candidates manually; two clues about the same topic can test different facts.
 - If two differently worded clues test the same underlying fact, authors should still give both the same explicit `factKey`; that is the strongest deterministic duplicate check.
 - Question IDs are also globally unique.
 
-These checks run when the pack catalog is imported, so typecheck, tests, and production builds fail instead of shipping duplicated question data.
+Deterministic duplicate checks run when the pack catalog is imported, so typecheck, tests, and production builds fail on definite duplicates. Run `npm run questions:check` to inspect near-duplicate candidates and verify generated registry state.
 
 ## Pack author checklist
 
