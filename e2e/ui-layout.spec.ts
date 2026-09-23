@@ -267,6 +267,30 @@ for (const viewport of menuViewports) {
   });
 }
 
+test('menu music controls recover from a global mute set in game-room setup', async ({ page }) => {
+  await page.goto('/?mode=host&fresh=1');
+  await page.getByRole('button', { name: /Audio/ }).click();
+  await page.getByRole('button', { name: 'Mute All Audio' }).click();
+
+  const mutedInSetup = await page.evaluate(() => JSON.parse(localStorage.getItem('blue-stage-audio') ?? '{}').muted);
+  expect(mutedInSetup).toBe(true);
+
+  await page.getByRole('button', { name: 'Close audio controls' }).click();
+  await page.getByRole('button', { name: '← Menu' }).click();
+  await page.waitForURL((url) => !url.searchParams.has('mode'));
+  const mutedOnMenu = await page.evaluate(() => JSON.parse(localStorage.getItem('blue-stage-audio') ?? '{}').muted);
+  expect(mutedOnMenu).toBe(true);
+  await expect(page.getByRole('button', { name: 'Unmute Music' })).toBeVisible();
+
+  const musicSlider = page.locator('.menu-music-volume input[type="range"]');
+  await musicSlider.fill('0.5');
+
+  await expect(page.getByRole('button', { name: 'Mute Music' })).toBeVisible();
+  const settings = await page.evaluate(() => JSON.parse(localStorage.getItem('blue-stage-audio') ?? '{}'));
+  expect(settings.muted).toBe(false);
+  expect(settings.music).toBeGreaterThan(0);
+});
+
 for (const viewport of viewports) {
   test(`production presentation board fits at ${viewport.width}x${viewport.height}`, async ({ page }) => {
     await page.setViewportSize(viewport);

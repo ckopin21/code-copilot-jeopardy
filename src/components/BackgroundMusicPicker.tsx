@@ -15,13 +15,15 @@ function savedMusicRestoreGain(): number {
 export function MusicTrackSelect({ className = '' }: { className?: string }) {
   const [track, setTrack] = useState<BackgroundTrackId>(audio.settings.backgroundTrack);
   const [musicGain, setMusicGain] = useState(audio.settings.music);
-  const musicMuted = musicGain <= 0;
+  const [globalMuted, setGlobalMuted] = useState(audio.settings.muted);
+  const musicMuted = globalMuted || musicGain <= 0;
   const showMenuControls = className.split(/\s+/).includes('menu-music-select');
 
   useEffect(() => {
     const sync = () => {
       setTrack(audio.settings.backgroundTrack);
       setMusicGain(audio.settings.music);
+      setGlobalMuted(audio.settings.muted);
     };
     window.addEventListener('blue-stage:audio-settings', sync);
     return () => window.removeEventListener('blue-stage:audio-settings', sync);
@@ -37,18 +39,25 @@ export function MusicTrackSelect({ className = '' }: { className?: string }) {
     if (nextGain > 0) {
       try { localStorage.setItem(MENU_MUSIC_RESTORE_KEY, String(nextGain)); } catch { /* optional preference storage */ }
     }
-    audio.setSettings({ music: nextGain });
+    audio.setSettings(nextGain > 0 ? { music: nextGain, muted: false } : { music: nextGain });
     if (nextGain > 0) void audio.unlock().then(() => audio.setMusic('lobby')).catch(() => {});
   };
 
   const toggleMenuMusic = () => {
+    if (audio.settings.muted) {
+      const restoreGain = audio.settings.music > 0 ? audio.settings.music : savedMusicRestoreGain();
+      audio.setSettings({ muted: false, music: restoreGain });
+      void audio.unlock().then(() => audio.setMusic('lobby')).catch(() => {});
+      return;
+    }
+
     if (audio.settings.music > 0) {
       try { localStorage.setItem(MENU_MUSIC_RESTORE_KEY, String(audio.settings.music)); } catch { /* optional preference storage */ }
       audio.setSettings({ music: 0 });
       return;
     }
 
-    audio.setSettings({ music: savedMusicRestoreGain() });
+    audio.setSettings({ muted: false, music: savedMusicRestoreGain() });
     void audio.unlock().then(() => audio.setMusic('lobby')).catch(() => {});
   };
 
