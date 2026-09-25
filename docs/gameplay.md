@@ -28,6 +28,17 @@ Free Response can add a configurable reading-only delay of 0, 3, 5, 7, 10, or 15
 
 Question-pack choices are filtered to packs that support the selected mode.
 
+## Turn rotation
+
+The player on turn picks the next clue. After each clue, the turn passes to the next connected player:
+
+- **Join order** rotates by seat (P1 → P5).
+- **Manual · drag order** rotates through a custom order the host drags into place in the lobby. Players missing from that order follow in seat order. The order is saved on the server with the room's settings.
+
+In either mode the host can hand the turn to any connected player from the board's **Turn** selector; rotation continues from there. A disconnected player keeps their place in the order and is skipped until they return.
+
+Cold Streak always starts at three misses in a row; it is a fixed rule, not a lobby setting.
+
 ## Game length
 
 Game length changes the generated board, not only a label:

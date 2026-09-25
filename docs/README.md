@@ -11,11 +11,12 @@ This folder is the maintained technical and gameplay reference for the current g
 - [`networking.md`](networking.md) — Socket.IO roles, LAN joining, reconnect/reserved-seat behavior, failure cases
 - [`real-device-test-matrix.md`](real-device-test-matrix.md) — repeatable physical-device and same-Wi-Fi validation matrix
 - [`question-packs.md`](question-packs.md) — built-in pack authoring, automatic registration, metadata, and validation
-- [`development.md`](development.md) — repository layout, testing, CI, deployment, safe modification checklist
+- [`development.md`](development.md) — repository layout, where changes belong, testing, CI, deployment, renaming
+- [`adding-a-game.md`](adding-a-game.md) — the platform/game contract and steps for adding a new game
 
 ## Runtime support
 
-Blue Stage has one supported multiplayer runtime: the laptop's Node/Socket.IO server. It runs the shared `BrowserGameEngine` and serves Host, player, and Presentation browsers across a reachable LAN. GitHub Pages may show a static preview or documentation; it cannot host the multiplayer authority. `npm run dev` and `npm start` use the same server game path.
+Blue Stage has one supported multiplayer runtime: the laptop's Node/Socket.IO server. It hosts every registered game (currently Blue Stage Trivia, whose rules live in `TriviaEngine`) and serves Host, player, and Presentation browsers across a reachable LAN. GitHub Pages may show a static preview or documentation; it cannot host the multiplayer authority. `npm run dev` and `npm start` use the same server game path.
 
 ## Documentation maintenance rule
 

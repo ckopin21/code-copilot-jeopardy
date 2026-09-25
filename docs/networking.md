@@ -7,7 +7,7 @@ The laptop runs `server/index.ts`: one HTTP server serves the application and on
 ```text
 Host browser ───────┐
 Player phones ──────┼── local Wi-Fi/LAN ── laptop Node + Socket.IO server
-Presentation screen ┘                       authoritative BrowserGameEngine
+Presentation screen ┘                       authoritative TriviaEngine
 ```
 
 The server listens on `0.0.0.0:3000` by default. It discovers and advertises a private IPv4 address, preferring a Wi-Fi adapter. The Host page obtains that base URL from `/api/network`; room creation produces a player Join URL, a QR code, and a capability-bearing Presentation URL. `BLUE_STAGE_BASE_URL` can override the advertised address when the laptop has several adapters. `PORT` and `HOST` override the listening port and interface. Keep the Host and phones on the same reachable network; a numeric LAN address such as `http://192.168.1.174:3000` is the fallback when local hostname resolution is unreliable.
@@ -16,7 +16,7 @@ The Host browser is a client, not the server. Closing or refreshing it does not 
 
 ## Wire protocol and authority
 
-Clients send `game:request` with `{ requestId, event, payload }` and receive an acknowledgement `{ requestId, ok, data?, error? }`. Existing event names describe intents: `room:create`, `host:*`, `player:*`, and `presentation:join`. The server checks the socket's bound role and room before calling the shared `BrowserGameEngine`. It then sends each authorized socket a `room:state` snapshot sanitized for Host, player, or Presentation. A committed score change also sends `room:score` before the new snapshot so score effects can target the correct player. Clients do not send replacement scores or room snapshots.
+Clients send `game:request` with `{ requestId, event, payload }` and receive an acknowledgement `{ requestId, ok, data?, error? }`. Existing event names describe intents: `room:create`, `host:*`, `player:*`, and `presentation:join`. The server checks the socket's bound role and room before calling the shared `TriviaEngine`. It then sends each authorized socket a `room:state` snapshot sanitized for Host, player, or Presentation. A committed score change also sends `room:score` before the new snapshot so score effects can target the correct player. Clients do not send replacement scores or room snapshots.
 
 The request journal coalesces an in-flight request and replays the acknowledgement for a completed request ID. The client reuses that ID when retrying an uncertain acknowledgement. The server also keeps bounded session-level completed responses, so reconnect retries cannot score, buzz, answer, or wager twice. Question actions include the active question ID and game start time; Final actions include game start time. The engine rejects stale actions and enforces response deadlines.
 

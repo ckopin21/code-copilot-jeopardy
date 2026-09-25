@@ -1,6 +1,6 @@
 # Adding questions and packs
 
-For full details, see [`../../docs/question-packs.md`](../../docs/question-packs.md).
+For full details, see [`docs/question-packs.md`](../../../../docs/question-packs.md).
 
 ## New pack
 

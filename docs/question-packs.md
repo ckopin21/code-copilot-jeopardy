@@ -1,29 +1,29 @@
 # Question packs
 
-Blue Stage uses built-in TypeScript packs under `src/packs/`. This page is the source of truth for adding and checking question content.
+Blue Stage uses built-in TypeScript packs under `src/games/trivia/packs/`. This page is the source of truth for adding and checking question content.
 
 ## Canonical authoring instructions for ChatGPT
 
-When asking ChatGPT to add questions, give it this file and ask it to use the explicit `category(..., { 100: question(...), ... })` format in the target `src/packs/*.ts` file. The pack source is the only question content to edit. `src/packs/generatedRegistry.ts` is generated; do not edit it by hand.
+When asking ChatGPT to add questions, give it this file and ask it to use the explicit `category(..., { 100: question(...), ... })` format in the target `src/games/trivia/packs/*.ts` file. The pack source is the only question content to edit. `src/games/trivia/packs/generatedRegistry.ts` is generated; do not edit it by hand.
 
 - A pack filename and `id` use lowercase kebab-case; export exactly one `somethingPack` made by `buildPack(...)`.
 - Each category has exactly `100`, `200`, `300`, `400`, `500`, and `1000`; adding 30 questions means appending five complete categories. Append new categories after existing ones so generated IDs remain stable.
 - Every clue and accepted answer is nonblank. Use an answer array only for genuinely accepted alternatives, never formatting/capitalization variants.
 - IDs are generated; never write question IDs manually. `finalQuestionId`, when used, must reference a generated question in that same pack.
 - Use only `responseMode: 'buzz' | 'text'` and `dailyDoubleEligible: true | false`; unsupported fields/configuration are prohibited.
-- Search all `src/packs/*.ts` first. Exact and normalized clue repeats fail, including changes only to case, punctuation, accents, or whitespace. Explicit `factKey` repeats also fail. If two clues test the same fact with different wording, give them the same `factKey`, then replace one clue.
+- Search all `src/games/trivia/packs/*.ts` first. Exact and normalized clue repeats fail, including changes only to case, punctuation, accents, or whitespace. Explicit `factKey` repeats also fail. If two clues test the same fact with different wording, give them the same `factKey`, then replace one clue.
 - Similar wording or a shared answer plus substantial subject overlap is a **review candidate**, not proof of duplication. The question audit prints both clue locations and texts. Review each candidate; keep related clues that test different facts.
 
 After every content change run `npm run packs:sync`, `npm run questions:check`, `npm run typecheck`, and `npm run build`. The checks fail on malformed packs, IDs, values, missing data, invalid references, deterministic duplicates, and registry drift. Read any near-duplicate review lines before committing. Commit the generated registry when the generator changes it.
 
 ## Fastest way to add a pack
 
-1. Copy `src/packs/_pack.template.ts.example` to a new `.ts` file in `src/packs/`, for example `src/packs/geography.ts`.
+1. Copy `src/games/trivia/packs/_pack.template.ts.example` to a new `.ts` file in `src/games/trivia/packs/`, for example `src/games/trivia/packs/geography.ts`.
 2. Change the metadata and questions.
 3. Export exactly one pack with a name ending in `Pack`, for example `export const geographyPack = buildPack(...)`.
 4. Run `npm run packs:sync`, then `npm run questions:check`. Normal development commands also refresh the registry automatically.
 
-You do **not** edit `src/packs/index.ts` when adding a pack. `scripts/generate-pack-registry.mjs` discovers pack files and writes `src/packs/generatedRegistry.ts`.
+You do **not** edit `src/games/trivia/packs/index.ts` when adding a pack. `scripts/generate-pack-registry.mjs` discovers pack files and writes `src/games/trivia/packs/generatedRegistry.ts`.
 
 You can also run the registry directly:
 
@@ -133,4 +133,4 @@ If you want more total questions without changing existing categories, add anoth
 
 ## Custom pack support
 
-There is currently no runtime JSON upload endpoint. Add new packs under `src/packs/`, validate them with `npm run questions:check`, and include them in the application build.
+There is currently no runtime JSON upload endpoint. Add new packs under `src/games/trivia/packs/`, validate them with `npm run questions:check`, and include them in the application build.

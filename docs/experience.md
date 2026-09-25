@@ -1,6 +1,6 @@
 # Game experience systems
 
-This document covers the Host/player quality-of-life layer built on top of the server's authoritative `BrowserGameEngine`.
+This document covers the Host/player quality-of-life layer built on top of the server's authoritative `TriviaEngine`.
 
 ## Permanent player seats
 
@@ -14,7 +14,7 @@ Seat numbers are used for:
 - gamepads (gamepad indexes `0` through `4` map to P1 through P5)
 - stable ordering through reconnects and Final Round
 
-Older persisted games are migrated when `BrowserGameEngine` starts. Missing/duplicate seat values are reassigned to the first available valid seat.
+Older persisted games are migrated when `TriviaEngine` starts. Missing/duplicate seat values are reassigned to the first available valid seat.
 
 ## Player identity and customization
 

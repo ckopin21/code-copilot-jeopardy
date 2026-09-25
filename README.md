@@ -1,6 +1,6 @@
 # Blue Stage Trivia
 
-A shared-screen trivia game with a Host display and up to five phone controllers. For multiplayer, the user's laptop runs the authoritative Node + Socket.IO server; Host, phones, and Presentation connect over the same Wi-Fi/LAN.
+A shared-screen trivia game with a Host display and up to five phone controllers. The repo is organized as a small game platform (`src/platform/`, `server/`) with trivia as its first game (`src/games/trivia/`), so more games can be added alongside it. For multiplayer, the user's laptop runs the authoritative Node + Socket.IO server; Host, phones, and Presentation connect over the same Wi-Fi/LAN.
 
 GitHub Pages hosts a static preview, not the multiplayer server:
 
@@ -43,7 +43,8 @@ The maintained documentation index is [`docs/README.md`](docs/README.md).
 - [`docs/architecture.md`](docs/architecture.md) — runtime, state ownership, storage, UI architecture
 - [`docs/networking.md`](docs/networking.md) — Socket.IO, reconnects, reserved seats, LAN troubleshooting
 - [`docs/question-packs.md`](docs/question-packs.md) — easiest way to add questions and packs
-- [`docs/development.md`](docs/development.md) — repository layout, tests, CI, deployment, change checklist
+- [`docs/development.md`](docs/development.md) — repository layout, where each kind of change belongs, tests, CI, renaming
+- [`docs/adding-a-game.md`](docs/adding-a-game.md) — how to add another game to this repo
 
 ## Run a multiplayer game on the laptop
 
@@ -56,7 +57,7 @@ npm start
 
 `npm start` builds the app and starts its HTTP/Socket.IO server on port 3000, listening on the LAN. Open the printed Host URL on the laptop. Allow Node.js through Windows Firewall for **Private** networks if prompted. Put the laptop and phones on the same reachable Wi-Fi; the Host shows a room code, player Join URL/QR, and an optional Presentation link. Keep the server process running during the game. `npm run dev` starts the same server with Vite for development. [Start here](START-HERE.md) has the short setup and connection checklist.
 
-The laptop server owns rooms, gameplay, and scoring through `src/lib/browserGameEngine.ts`. The browser Host is an authenticated client; refreshing it leaves the room on the server. Phones and a remote Presentation browser connect through `src/lib/socket.ts`, the Socket.IO client adapter. Normal same-room gameplay needs no public Internet after dependencies and assets are installed. GitHub Pages cannot host the Node server and is only useful as a static preview or landing page.
+The laptop server owns rooms, gameplay, and scoring through `src/games/trivia/engine/TriviaEngine.ts`. The browser Host is an authenticated client; refreshing it leaves the room on the server. Phones and a remote Presentation browser connect through `src/platform/net/socket.ts`, the Socket.IO client adapter. Normal same-room gameplay needs no public Internet after dependencies and assets are installed. GitHub Pages cannot host the Node server and is only useful as a static preview or landing page.
 
 ### Game flow
 
@@ -114,16 +115,16 @@ Only players connected when Final begins become Final participants. Final answer
 
 ## Question packs
 
-Built-in packs live in `src/packs/`.
+Built-in packs live in `src/games/trivia/packs/`.
 
 To add a new built-in pack:
 
-1. Copy `src/packs/_pack.template.ts.example` to a new `.ts` file.
+1. Copy `src/games/trivia/packs/_pack.template.ts.example` to a new `.ts` file.
 2. Fill in metadata/categories/questions.
 3. Export one `somethingPack` created with `buildPack(...)`.
 4. Run a normal dev/test/build command.
 
-The registry is generated automatically; do not edit `src/packs/index.ts` or `src/packs/generatedRegistry.ts` just to add a pack.
+The registry is generated automatically; do not edit `src/games/trivia/packs/index.ts` or `src/games/trivia/packs/generatedRegistry.ts` just to add a pack.
 
 Preferred category authoring uses explicit point keys:
 
@@ -161,7 +162,7 @@ Dependencies are pinned and `package-lock.json` is committed so local and CI ins
 
 ## Testing and CI
 
-Tests exercise the production `BrowserGameEngine`, multiplayer snapshot privacy, answer normalization, game modes, pack loading/validation, game-length boards, reconnect identity, timer restoration, Daily Doubles, Free Response grading/rejoin behavior, Final participation/privacy, customization/layout regressions, and mobile recovery policies.
+Tests exercise the production `TriviaEngine`, the room server hosting two games side by side, multiplayer snapshot privacy, answer normalization, game modes, pack loading/validation, game-length boards, reconnect identity, timer restoration, Daily Doubles, Free Response grading/rejoin behavior, Final participation/privacy, customization/layout regressions, and mobile recovery policies.
 
 GitHub Actions uses the committed lockfile, runs typecheck, lint, Vitest, and a production build, then runs Playwright in Chromium. Selected Safari/mobile and player-card regressions also run in WebKit.
 
