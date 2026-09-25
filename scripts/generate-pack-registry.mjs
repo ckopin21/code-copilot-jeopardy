@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const packDir = path.join(root, 'src', 'packs');
+const packDir = path.join(root, 'src', 'games', 'trivia', 'packs');
 const output = path.join(packDir, 'generatedRegistry.ts');
 const excluded = new Set(['buildPack.ts', 'generatedRegistry.ts', 'index.ts']);
 const checkOnly = process.argv.includes('--check');

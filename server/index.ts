@@ -4,8 +4,7 @@ import { resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import QRCode from 'qrcode';
 import { createServer as createViteServer, type ViteDevServer } from 'vite';
-import { packSummaries } from '../src/packs';
-import { createGameServer, type GameServer } from './gameServer';
+import { createRoomServer, type RoomServer } from './roomServer';
 
 const mimeTypes: Record<string, string> = {
   '.css': 'text/css; charset=utf-8',
@@ -31,7 +30,7 @@ function sendJson(response: ServerResponse, value: unknown, status = 200): void 
 
 export interface LocalGameServer {
   httpServer: ReturnType<typeof createServer>;
-  game: GameServer;
+  game: RoomServer;
   port: number;
   close(): Promise<void>;
 }
@@ -43,7 +42,7 @@ export async function startLocalGameServer(options: { port?: number; host?: stri
   if (!options.dev && !existsSync(resolve(distDir, 'index.html'))) throw new Error(`Production application is missing from ${distDir}. Run npm run build first.`);
   let vite: ViteDevServer | null = null;
   const httpServer = createServer((request, response) => { void serveRequest(request, response); });
-  const game = createGameServer({ httpServer, baseUrl: options.baseUrl ?? process.env.BLUE_STAGE_BASE_URL });
+  const game = createRoomServer({ httpServer, baseUrl: options.baseUrl ?? process.env.BLUE_STAGE_BASE_URL });
   if (options.dev) {
     vite = await createViteServer({
       appType: 'spa',
@@ -61,7 +60,8 @@ export async function startLocalGameServer(options: { port?: number; host?: stri
         sendJson(response, { baseUrl, hostUrl: `${baseUrl}/?mode=host`, transport: 'socket.io', p2p: false });
         return;
       }
-      if (url.pathname === '/api/packs') { sendJson(response, packSummaries()); return; }
+      const gameRoute = game.httpRoutes.get(url.pathname);
+      if (gameRoute) { sendJson(response, gameRoute()); return; }
       if (url.pathname === '/api/qr') {
         const value = url.searchParams.get('value') ?? '';
         if (!value || value.length > 2048) { sendJson(response, { error: 'A valid URL is required' }, 400); return; }
