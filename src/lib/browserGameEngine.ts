@@ -1,4 +1,4 @@
-import { DEFAULT_SETTINGS, GAME_LENGTH_CONFIG } from '../shared/config';
+import { COLD_STREAK_THRESHOLD, DEFAULT_SETTINGS, GAME_LENGTH_CONFIG } from '../shared/config';
 import type { BoardQuestion, GameSettings, HostRoomCredentials, Player, PlayerJoinCredentials, Question, QuestionPack, RoomSnapshot, RoomState } from '../shared/types';
 import { QUESTION_VALUES } from '../shared/types';
 import { autoGradeAnswer } from '../shared/validation';
@@ -67,6 +67,24 @@ function normalizeFreeResponseReadSeconds(value: unknown, fallback = 5): number 
   if (!Number.isFinite(numeric)) return fallback;
   return Math.min(30, Math.max(0, Math.round(numeric)));
 }
+/** Applies the rules the product fixes regardless of requested or persisted settings. */
+function normalizeSettings(settings: GameSettings, playerIds: readonly string[]): GameSettings {
+  const known = new Set(playerIds);
+  const requestedOrder = Array.isArray(settings.turnOrder) ? settings.turnOrder : [];
+  return {
+    ...settings,
+    // One pack per game; the lobby has no mixed-pack flow.
+    selectedPackIds: settings.selectedPackIds.slice(0, 1),
+    mixedPacks: false,
+    // Session locking and steals were removed from the product.
+    lockRoomOnStart: false,
+    stealsEnabled: false,
+    coldStreakThreshold: COLD_STREAK_THRESHOLD,
+    freeResponseReadSeconds: normalizeFreeResponseReadSeconds(settings.freeResponseReadSeconds, 5),
+    turnOrderMode: settings.turnOrderMode === 'manual' ? 'manual' : 'join-order',
+    turnOrder: [...new Set(requestedOrder.filter((playerId) => typeof playerId === 'string' && known.has(playerId)))]
+  };
+}
 
 export class BrowserGameEngine {
   private rooms = new Map<string, RoomRecord>();
@@ -82,12 +100,9 @@ export class BrowserGameEngine {
       // Session locking was removed from the product. Normalize older persisted rooms so they remain joinable.
       record.state.locked = false;
       record.state.revision ??= 0;
-      record.state.settings.lockRoomOnStart = false;
-      record.state.settings.turnOrderMode ??= 'join-order';
       record.state.settings.gameMode ??= 'classic';
-      record.state.settings.freeResponseReadSeconds = normalizeFreeResponseReadSeconds(record.state.settings.freeResponseReadSeconds, 5);
-      // Steals are not part of the current reveal-first product flow. Keep restored legacy rooms aligned with the live UI.
-      record.state.settings.stealsEnabled = false;
+      record.state.settings = normalizeSettings(record.state.settings, record.state.players.map((player) => player.id));
+      record.state.selectedPackIds = record.state.settings.selectedPackIds;
       record.state.turnPlayerId ??= null;
       if (record.state.currentQuestion && !record.state.currentQuestion.participantIds) {
         record.state.currentQuestion.participantIds = record.state.players.map((player) => player.id);
@@ -162,12 +177,14 @@ export class BrowserGameEngine {
     else if (!loaded.readable) this.reportPersistence(false);
   }
 
+  /** Called when saving rooms starts failing or recovers. The server relays this to Host screens. */
+  onPersistenceChange: ((ok: boolean) => void) | null = null;
+  get persistenceOk(): boolean { return this.persistenceHealthy; }
+
   private reportPersistence(ok: boolean): void {
     if (this.persistenceHealthy === ok) return;
     this.persistenceHealthy = ok;
-    if (typeof window === 'undefined') return;
-    (window as typeof window & { BLUE_STAGE_PERSISTENCE_OK?: boolean }).BLUE_STAGE_PERSISTENCE_OK = ok;
-    window.dispatchEvent(new CustomEvent('blue-stage:persistence-status', { detail: { ok } }));
+    this.onPersistenceChange?.(ok);
   }
   private persist(): void {
     try {
@@ -225,10 +242,33 @@ export class BrowserGameEngine {
     }
   }
   private connectedPlayers(room: RoomRecord): Player[] { return room.state.players.filter((player) => player.connected).sort((a, b) => a.seat - b.seat); }
-  private nextConnectedAfterSeat(room: RoomRecord, seat: number): Player | null {
-    const connected = this.connectedPlayers(room);
+  /** Every player in turn-rotation order: the host's custom order in manual mode, otherwise seat order. */
+  private turnRotation(room: RoomRecord): Player[] {
+    const players = [...room.state.players].sort((a, b) => a.seat - b.seat);
+    if (room.state.settings.turnOrderMode !== 'manual') return players;
+    const rank = new Map(room.state.settings.turnOrder.map((playerId, index) => [playerId, index]));
+    return players.sort((a, b) => (rank.get(a.id) ?? Infinity) - (rank.get(b.id) ?? Infinity) || a.seat - b.seat);
+  }
+  private firstInRotation(room: RoomRecord): Player | null {
+    return this.turnRotation(room).find((player) => player.connected) ?? null;
+  }
+  /**
+   * The connected player after `playerId` in rotation order. A player who is no longer
+   * in the room continues from `removedSeat`, matching where their seat used to be.
+   */
+  private nextInRotation(room: RoomRecord, playerId: string | null, removedSeat?: number): Player | null {
+    const rotation = this.turnRotation(room);
+    const connected = rotation.filter((player) => player.connected);
     if (!connected.length) return null;
-    return connected.find((player) => player.seat > seat) ?? connected[0];
+    const index = rotation.findIndex((player) => player.id === playerId);
+    if (index < 0) {
+      return removedSeat === undefined ? connected[0] : connected.find((player) => player.seat > removedSeat) ?? connected[0];
+    }
+    for (let step = 1; step <= rotation.length; step += 1) {
+      const candidate = rotation[(index + step) % rotation.length];
+      if (candidate.connected) return candidate;
+    }
+    return null;
   }
   private currentQuestionParticipants(room: RoomRecord): Player[] {
     const ids = room.state.currentQuestion?.participantIds;
@@ -245,16 +285,12 @@ export class BrowserGameEngine {
     if (!connected.length) { room.state.turnPlayerId = null; return null; }
     const current = connected.find((player) => player.id === room.state.turnPlayerId);
     if (current) return current;
-    const priorSeat = room.state.players.find((player) => player.id === room.state.turnPlayerId)?.seat ?? 0;
-    const replacement = this.nextConnectedAfterSeat(room, priorSeat) ?? connected[0];
+    const replacement = this.nextInRotation(room, room.state.turnPlayerId) ?? connected[0];
     room.state.turnPlayerId = replacement.id;
     return replacement;
   }
   private advanceTurn(room: RoomRecord): void {
-    if (room.state.settings.turnOrderMode === 'manual') { this.ensureTurnPlayer(room); return; }
-    const currentSeat = room.state.players.find((player) => player.id === room.state.turnPlayerId)?.seat ?? 0;
-    const next = this.nextConnectedAfterSeat(room, currentSeat);
-    room.state.turnPlayerId = next?.id ?? null;
+    room.state.turnPlayerId = this.nextInRotation(room, room.state.turnPlayerId)?.id ?? null;
   }
   private finalParticipants(room: RoomRecord): Player[] {
     const ids = new Set(room.state.finalRound?.participantIds ?? []);
@@ -293,8 +329,7 @@ export class BrowserGameEngine {
     const requestedPacksCompatible = requestedPacks.length === requestedPackIds.length && requestedPacks.every((pack) => packSupportsGameMode(pack, gameMode));
     const fallbackPack = packsForGameMode(gameMode)[0];
     if (!fallbackPack && !requestedPacksCompatible) throw new Error(`No question packs are available for ${gameMode}`);
-    const selectedPackIds = requestedPacksCompatible ? requestedPackIds : [fallbackPack!.id];
-    const freeResponseReadSeconds = normalizeFreeResponseReadSeconds(settings?.freeResponseReadSeconds ?? DEFAULT_SETTINGS.freeResponseReadSeconds);
+    const selectedPackIds = (requestedPacksCompatible ? requestedPackIds : [fallbackPack!.id]).slice(0, 1);
     const presentationToken = randomToken();
     const state: RoomState = {
       code,
@@ -306,7 +341,7 @@ export class BrowserGameEngine {
       hostConnected: true,
       locked: false,
       players: [],
-      settings: { ...DEFAULT_SETTINGS, ...settings, gameMode, selectedPackIds, freeResponseReadSeconds, lockRoomOnStart: false, stealsEnabled: false },
+      settings: normalizeSettings({ ...DEFAULT_SETTINGS, ...settings, gameMode, selectedPackIds }, []),
       board: null,
       currentQuestion: null,
       timer: emptyTimer(),
@@ -458,8 +493,9 @@ export class BrowserGameEngine {
     const removedSeat = player.seat;
     if (current?.textResponses?.[playerId]) delete current.textResponses[playerId];
     room.state.players = room.state.players.filter((candidate) => candidate.id !== playerId);
+    room.state.settings.turnOrder = room.state.settings.turnOrder.filter((idValue) => idValue !== playerId);
     delete room.playerTokens[playerId];
-    if (removedTurnOwner) room.state.turnPlayerId = this.nextConnectedAfterSeat(room, removedSeat)?.id ?? null;
+    if (removedTurnOwner) room.state.turnPlayerId = this.nextInRotation(room, playerId, removedSeat)?.id ?? null;
 
     if (current && room.state.phase === 'question' && !current.answerRevealed) {
       if (current.responseMode === 'text') {
@@ -542,8 +578,11 @@ export class BrowserGameEngine {
       updates.freeResponseReadSeconds ?? room.state.settings.freeResponseReadSeconds,
       room.state.settings.freeResponseReadSeconds
     );
-    room.state.settings = { ...room.state.settings, ...updates, gameMode, selectedPackIds, freeResponseReadSeconds, lockRoomOnStart: false, stealsEnabled: false };
-    room.state.selectedPackIds = selectedPackIds;
+    room.state.settings = normalizeSettings(
+      { ...room.state.settings, ...updates, gameMode, selectedPackIds, freeResponseReadSeconds },
+      room.state.players.map((player) => player.id)
+    );
+    room.state.selectedPackIds = room.state.settings.selectedPackIds;
     this.persist();
     return this.snapshot(roomCode);
   }
@@ -642,7 +681,7 @@ export class BrowserGameEngine {
     room.state.gameStartedAt = null;
     room.state.gameEndedAt = null;
     room.state.players.forEach((player) => this.resetPlayerForGame(player));
-    room.state.turnPlayerId = this.connectedPlayers(room)[0]?.id ?? null;
+    room.state.turnPlayerId = this.firstInRotation(room)?.id ?? null;
     this.persist();
     return this.snapshot(roomCode);
   }
@@ -664,7 +703,7 @@ export class BrowserGameEngine {
     room.state.resultPlayerIds = [];
     room.finalQuestionId = null;
     room.state.players.forEach((player) => this.resetPlayerForGame(player));
-    room.state.turnPlayerId = this.connectedPlayers(room)[0]?.id ?? null;
+    room.state.turnPlayerId = this.firstInRotation(room)?.id ?? null;
     this.persist();
     return this.snapshot(roomCode);
   }
@@ -780,7 +819,7 @@ export class BrowserGameEngine {
     if (room.state.phase !== 'daily-double-wager' || !current?.dailyDoublePlayerId) throw new Error('No Daily Double wager is pending');
     const player = room.state.players.find((item) => item.id === current.dailyDoublePlayerId)!;
     const maximum = room.state.settings.allowWagerBeyondScore ? room.state.settings.maxWager : Math.min(room.state.settings.maxWager, Math.max(0, player.score));
-    if (!QUESTION_VALUES.includes(wager as (typeof QUESTION_VALUES)[number]) || wager > maximum) throw new Error('Choose an available preset Daily Double wager');
+    if (!QUESTION_VALUES.includes(wager as (typeof QUESTION_VALUES)[number]) || wager > maximum) throw new Error('Choose one of the preset Daily Double wagers');
     current.wager = wager;
     const tile = room.state.board?.questions.find((entry) => entry.questionId === current.questionId);
     if (tile) {
@@ -1299,10 +1338,11 @@ export class BrowserGameEngine {
     if (room.state.phase !== 'final-wager' || !room.state.finalRound) throw new Error('Final wagers are closed');
     if (!room.state.finalRound.participantIds.includes(player.id)) throw new Error('This seat is not participating in Final Round');
     if (player.finalWagerSubmitted) throw new Error('Your Final wager is already locked');
-    const { maxWager } = finalWagerRules(room.state, player.id);
     const rules = finalWagerRules(room.state, player.id);
     const allIn = rules.allInAllowed && player.score > 0 && wager === player.score;
-    if ((!QUESTION_VALUES.includes(wager as (typeof QUESTION_VALUES)[number]) && wager !== 0 && !allIn) || wager > maxWager) throw new Error('Choose an available Final preset: 0 and 1000 are the bounds, or All In');
+    const preset = wager === 0 || QUESTION_VALUES.includes(wager as (typeof QUESTION_VALUES)[number]);
+    if (!preset && !allIn) throw new Error('Choose an available preset or All In');
+    if (wager > rules.maxWager) throw new Error(`Final wager is capped at ${rules.maxWager.toLocaleString()}`);
     player.finalWager = wager;
     player.finalWagerSubmitted = true;
     player.stats.biggestWager = Math.max(player.stats.biggestWager, wager);

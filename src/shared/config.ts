@@ -43,8 +43,12 @@ export const DEFAULT_SETTINGS: GameSettings = {
   maxWager: 100000,
   localBuzzersEnabled: true,
   controllerBuzzersEnabled: true,
-  turnOrderMode: 'join-order'
+  turnOrderMode: 'join-order',
+  turnOrder: []
 };
+
+/** Cold Streak is a fixed rule rather than a lobby setting. */
+export const COLD_STREAK_THRESHOLD = 3;
 
 export interface GamePreset {
   id: 'casual' | 'fast' | 'competitive' | 'party';

@@ -543,20 +543,51 @@ describe('BrowserGameEngine production state', () => {
     expect(() => engine.reconnectPlayer(host.roomCode, player.playerId, player.reconnectToken)).not.toThrow();
   });
 
-  it('lets the host set an authoritative turn and manual mode keeps it after a clue', () => {
+  it('rotates through the host custom order in manual mode, starting from any host-chosen turn', () => {
     const { engine, host } = setup({ dailyDoublesEnabled: false, finalRoundEnabled: false, turnOrderMode: 'manual' });
     const one = addPlayer(engine, host.roomCode, 'One');
     const two = addPlayer(engine, host.roomCode, 'Two');
+    const three = addPlayer(engine, host.roomCode, 'Three');
+    engine.updateSettings(host.roomCode, host.hostToken, { turnOrder: [three.playerId, one.playerId, 'unknown-player', one.playerId] });
+    expect(engine.snapshot(host.roomCode).settings.turnOrder).toEqual([three.playerId, one.playerId]);
+
+    const finishClue = () => {
+      const tile = firstUnused(engine, host.roomCode);
+      engine.selectQuestion(host.roomCode, host.hostToken, tile.questionId);
+      engine.revealAnswer(host.roomCode, host.hostToken);
+      engine.advanceToBoard(host.roomCode, host.hostToken);
+    };
     engine.startGame(host.roomCode, host.hostToken);
-    engine.setTurnPlayer(host.roomCode, host.hostToken, two.playerId);
+    // Custom order first, then unlisted players by seat: Three, One, Two.
+    expect(engine.snapshot(host.roomCode).turnPlayerId).toBe(three.playerId);
+    finishClue();
+    expect(engine.snapshot(host.roomCode).turnPlayerId).toBe(one.playerId);
+    finishClue();
     expect(engine.snapshot(host.roomCode).turnPlayerId).toBe(two.playerId);
 
-    const tile = firstUnused(engine, host.roomCode);
-    engine.selectQuestion(host.roomCode, host.hostToken, tile.questionId);
-    engine.revealAnswer(host.roomCode, host.hostToken);
-    engine.advanceToBoard(host.roomCode, host.hostToken);
-    expect(engine.snapshot(host.roomCode).turnPlayerId).toBe(two.playerId);
-    expect(engine.snapshot(host.roomCode).players.find((player) => player.id === one.playerId)?.connected).toBe(true);
+    engine.setTurnPlayer(host.roomCode, host.hostToken, three.playerId);
+    finishClue();
+    expect(engine.snapshot(host.roomCode).turnPlayerId).toBe(one.playerId);
+  });
+
+  it('enforces fixed product rules on requested and restored settings', () => {
+    const { engine, host } = setup({ coldStreakThreshold: 6, selectedPackIds: ['disney', 'music'], mixedPacks: true, lockRoomOnStart: true });
+    const settings = engine.snapshot(host.roomCode).settings;
+    expect(settings.coldStreakThreshold).toBe(3);
+    expect(settings.selectedPackIds).toEqual(['disney']);
+    expect(settings.mixedPacks).toBe(false);
+    expect(settings.lockRoomOnStart).toBe(false);
+    engine.updateSettings(host.roomCode, host.hostToken, { coldStreakThreshold: 8 });
+    expect(engine.snapshot(host.roomCode).settings.coldStreakThreshold).toBe(3);
+  });
+
+  it('drops a removed player from the custom turn order', () => {
+    const { engine, host } = setup({ turnOrderMode: 'manual' });
+    const one = addPlayer(engine, host.roomCode, 'One');
+    const two = addPlayer(engine, host.roomCode, 'Two');
+    engine.updateSettings(host.roomCode, host.hostToken, { turnOrder: [two.playerId, one.playerId] });
+    engine.removePlayer(host.roomCode, host.hostToken, two.playerId);
+    expect(engine.snapshot(host.roomCode).settings.turnOrder).toEqual([one.playerId]);
   });
 
   it('rotates forward when the current turn owner disconnects on the board', () => {
@@ -795,7 +826,7 @@ describe('BrowserGameEngine production state', () => {
     engine.adjustScore(host.roomCode, host.hostToken, leader.playerId, 20000);
     engine.adjustScore(host.roomCode, host.hostToken, runner.playerId, 1000);
     engine.beginFinalWagers(host.roomCode, host.hostToken);
-    expect(() => engine.submitFinalWager(host.roomCode, leader.playerId, leader.reconnectToken, 1100)).toThrow(/0 and 1000/i);
+    expect(() => engine.submitFinalWager(host.roomCode, leader.playerId, leader.reconnectToken, 1100)).toThrow(/preset/i);
     expect(() => engine.submitFinalWager(host.roomCode, leader.playerId, leader.reconnectToken, 1000)).not.toThrow();
   });
 

@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { BrowserGameEngine, type RandomSource } from '../src/lib/browserGameEngine';
-import '../src/lib/turnHistoryPolicy';
 import { calculateComebackAward, comebackBoostsUnlocked } from '../src/lib/comebackScoring';
 import type { RoomSnapshot } from '../src/shared/types';
 

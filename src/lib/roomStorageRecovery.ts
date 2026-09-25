@@ -109,16 +109,3 @@ export function recoverRoomStorage(storage: Storage = localStorage): StoredRoom[
   if (primaryRaw !== serialized) safeSetItem(storage, PRIMARY_KEY, serialized);
   return merged;
 }
-
-if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
-  recoverRoomStorage();
-  let scheduled = false;
-  window.addEventListener('storage', (event) => {
-    if (event.storageArea !== localStorage || (event.key !== PRIMARY_KEY && event.key !== BACKUP_KEY) || scheduled) return;
-    scheduled = true;
-    queueMicrotask(() => {
-      scheduled = false;
-      recoverRoomStorage();
-    });
-  });
-}

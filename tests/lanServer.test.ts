@@ -325,6 +325,52 @@ describe('LAN Socket.IO game server', () => {
     expect(game!.engine.snapshot(host.roomCode).players.find((player) => player.id === one.playerId)?.score).toBe(100);
   });
 
+  it('does not broadcast room state for read-only requests', async () => {
+    await start();
+    const hostSocket = await connect();
+    const host = await request<HostRoomCredentials>(hostSocket, 'room:create', {});
+    const playerSocket = await connect();
+    const player = await join(playerSocket, host.roomCode, 'Quiet');
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    let broadcasts = 0;
+    playerSocket.on('room:state', () => { broadcasts += 1; });
+    await request(hostSocket, 'host:get-player-health', hostPayload(host));
+    await request(hostSocket, 'host:get-presentation-count', hostPayload(host));
+    await request(playerSocket, 'player:heartbeat', playerPayload(player));
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(broadcasts).toBe(0);
+    await request(hostSocket, 'host:update-settings', hostPayload(host, { updates: { timerSeconds: 20 } }));
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(broadcasts).toBe(1);
+  });
+
+  it('tells the Host when saving rooms fails and when it recovers', async () => {
+    const storage = new MemoryStorage();
+    let failWrites = false;
+    const setItem = storage.setItem.bind(storage);
+    storage.setItem = (key: string, value: string) => {
+      if (failWrites) throw new Error('disk full');
+      setItem(key, value);
+    };
+    server = createServer();
+    game = createGameServer({ httpServer: server, storage });
+    await new Promise<void>((resolve) => server!.listen(0, '127.0.0.1', resolve));
+    const address = server.address();
+    if (!address || typeof address === 'string') throw new Error('Test HTTP server has no TCP address');
+    url = `http://127.0.0.1:${address.port}`;
+
+    const hostSocket = await connect();
+    const statuses: boolean[] = [];
+    hostSocket.on('server:persistence', (status: { ok: boolean }) => statuses.push(status.ok));
+    const host = await request<HostRoomCredentials>(hostSocket, 'room:create', {});
+    failWrites = true;
+    await request(hostSocket, 'host:update-settings', hostPayload(host, { updates: { timerSeconds: 20 } }));
+    failWrites = false;
+    await request(hostSocket, 'host:update-settings', hostPayload(host, { updates: { timerSeconds: 30 } }));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(statuses).toEqual([true, false, true]);
+  });
+
   it('keeps unrevealed Final answers private on Presentation and supports a room-preserving rematch', async () => {
     await start();
     const hostSocket = await connect();

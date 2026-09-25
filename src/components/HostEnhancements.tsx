@@ -4,7 +4,7 @@ import type { HostRoomCredentials, RoomSnapshot } from '../shared/types';
 import { emitAck, getPlayerConnectionHealth, socket, type PlayerConnectionHealth } from '../lib/socket';
 import { audio } from '../lib/audio';
 import { readAccessibility, saveAccessibility, type AccessibilityPreferences } from '../lib/accessibility';
-import { readActiveHostCredentials } from '../lib/hostCredentials';
+import { HOST_CREDENTIALS_EVENT, readActiveHostCredentials } from '../lib/hostCredentials';
 import { ComebackBoostNotice } from './ComebackBoostNotice';
 import { useOutsideDismiss } from '../lib/useOutsideDismiss';
 type TransitionCard = { key: string; eyebrow: string; title: string; detail?: string; categories?: string[] };
@@ -35,7 +35,7 @@ export function HostEnhancements() {
   const [transition, setTransition] = useState<TransitionCard | null>(null);
   const [accessibility, setAccessibility] = useState<AccessibilityPreferences>(() => readAccessibility());
   const [actionMessage, setActionMessage] = useState('');
-  const [persistenceOk, setPersistenceOk] = useState(() => (window as typeof window & { BLUE_STAGE_PERSISTENCE_OK?: boolean }).BLUE_STAGE_PERSISTENCE_OK !== false);
+  const [persistenceOk, setPersistenceOk] = useState(true);
   const lastPhaseRef = useRef<RoomSnapshot['phase'] | null>(null);
   const lastGameStartedRef = useRef<number | null>(null);
   const transitionHydratedRef = useRef(false);
@@ -57,14 +57,18 @@ export function HostEnhancements() {
       });
     };
     syncCredentials();
-    const timer = window.setInterval(syncCredentials, 250);
-    return () => window.clearInterval(timer);
+    window.addEventListener(HOST_CREDENTIALS_EVENT, syncCredentials);
+    window.addEventListener('storage', syncCredentials);
+    return () => {
+      window.removeEventListener(HOST_CREDENTIALS_EVENT, syncCredentials);
+      window.removeEventListener('storage', syncCredentials);
+    };
   }, []);
 
   useEffect(() => {
-    const onPersistence = (event: Event) => setPersistenceOk(Boolean((event as CustomEvent<{ ok: boolean }>).detail?.ok));
-    window.addEventListener('blue-stage:persistence-status', onPersistence);
-    return () => window.removeEventListener('blue-stage:persistence-status', onPersistence);
+    const onPersistence = (status: { ok?: boolean }) => setPersistenceOk(status?.ok !== false);
+    socket.on('server:persistence', onPersistence);
+    return () => socket.off('server:persistence', onPersistence);
   }, []);
 
   useEffect(() => {
@@ -77,13 +81,15 @@ export function HostEnhancements() {
     return () => socket.off('room:state', onState);
   }, []);
 
+  // Connection health is only shown in the drawer and the pre-game check, so only poll while one is open.
+  const healthRoomCode = room && credentials?.roomCode === room.code && (drawerOpen || preflightOpen) ? room.code : null;
   useEffect(() => {
-    if (!room || !credentials || credentials.roomCode !== room.code) return;
-    const update = () => setHealth(getPlayerConnectionHealth(room.code));
+    if (!healthRoomCode) return;
+    const update = () => setHealth(getPlayerConnectionHealth(healthRoomCode));
     update();
     const timer = window.setInterval(update, 1000);
     return () => window.clearInterval(timer);
-  }, [room, credentials]);
+  }, [healthRoomCode]);
 
   useEffect(() => {
     if (!room) return;

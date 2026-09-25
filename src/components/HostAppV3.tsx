@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { GameSettings, HostRoomCredentials, PackSummary, RoomSnapshot } from '../shared/types';
 import { clampDailyDoubleCount, DEFAULT_SETTINGS, QUESTION_VALUES, settingsForGameLength } from '../shared/config';
 import { GAME_MODES, gameModeDefinition } from '../shared/gameModes';
@@ -23,6 +23,7 @@ import { readAccessibility } from '../lib/accessibility';
 import { PlayerAvatar } from './PlayerAvatar';
 import { normalizePlayerCustomization } from '../shared/playerCustomization';
 import { useOutsideDismiss } from '../lib/useOutsideDismiss';
+import { PackFamilyPicker, TurnOrderEditor } from './LobbySetup';
 type HostStored = HostRoomCredentials;
 type HistoryAttempt = { playerId: string; playerName: string; playerAvatar: string; correct: boolean };
 type QuestionHistoryEntry = {
@@ -171,7 +172,7 @@ export function HostAppV3() {
         const parsed = readActiveHostCredentials();
         if (parsed) {
           try {
-            let snapshot = await emitAck<RoomSnapshot>('host:reconnect', { roomCode: parsed.roomCode, hostToken: parsed.hostToken, allowAuthorityTakeover: true });
+            let snapshot = await emitAck<RoomSnapshot>('host:reconnect', { roomCode: parsed.roomCode, hostToken: parsed.hostToken });
             if (forceFresh) {
               localStorage.removeItem(`blue-stage-history-${parsed.roomCode}`);
               snapshot = await emitAck<RoomSnapshot>('host:reset-game', { roomCode: parsed.roomCode, hostToken: parsed.hostToken });
@@ -226,18 +227,6 @@ export function HostAppV3() {
 
   const musicState = phaseMusic(room);
   useEffect(() => { void audio.setMusic(musicState); }, [musicState]);
-
-  useEffect(() => {
-    if (!room || room.phase !== 'lobby' || !credentials) return;
-    const updates: Partial<GameSettings> = {};
-    if (room.settings.stealsEnabled) updates.stealsEnabled = false;
-    if (room.settings.lockRoomOnStart) updates.lockRoomOnStart = false;
-    if (room.settings.selectedPackIds.length > 1 || room.settings.mixedPacks) {
-      updates.selectedPackIds = [room.settings.selectedPackIds[0] ?? DEFAULT_SETTINGS.selectedPackIds[0]];
-      updates.mixedPacks = false;
-    }
-    if (Object.keys(updates).length) void perform('host:update-settings', { updates });
-  }, [room, credentials, perform]);
 
   useEffect(() => {
     if (!credentials?.roomCode) return;
@@ -382,25 +371,32 @@ export function HostAppV3() {
     if (modifierTimerRef.current !== null) window.clearTimeout(modifierTimerRef.current);
   }, []);
 
+  // Local buzzer listeners read the latest room through a ref so snapshots don't tear them down.
+  const roomRef = useRef(room);
+  useLayoutEffect(() => { roomRef.current = room; }, [room]);
+  const localBuzzersEnabled = Boolean(room?.settings.localBuzzersEnabled);
+  const controllerBuzzersOpen = Boolean(room?.settings.controllerBuzzersEnabled && room.currentQuestion?.buzzOpen);
+
   useEffect(() => {
-    if (!room || !room.settings.localBuzzersEnabled) return;
+    if (!localBuzzersEnabled) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.repeat || !room.currentQuestion?.buzzOpen) return;
+      const current = roomRef.current;
+      if (event.repeat || !current?.currentQuestion?.buzzOpen) return;
       const seat = Number(event.key);
-      const player = room.players.find((candidate) => candidate.connected && candidate.seat === seat);
+      const player = current.players.find((candidate) => candidate.connected && candidate.seat === seat);
       if (player) void perform('host:local-buzz', { playerId: player.id });
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [room, perform]);
+  }, [localBuzzersEnabled, perform]);
 
   useEffect(() => {
-    if (!room?.settings.controllerBuzzersEnabled || !room.currentQuestion?.buzzOpen) return;
+    if (!controllerBuzzersOpen) return;
     let frame = 0;
     const previous = new Map<number, boolean[]>();
     const poll = () => {
       navigator.getGamepads?.().forEach((pad, index) => {
-        const player = room.players.find((candidate) => candidate.connected && candidate.seat === index + 1);
+        const player = roomRef.current?.players.find((candidate) => candidate.connected && candidate.seat === index + 1);
         if (!pad || !player) return;
         const prev = previous.get(index) ?? [];
         const pressed = pad.buttons.some((button, buttonIndex) => button.pressed && !prev[buttonIndex]);
@@ -411,7 +407,7 @@ export function HostAppV3() {
     };
     frame = requestAnimationFrame(poll);
     return () => cancelAnimationFrame(frame);
-  }, [room, perform]);
+  }, [controllerBuzzersOpen, perform]);
 
   useEffect(() => {
     const previous = lastPenaltySnapshotRef.current;
@@ -720,7 +716,7 @@ export function HostAppV3() {
           <button className="primary-button giant start-button" disabled={busy} onClick={() => void perform('host:start-game')}>Start Game</button>
         </article>
 
-        <article className="settings-card panel-v2">
+        <article className="settings-card panel-v2 enhanced-lobby-setup">
           <div className="section-kicker">SETUP</div>
           <h2>Game mode</h2>
           <p className="settings-helper">Same board and multiplayer system, different question flow.</p>
@@ -734,25 +730,22 @@ export function HostAppV3() {
           </div>
           <h2>Question pack</h2>
           <p className="settings-helper">Choose one pack for this game.</p>
-          <div className="pack-grid-v2">{compatiblePacks.map((pack) => {
-            const selected = settings.selectedPackIds[0] === pack.id;
-            return <button key={pack.id} aria-pressed={selected} className={`pack-card-v2 ${selected ? 'selected' : ''}`} onClick={() => {
-              const dailyDoubleCount = clampDailyDoubleCount(settings.dailyDoubleCount, pack.questionCount);
-              void updateSettings({ selectedPackIds: [pack.id], mixedPacks: false, dailyDoubleCount, dailyDoublesEnabled: dailyDoubleCount > 0 });
-            }}><strong>{pack.title}</strong><span>{pack.theme}</span><small>{pack.questionCount} questions</small></button>;
-          })}</div>
+          <PackFamilyPicker packs={compatiblePacks} selectedId={settings.selectedPackIds[0]} onSelect={(pack) => {
+            const dailyDoubleCount = clampDailyDoubleCount(settings.dailyDoubleCount, pack.questionCount);
+            void updateSettings({ selectedPackIds: [pack.id], dailyDoubleCount, dailyDoublesEnabled: dailyDoubleCount > 0 });
+          }} />
           <h2>Rules</h2>
           <div className="settings-grid-v2">
             <label data-tooltip="Quick uses 16 questions, Standard 25, and Marathon 36 including the $1000 row. Changing length resets Daily Doubles to 2, 4, or 6; you can still adjust that count manually afterward.">Game length<select value={settings.gameLength} onChange={(event) => void updateGameLength(event.target.value as GameSettings['gameLength'])}><option value="quick">Quick · 16 questions</option><option value="standard">Standard · 25 questions</option><option value="marathon">Marathon · 36 questions</option></select></label>
             <label data-tooltip="How long players have once answering or buzzing is active. Unlimited disables the countdown.">Answer timer<select value={settings.timerSeconds ?? 'none'} onChange={(event) => void updateSettings({ timerSeconds: event.target.value === 'none' ? null : Number(event.target.value) as GameSettings['timerSeconds'] })}>{[5,10,15,20,30].map((seconds)=><option key={seconds} value={seconds}>{seconds}s</option>)}<option value="none">Unlimited</option></select></label>
             <label data-tooltip={gameMode.id === 'free-response' ? 'How long everyone gets to read the question before answer boxes open.' : 'Reading time only applies to Free Response mode.'}>Reading time<select disabled={gameMode.id !== 'free-response'} value={settings.freeResponseReadSeconds} onChange={(event) => void updateSettings({ freeResponseReadSeconds: Number(event.target.value) })}>{[0,3,5,7,10,15].map((seconds)=><option key={seconds} value={seconds}>{seconds === 0 ? 'Off' : `${seconds}s`}</option>)}</select></label>
-            <label data-tooltip="By default, question selection rotates through players in join order. Manual keeps the selected picker until you change it.">Turn rotation<select value={settings.turnOrderMode} onChange={(event) => void updateSettings({ turnOrderMode: event.target.value as GameSettings['turnOrderMode'] })}><option value="join-order">Join order · rotate</option><option value="manual">Manual · host selects</option></select></label>
-            <label data-tooltip={gameMode.dailyDoubles ? `How many hidden Daily Doubles are placed on the board. Maximum for this pack: ${dailyDoubleMax}.` : 'Free Response keeps standard board questions open to everyone, so Daily Doubles are disabled in this mode.'}>Daily Doubles<input type="number" min="0" max={dailyDoubleMax} step="1" disabled={!gameMode.dailyDoubles} value={gameMode.dailyDoubles ? settings.dailyDoubleCount : 0} onChange={(event) => void updateSettings({ dailyDoubleCount: Number(event.target.value), dailyDoublesEnabled: Number(event.target.value) > 0 })} onBlur={(event) => {
+            <label data-tooltip="Join order rotates by seat. Manual lets you drag players into a custom rotation order.">Turn rotation<select value={settings.turnOrderMode} onChange={(event) => void updateSettings({ turnOrderMode: event.target.value as GameSettings['turnOrderMode'] })}><option value="join-order">Join order · rotate</option><option value="manual">Manual · drag order</option></select></label>
+            <label data-tooltip={gameMode.dailyDoubles ? 'Choose how many hidden Daily Doubles appear on this board. Set 0 to disable them.' : 'Daily Doubles are disabled in Free Response mode so every standard board question stays open to everyone.'}>Daily Doubles<input type="number" min="0" max={dailyDoubleMax} step="1" title={gameMode.dailyDoubles ? 'Daily Double count' : 'Daily Doubles are unavailable in this game mode'} disabled={!gameMode.dailyDoubles} value={gameMode.dailyDoubles ? settings.dailyDoubleCount : 0} onChange={(event) => void updateSettings({ dailyDoubleCount: Number(event.target.value), dailyDoublesEnabled: Number(event.target.value) > 0 })} onBlur={(event) => {
               const dailyDoubleCount = clampDailyDoubleCount(Number(event.currentTarget.value), dailyDoubleMax);
               if (dailyDoubleCount !== settings.dailyDoubleCount) void updateSettings({ dailyDoubleCount, dailyDoublesEnabled: dailyDoubleCount > 0 });
             }} /></label>
-            <label data-tooltip="Misses in a row before the Cold Streak effect appears.">Cold streak<input type="number" min="2" max="8" value={settings.coldStreakThreshold} onChange={(event) => void updateSettings({ coldStreakThreshold: Number(event.target.value) })} /></label>
           </div>
+          {settings.turnOrderMode === 'manual' && <TurnOrderEditor players={room.players} turnOrder={settings.turnOrder} onReorder={(turnOrder) => void updateSettings({ turnOrder })} />}
           <div className="toggle-grid-v2">
             <label className="toggle-v2" data-tooltip="Allow incorrect answers to push a player's score below zero."><input type="checkbox" checked={settings.allowNegativeScores} onChange={(event) => void updateSettings({ allowNegativeScores: event.target.checked })} /><span>Negative scores</span></label>
             <label className="toggle-v2" data-tooltip="The last six board questions are worth 2× and the last three are worth 3×."><input type="checkbox" checked={settings.lateGameModifiers} onChange={(event) => void updateSettings({ lateGameModifiers: event.target.checked })} /><span>Double / Triple finale</span></label>

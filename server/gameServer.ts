@@ -3,11 +3,9 @@ import { networkInterfaces } from 'node:os';
 import { join } from 'node:path';
 import { Server, type Socket } from 'socket.io';
 import type { GameSettings, HostRoomCredentials, PlayerJoinCredentials, RoomSnapshot } from '../src/shared/types';
-import { QUESTION_VALUES } from '../src/shared/types';
 import { playerJoinSchema } from '../src/shared/validation';
 import { BrowserGameEngine } from '../src/lib/browserGameEngine';
 import { sanitizeRoomSnapshot } from '../src/lib/snapshotSecurity';
-import { finalWagerRules } from '../src/lib/finalWagerRules';
 import { createFileRoomStorage } from './storage';
 
 export type GameRequest = { requestId: string; event: string; payload: Record<string, unknown> };
@@ -49,6 +47,8 @@ export interface PlayerConnectionHealth {
   quality: 'good' | 'fair' | 'stale' | 'offline';
 }
 
+/** Requests that never change room state, so they skip snapshots and broadcasts. */
+const READ_ONLY_EVENTS = new Set(['player:heartbeat', 'host:get-player-health', 'host:get-presentation-count', 'host:test-controllers']);
 const PLAYER_STALE_MS = 30_000;
 const HEALTH_FAIR_MS = 7_000;
 const HEALTH_STALE_MS = 15_000;
@@ -75,9 +75,6 @@ function failure(error: unknown): string { return error instanceof Error ? error
 function keyForPlayer(roomCode: string, playerId: string): string { return `${roomCode}:${playerId}`; }
 function roomChannel(roomCode: string): string { return `room:${roomCode}`; }
 function isRecord(value: unknown): value is Record<string, unknown> { return Boolean(value && typeof value === 'object' && !Array.isArray(value)); }
-function presetWager(wager: number, includeZero = false): boolean {
-  return (includeZero && wager === 0) || QUESTION_VALUES.includes(wager as (typeof QUESTION_VALUES)[number]);
-}
 function gameStartedAt(payload: Record<string, unknown>): number {
   const value = Number(payload.gameStartedAt);
   if (!Number.isFinite(value) || value <= 0) throw new Error('Missing or stale game context');
@@ -108,6 +105,12 @@ export function createGameServer(options: GameServerOptions): GameServer {
   };
 
   function getSocket(id: string | undefined): Socket | undefined { return id ? io.sockets.sockets.get(id) : undefined; }
+  function sendPersistenceStatus(socket: Socket | undefined): void {
+    socket?.emit('server:persistence', { ok: engine.persistenceOk });
+  }
+  engine.onPersistenceChange = () => {
+    for (const socketId of hostOwners.values()) sendPersistenceStatus(getSocket(socketId));
+  };
   function getPresentationConnectionCount(roomCode: string): number {
     const code = cleanCode(roomCode);
     let count = 0;
@@ -197,7 +200,10 @@ export function createGameServer(options: GameServerOptions): GameServer {
       : identity.role === 'player' && identity.playerId ? playerOwners.get(keyForPlayer(identity.roomCode, identity.playerId)) : undefined;
     identities.set(socket.id, identity);
     socket.join(roomChannel(identity.roomCode));
-    if (identity.role === 'host') hostOwners.set(identity.roomCode, socket.id);
+    if (identity.role === 'host') {
+      hostOwners.set(identity.roomCode, socket.id);
+      sendPersistenceStatus(socket);
+    }
     if (identity.role === 'player' && identity.playerId) {
       const key = keyForPlayer(identity.roomCode, identity.playerId);
       playerOwners.set(key, socket.id);
@@ -325,11 +331,7 @@ export function createGameServer(options: GameServerOptions): GameServer {
       case 'host:reset-game': return engine.resetGame(roomCode, hostToken);
       case 'host:select-question': return engine.selectQuestion(roomCode, hostToken, String(payload.questionId ?? ''), payload.dailyDoublePlayerId ? String(payload.dailyDoublePlayerId) : undefined);
       case 'host:cancel-question': return engine.cancelQuestion(roomCode, hostToken);
-      case 'host:daily-double-wager': {
-        const wager = Number(payload.wager);
-        if (!presetWager(wager)) throw new Error('Choose one of the preset Daily Double wagers');
-        return engine.setDailyDoubleWager(roomCode, hostToken, wager);
-      }
+      case 'host:daily-double-wager': return engine.setDailyDoubleWager(roomCode, hostToken, Number(payload.wager));
       case 'host:open-buzzers': return engine.openBuzzers(roomCode, hostToken);
       case 'host:close-buzzers': return engine.closeBuzzers(roomCode, hostToken);
       case 'host:local-buzz': return engine.localBuzz(roomCode, hostToken, String(payload.playerId ?? ''));
@@ -368,24 +370,11 @@ export function createGameServer(options: GameServerOptions): GameServer {
         return { accepted: result.accepted, reason: result.reason };
       }
       case 'player:text-response': return engine.submitTextResponse(roomCode, identity.playerId!, identity.token, String(payload.answer ?? ''), questionId(payload), gameStartedAt(payload));
-      case 'player:daily-double-wager': {
-        const wager = Number(payload.wager);
-        if (!presetWager(wager)) throw new Error('Choose one of the preset Daily Double wagers');
-        return engine.submitDailyDoubleWager(roomCode, identity.playerId!, identity.token, wager, questionId(payload), gameStartedAt(payload));
-      }
-      case 'player:final-wager': {
-        const wager = Number(payload.wager);
-        const started = gameStartedAt(payload);
-        const snapshot = engine.snapshot(roomCode);
-        const player = snapshot.players.find((candidate) => candidate.id === identity.playerId);
-        if (!player) throw new Error('Player not found');
-        const rules = finalWagerRules(snapshot, identity.playerId!);
-        const allIn = rules.allInAllowed && wager === player.score;
-        if (!presetWager(wager, true) && !allIn) throw new Error('Choose an available preset or All In');
-        if (wager > rules.maxWager) throw new Error(`Final wager is capped at ${rules.maxWager.toLocaleString()}`);
-        engine.submitFinalWager(roomCode, identity.playerId!, identity.token, wager, started);
+      case 'player:daily-double-wager':
+        return engine.submitDailyDoubleWager(roomCode, identity.playerId!, identity.token, Number(payload.wager), questionId(payload), gameStartedAt(payload));
+      case 'player:final-wager':
+        engine.submitFinalWager(roomCode, identity.playerId!, identity.token, Number(payload.wager), gameStartedAt(payload));
         return null;
-      }
       case 'player:final-answer':
         engine.submitFinalAnswer(roomCode, identity.playerId!, identity.token, String(payload.answer ?? ''), gameStartedAt(payload));
         return null;
@@ -415,11 +404,12 @@ export function createGameServer(options: GameServerOptions): GameServer {
   }
   async function runRequest(socket: Socket, request: GameRequest): Promise<GameReply> {
     const roomCode = cleanCode(request.payload.roomCode);
-    const before = roomCode ? snapshotOrNull(roomCode) : null;
+    const readOnly = READ_ONLY_EVENTS.has(request.event);
+    const before = roomCode && !readOnly ? snapshotOrNull(roomCode) : null;
     try {
       const data = await dispatch(socket, request.event, request.payload);
       const changedRoom = roomCode || (isRecord(data) ? cleanCode(data.roomCode) : '');
-      if (changedRoom && request.event !== 'player:heartbeat') {
+      if (changedRoom && !readOnly) {
         const after = snapshotOrNull(changedRoom);
         if (request.event !== 'host:reset-game') emitScoreDiff(changedRoom, before, after, request.requestId);
         emitRoom(changedRoom);

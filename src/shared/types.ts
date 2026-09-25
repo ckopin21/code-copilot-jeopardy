@@ -88,8 +88,10 @@ export interface GameSettings {
   maxWager: number;
   localBuzzersEnabled: boolean;
   controllerBuzzersEnabled: boolean;
-  /** Join order rotates automatically; manual keeps the host-selected picker until changed. */
+  /** Join order rotates by seat; manual rotates through the host's custom `turnOrder`. */
   turnOrderMode: 'join-order' | 'manual';
+  /** Player ids in the host's custom rotation. Unlisted players follow in seat order. */
+  turnOrder: string[];
 }
 
 export interface PlayerStats {

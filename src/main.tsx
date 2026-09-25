@@ -1,8 +1,5 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import './lib/roomStorageRecovery';
-import './lib/turnHistoryPolicy';
-import './lib/lobbySetupEnhancements';
 import './lib/hostFullscreenControl';
 import './lib/defaultBackgroundTrack';
 import App from './App';

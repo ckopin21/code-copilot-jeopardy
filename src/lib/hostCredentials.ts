@@ -27,10 +27,18 @@ export function readActiveHostCredentials(): HostRoomCredentials | null {
   return readTabHostCredentials() ?? readSavedHostCredentials();
 }
 
+/** Fired on `window` whenever this tab writes or clears Host credentials. */
+export const HOST_CREDENTIALS_EVENT = 'blue-stage:host-credentials';
+
+function announceChange(): void {
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(HOST_CREDENTIALS_EVENT));
+}
+
 export function writeHostCredentials(credentials: HostRoomCredentials): void {
   const serialized = JSON.stringify(credentials);
   localStorage.setItem(HOST_STORAGE_KEY, serialized);
   sessionStorage.setItem(HOST_TAB_KEY, serialized);
+  announceChange();
 }
 
 export function clearHostCredentials(credentials?: HostRoomCredentials | null): void {
@@ -38,4 +46,5 @@ export function clearHostCredentials(credentials?: HostRoomCredentials | null): 
   if (!credentials || active?.roomCode === credentials.roomCode) sessionStorage.removeItem(HOST_TAB_KEY);
   const saved = readSavedHostCredentials();
   if (!credentials || saved?.roomCode === credentials.roomCode) localStorage.removeItem(HOST_STORAGE_KEY);
+  announceChange();
 }

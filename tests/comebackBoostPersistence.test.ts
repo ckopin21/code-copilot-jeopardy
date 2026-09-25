@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { BrowserGameEngine, type RandomSource } from '../src/lib/browserGameEngine';
-import '../src/lib/turnHistoryPolicy';
 import { calculateComebackAward } from '../src/lib/comebackScoring';
 
 class MemoryStorage implements Storage {

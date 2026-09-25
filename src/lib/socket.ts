@@ -45,7 +45,7 @@ export interface SocketRuntimeOptions {
 
 const REQUEST_TIMEOUT_MS = 8_000;
 const CONNECT_TIMEOUT_MS = 10_000;
-const EVENT_NAMES = ['room:state', 'room:score', 'host:credentials', 'presentation:status', 'player:suspended', 'player:removed', 'preflight:test'] as const;
+const EVENT_NAMES = ['room:state', 'room:score', 'host:credentials', 'presentation:status', 'player:suspended', 'player:removed', 'preflight:test', 'server:persistence'] as const;
 
 export function createSocketRuntime(options: SocketRuntimeOptions = {}): SocketRuntime {
   const browser = typeof window !== 'undefined';
