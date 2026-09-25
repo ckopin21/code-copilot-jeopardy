@@ -1,0 +1,6 @@
+# Keep one line-ending style for every contributor and OS.
+* text=auto eol=lf
+*.bat text eol=crlf
+*.mp3 binary
+*.png binary
+*.jpg binary

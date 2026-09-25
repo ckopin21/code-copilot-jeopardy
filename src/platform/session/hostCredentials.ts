@@ -1,7 +1,9 @@
 import type { HostRoomCredentials } from '../rooms/types';
+import { activeStorageNamespace } from './activeGame';
 
-export const HOST_STORAGE_KEY = 'blue-stage-host-room';
-const HOST_TAB_KEY = 'blue-stage-host-room-tab';
+// Saved per game: `<namespace>-host-room` survives the browser; the `-tab` copy pins this tab to its room.
+const savedKey = () => `${activeStorageNamespace()}-host-room`;
+const tabKey = () => `${activeStorageNamespace()}-host-room-tab`;
 
 function parse(raw: string | null): HostRoomCredentials | null {
   if (!raw) return null;
@@ -16,11 +18,11 @@ function parse(raw: string | null): HostRoomCredentials | null {
 }
 
 export function readSavedHostCredentials(): HostRoomCredentials | null {
-  return parse(localStorage.getItem(HOST_STORAGE_KEY));
+  return parse(localStorage.getItem(savedKey()));
 }
 
 export function readTabHostCredentials(): HostRoomCredentials | null {
-  return parse(sessionStorage.getItem(HOST_TAB_KEY));
+  return parse(sessionStorage.getItem(tabKey()));
 }
 
 export function readActiveHostCredentials(): HostRoomCredentials | null {
@@ -36,15 +38,15 @@ function announceChange(): void {
 
 export function writeHostCredentials(credentials: HostRoomCredentials): void {
   const serialized = JSON.stringify(credentials);
-  localStorage.setItem(HOST_STORAGE_KEY, serialized);
-  sessionStorage.setItem(HOST_TAB_KEY, serialized);
+  localStorage.setItem(savedKey(), serialized);
+  sessionStorage.setItem(tabKey(), serialized);
   announceChange();
 }
 
 export function clearHostCredentials(credentials?: HostRoomCredentials | null): void {
   const active = readTabHostCredentials();
-  if (!credentials || active?.roomCode === credentials.roomCode) sessionStorage.removeItem(HOST_TAB_KEY);
+  if (!credentials || active?.roomCode === credentials.roomCode) sessionStorage.removeItem(tabKey());
   const saved = readSavedHostCredentials();
-  if (!credentials || saved?.roomCode === credentials.roomCode) localStorage.removeItem(HOST_STORAGE_KEY);
+  if (!credentials || saved?.roomCode === credentials.roomCode) localStorage.removeItem(savedKey());
   announceChange();
 }

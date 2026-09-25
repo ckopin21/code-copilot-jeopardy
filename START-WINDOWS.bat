@@ -24,7 +24,7 @@ call npm run build
 if errorlevel 1 goto :fail
 
 echo Starting game...
-start "Blue Stage Trivia" cmd /k "npm start"
+start "Blue Stage Trivia" cmd /k "npm run serve"
 timeout /t 3 /nobreak >nul
 
 set "HOST_ADDR=localhost"

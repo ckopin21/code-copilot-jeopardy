@@ -18,7 +18,7 @@ echo "Building game..."
 npm run build || exit 1
 
 echo "Starting game..."
-npm start &
+npm run serve &
 SERVER_PID=$!
 sleep 3
 

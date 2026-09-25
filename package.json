@@ -23,7 +23,8 @@
     "lint": "eslint .",
     "prebuild": "npm run packs:sync",
     "build": "npm run typecheck && npm run typecheck:server && vite build",
-    "start": "npm run build && tsx server/index.ts"
+    "start": "npm run build && npm run serve",
+    "serve": "tsx server/index.ts"
   },
   "dependencies": {
     "@vitejs/plugin-react": "6.1.1",

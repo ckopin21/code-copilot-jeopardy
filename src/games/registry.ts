@@ -11,12 +11,19 @@ export interface ClientGame {
   /** URL and server id, e.g. `?game=trivia`. Lowercase kebab-case, never reused. */
   id: string;
   title: string;
+  /** Prefix for this game's browser storage keys. Defaults to `blue-stage-<id>`; never change it after release. */
+  storageNamespace?: string;
   load: () => Promise<{ default: ComponentType }>;
 }
 
 export const GAMES: readonly ClientGame[] = [
-  { id: 'trivia', title: 'Blue Stage Trivia', load: () => import('./trivia') }
+  // Trivia predates multi-game support, so it keeps the original un-suffixed keys.
+  { id: 'trivia', title: 'Blue Stage Trivia', storageNamespace: 'blue-stage', load: () => import('./trivia') }
 ];
+
+export function storageNamespaceFor(game: ClientGame): string {
+  return game.storageNamespace ?? `blue-stage-${game.id}`;
+}
 
 /** Opened when a URL has no `?game=`. Existing Join/Presentation links rely on this. */
 export const DEFAULT_GAME_ID = 'trivia';

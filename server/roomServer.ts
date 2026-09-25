@@ -76,6 +76,17 @@ function isRecord(value: unknown): value is Record<string, unknown> { return Boo
 export function createRoomServer(options: RoomServerOptions): RoomServer {
   const games = options.games ?? SERVER_GAMES;
   if (!games.length) throw new Error('At least one game must be registered');
+  const httpRoutes = new Map<string, () => unknown>();
+  const gameIds = new Set<string>();
+  for (const game of games) {
+    if (gameIds.has(game.id)) throw new Error(`Duplicate game id: ${game.id}`);
+    gameIds.add(game.id);
+    for (const [path, handler] of Object.entries(game.httpRoutes ?? {})) {
+      if (httpRoutes.has(path)) throw new Error(`Two games registered the route ${path}`);
+      httpRoutes.set(path, handler);
+    }
+  }
+
   const io = new Server(options.httpServer);
   const runtimes = new Map<string, Runtime>();
   const identities = new Map<string, Identity>();
@@ -86,7 +97,6 @@ export function createRoomServer(options: RoomServerOptions): RoomServer {
   let changeCounter = 0;
 
   for (const game of games) {
-    if (runtimes.has(game.id)) throw new Error(`Duplicate game id: ${game.id}`);
     const storage = options.storage ?? createFileRoomStorage(join(process.cwd(), '.data', game.storageFile));
     const engine: RoomEngine = game.createEngine(storage, {
       // Room codes are unique across every game so a code alone finds its room.
@@ -100,14 +110,6 @@ export function createRoomServer(options: RoomServerOptions): RoomServer {
     };
   }
   const defaultGameId = games[0].id;
-
-  const httpRoutes = new Map<string, () => unknown>();
-  for (const game of games) {
-    for (const [path, handler] of Object.entries(game.httpRoutes ?? {})) {
-      if (httpRoutes.has(path)) throw new Error(`Two games registered the route ${path}`);
-      httpRoutes.set(path, handler);
-    }
-  }
 
   const baseUrl = () => {
     if (typeof options.baseUrl === 'function') return options.baseUrl().replace(/\/$/, '');
