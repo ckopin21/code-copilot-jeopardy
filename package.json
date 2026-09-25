@@ -9,7 +9,7 @@
   "scripts": {
     "packs:sync": "node scripts/generate-pack-registry.mjs",
     "packs:check": "node scripts/generate-pack-registry.mjs --check",
-    "questions:check": "npm run packs:check && vitest run tests/packs.test.ts",
+    "questions:check": "npm run packs:check && vitest run tests/trivia/packs.test.ts",
     "predev": "npm run packs:sync",
     "dev": "tsx server/index.ts --dev",
     "pretypecheck": "npm run packs:sync",
