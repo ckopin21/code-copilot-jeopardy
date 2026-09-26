@@ -2,7 +2,7 @@ import type { Server as HttpServer } from 'node:http';
 import { networkInterfaces } from 'node:os';
 import { join } from 'node:path';
 import { Server, type Socket } from 'socket.io';
-import type { BaseRoomSnapshot, RoomEngine, RoomRole, ServerGame } from '../src/platform/rooms/types';
+import type { BaseRoomSnapshot, FileRouteResult, RoomEngine, RoomRole, ServerGame } from '../src/platform/rooms/types';
 import { playerJoinSchema } from '../src/platform/players/playerJoin';
 import { SERVER_GAMES } from './games';
 import { createFileRoomStorage } from './storage';
@@ -31,6 +31,8 @@ export interface RoomServer {
   engine<Engine extends RoomEngine = RoomEngine>(gameId?: string): Engine;
   /** GET routes contributed by games, keyed by path. */
   httpRoutes: ReadonlyMap<string, () => unknown>;
+  /** GET routes contributed by games that answer with a file body. */
+  fileRoutes: ReadonlyMap<string, (query: URLSearchParams) => Promise<FileRouteResult>>;
   baseUrl(): string;
   getPlayerConnectionHealth(roomCode: string): PlayerConnectionHealth[];
   getPresentationConnectionCount(roomCode: string): number;
@@ -45,7 +47,7 @@ export interface PlayerConnectionHealth {
 }
 
 /** Requests that never change room state, so they skip snapshots and broadcasts. */
-const READ_ONLY_EVENTS = new Set(['player:heartbeat', 'host:get-player-health', 'host:get-presentation-count', 'host:test-controllers']);
+const READ_ONLY_EVENTS = new Set(['room:lookup', 'player:heartbeat', 'host:get-player-health', 'host:get-presentation-count', 'host:test-controllers']);
 const PLAYER_STALE_MS = 30_000;
 const HEALTH_FAIR_MS = 7_000;
 const HEALTH_STALE_MS = 15_000;
@@ -77,13 +79,18 @@ export function createRoomServer(options: RoomServerOptions): RoomServer {
   const games = options.games ?? SERVER_GAMES;
   if (!games.length) throw new Error('At least one game must be registered');
   const httpRoutes = new Map<string, () => unknown>();
+  const fileRoutes = new Map<string, (query: URLSearchParams) => Promise<FileRouteResult>>();
   const gameIds = new Set<string>();
   for (const game of games) {
     if (gameIds.has(game.id)) throw new Error(`Duplicate game id: ${game.id}`);
     gameIds.add(game.id);
     for (const [path, handler] of Object.entries(game.httpRoutes ?? {})) {
-      if (httpRoutes.has(path)) throw new Error(`Two games registered the route ${path}`);
+      if (httpRoutes.has(path) || fileRoutes.has(path)) throw new Error(`Two games registered the route ${path}`);
       httpRoutes.set(path, handler);
+    }
+    for (const [path, handler] of Object.entries(game.fileRoutes ?? {})) {
+      if (httpRoutes.has(path) || fileRoutes.has(path)) throw new Error(`Two games registered the route ${path}`);
+      fileRoutes.set(path, handler);
     }
   }
 
@@ -277,6 +284,9 @@ export function createRoomServer(options: RoomServerOptions): RoomServer {
     const roomCode = cleanCode(payload.roomCode);
     const hostToken = String(payload.hostToken ?? '');
 
+    // Which game a room code belongs to, for the shared join-by-code screen. Reveals nothing else.
+    if (event === 'room:lookup') return { game: runtimeForRoom(roomCode).game.id };
+
     // Session-establishing events.
     if (event === 'room:create') {
       const existing = identities.get(socket.id);
@@ -302,7 +312,9 @@ export function createRoomServer(options: RoomServerOptions): RoomServer {
       return game.sanitize(engine.snapshot(roomCode), 'host');
     }
     if (event === 'player:join') {
-      if (identities.has(socket.id)) throw new Error('This socket already has a session');
+      // One browser tab keeps one socket across games, so a new join replaces whatever seat it held (bind() unbinds it).
+      const current = identities.get(socket.id);
+      if (current && current.role !== 'player') throw new Error('This socket already has a session');
       const input = playerJoinSchema.parse(payload);
       const joinCode = input.roomCode.toUpperCase();
       const { game, engine } = runtimeForRoom(joinCode);
@@ -314,9 +326,8 @@ export function createRoomServer(options: RoomServerOptions): RoomServer {
       const playerId = String(payload.playerId ?? '');
       const token = String(payload.reconnectToken ?? '');
       const current = identities.get(socket.id);
-      if (current && (current.role !== 'player' || current.roomCode !== roomCode || current.playerId !== playerId)) {
-        throw new Error('This socket already has a different session');
-      }
+      // A player seat in another room or game may be replaced: the tab moved between games. Host and display sessions may not.
+      if (current && current.role !== 'player') throw new Error('This socket already has a different session');
       const { game, engine } = runtimeForRoom(roomCode);
       const credentials = engine.reconnectPlayer(roomCode, playerId, token);
       bind(socket, { gameId: game.id, roomCode, role: 'player', playerId, token });
@@ -494,6 +505,7 @@ export function createRoomServer(options: RoomServerOptions): RoomServer {
     io,
     engine: <Engine extends RoomEngine = RoomEngine>(gameId = defaultGameId) => runtimeForGame(gameId).engine as Engine,
     httpRoutes,
+    fileRoutes,
     baseUrl, getPlayerConnectionHealth, getPresentationConnectionCount,
     async close() {
       clearInterval(tickTimer);

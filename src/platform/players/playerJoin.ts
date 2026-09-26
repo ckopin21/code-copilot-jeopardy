@@ -11,7 +11,9 @@ export const playerJoinSchema = z.object({
   frameStyle: z.enum(['clean', 'halo', 'bracket', 'neon']).optional(),
   buzzerSound: z.enum(['classic', 'laser', 'chime', 'arcade']).optional(),
   scoreEffect: z.enum(['pulse', 'spark', 'wave']).optional(),
-  victoryEffect: z.enum(['confetti', 'spotlight', 'stars']).optional()
+  victoryEffect: z.enum(['confetti', 'spotlight', 'stars']).optional(),
+  /** Reclaims an existing seat in games that hand out seat codes. Games without them ignore it. */
+  seatCode: z.string().regex(/^\d{4}$/).optional()
 });
 
 export type PlayerJoinInput = z.infer<typeof playerJoinSchema>;

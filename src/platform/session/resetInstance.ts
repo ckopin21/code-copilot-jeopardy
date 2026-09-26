@@ -1,3 +1,4 @@
+import { currentGameId } from './activeGame';
 const PREFIX = 'blue-stage-';
 
 function clearPrefixedStorage(storage: Storage): void {
@@ -9,11 +10,20 @@ function clearPrefixedStorage(storage: Storage): void {
   keys.forEach((key) => storage.removeItem(key));
 }
 
+/** The current game's menu. Keeps `?game=` so a game's Menu button never lands on the game picker. */
 export function menuUrl(extra?: Record<string, string>): string {
+  const game = new URL(location.href).searchParams.get('game') ?? currentGameId();
+  const url = new URL(pickerUrl());
+  if (game) url.searchParams.set('game', game);
+  for (const [key, value] of Object.entries(extra ?? {})) url.searchParams.set(key, value);
+  return url.toString();
+}
+
+/** The game picker at the site root. */
+export function pickerUrl(): string {
   const url = new URL('./', location.href);
   url.search = '';
   url.hash = '';
-  for (const [key, value] of Object.entries(extra ?? {})) url.searchParams.set(key, value);
   return url.toString();
 }
 

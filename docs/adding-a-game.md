@@ -38,7 +38,7 @@ Create `src/games/<id>/server.ts` exporting a `ServerGame` (see `src/games/trivi
 - `createEngine(storage, { isRoomCodeTaken })`
 - `sanitize(snapshot, role, playerId)`: strip anything a phone or TV must not see. This is your privacy boundary.
 - `hostActions` / `playerActions`: map event names (`host:...`, `player:...`) to engine calls. Authorization is already done when these run.
-- Optional `onStateChange` to emit extra room events (trivia uses it for score animations), and `httpRoutes` for read-only GET endpoints.
+- Optional `onStateChange` to emit extra room events (trivia uses it for score animations), `httpRoutes` for read-only JSON GET endpoints, and `fileRoutes` for GET endpoints that answer with a file body such as audio (Deal or Dud uses one for live narration), and `startServices` for helper programs the real app starts beside the server and stops on exit (Deal or Dud's narrator voice; tests and `BLUE_STAGE_SERVICES=0` skip them).
 
 Add it to `SERVER_GAMES` in `server/games.ts`.
 
@@ -67,6 +67,7 @@ npm run typecheck && npm run typecheck:server && npm run lint && npm test && npm
 
 ## Current limits
 
-- The root URL (`/`, no `?game=`) opens trivia's menu, because trivia is `DEFAULT_GAME_ID`. Once there are two games, add a game picker there or give the new game its own start link.
-- The phone "Join a Game" screen with manual room-code entry is part of trivia. Phones joining another game should use that game's Join link or QR, which carries `game=<id>`. A shared join-by-code screen belongs in the platform when a second game ships.
+- The root URL (`/` with no `?game=` and no `?mode=`) shows the game picker (`src/GamePicker.tsx`), which lists `GAMES` with each game's `blurb` and has a shared room-key box. It asks the server which game owns a code with the read-only `room:lookup` event and opens that game's Join screen.
+- URLs with `?mode=` but no `?game=` still open trivia (`DEFAULT_GAME_ID`), so old trivia Join and Presentation links keep working.
+- Include `game=<id>` in your Join and Presentation links. Your Join screen should accept `?room=` from the URL.
 - Background music tracks in `public/audio/` and the audio engine's music themes are shared.

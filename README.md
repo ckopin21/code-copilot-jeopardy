@@ -1,6 +1,6 @@
 # Blue Stage Trivia
 
-A shared-screen trivia game with a Host display and up to five phone controllers. The repo is organized as a small game platform (`src/platform/`, `server/`) with trivia as its first game (`src/games/trivia/`), so more games can be added alongside it. For multiplayer, the user's laptop runs the authoritative Node + Socket.IO server; Host, phones, and Presentation connect over the same Wi-Fi/LAN.
+A shared-screen trivia game with a Host display and up to five phone controllers. The repo is organized as a small game platform (`src/platform/`, `server/`) with trivia as its first game (`src/games/trivia/`) and **Deal or Dud** (`src/games/deal-or-dud/`, a four-player pitch game; see [docs/deal-or-dud.md](docs/deal-or-dud.md)) as its second. Opening the server's root URL shows a game picker. For multiplayer, the user's laptop runs the authoritative Node + Socket.IO server; Host, phones, and Presentation connect over the same Wi-Fi/LAN.
 
 GitHub Pages hosts a static preview, not the multiplayer server:
 

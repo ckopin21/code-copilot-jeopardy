@@ -5,6 +5,7 @@ import { pathToFileURL } from 'node:url';
 import QRCode from 'qrcode';
 import { createServer as createViteServer, type ViteDevServer } from 'vite';
 import { createRoomServer, type RoomServer } from './roomServer';
+import { SERVER_GAMES } from './games';
 
 const mimeTypes: Record<string, string> = {
   '.css': 'text/css; charset=utf-8',
@@ -35,7 +36,7 @@ export interface LocalGameServer {
   close(): Promise<void>;
 }
 
-export async function startLocalGameServer(options: { port?: number; host?: string; baseUrl?: string; distDir?: string; dev?: boolean } = {}): Promise<LocalGameServer> {
+export async function startLocalGameServer(options: { port?: number; host?: string; baseUrl?: string; distDir?: string; dev?: boolean; services?: boolean } = {}): Promise<LocalGameServer> {
   const port = options.port ?? Number(process.env.PORT ?? 3000);
   const host = options.host ?? process.env.HOST ?? '0.0.0.0';
   const distDir = resolve(options.distDir ?? 'dist-client');
@@ -62,6 +63,17 @@ export async function startLocalGameServer(options: { port?: number; host?: stri
       }
       const gameRoute = game.httpRoutes.get(url.pathname);
       if (gameRoute) { sendJson(response, gameRoute()); return; }
+      const fileRoute = game.fileRoutes.get(url.pathname);
+      if (fileRoute) {
+        const result = await fileRoute(url.searchParams);
+        response.writeHead(result.status, {
+          'content-type': result.contentType,
+          'content-length': result.body.byteLength,
+          'cache-control': result.cacheSeconds ? `public, max-age=${result.cacheSeconds}` : 'no-store'
+        });
+        response.end(result.body);
+        return;
+      }
       if (url.pathname === '/api/qr') {
         const value = url.searchParams.get('value') ?? '';
         if (!value || value.length > 2048) { sendJson(response, { error: 'A valid URL is required' }, 400); return; }
@@ -97,15 +109,17 @@ export async function startLocalGameServer(options: { port?: number; host?: stri
   });
   const address = httpServer.address();
   const actualPort = address && typeof address !== 'string' ? address.port : port;
+  // Games' helper programs (Deal or Dud's narrator voice) run only with the real app.
+  const services = options.services ? SERVER_GAMES.flatMap((item) => item.startServices ? [item.startServices((line) => process.stdout.write(`${line}\n`))] : []) : [];
   return {
     httpServer, game, port: actualPort,
-    async close() { await vite?.close(); await game.close(); }
+    async close() { services.forEach((service) => service.stop()); await vite?.close(); await game.close(); }
   };
 }
 
 const launchedFromCli = process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href;
 if (launchedFromCli) {
-  startLocalGameServer({ dev: process.argv.includes('--dev') }).then(({ game, close }) => {
+  startLocalGameServer({ dev: process.argv.includes('--dev'), services: process.env.BLUE_STAGE_SERVICES !== '0' }).then(({ game, close }) => {
     process.stdout.write(`Blue Stage Trivia is running.\nHost: ${game.baseUrl()}/?mode=host\nJoin and Presentation links appear in Host after room creation.\n`);
     let stopping = false;
     const stop = () => {

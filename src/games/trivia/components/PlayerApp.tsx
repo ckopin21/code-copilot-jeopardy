@@ -4,7 +4,7 @@ import type { RoomSnapshot } from '../types';
 import type { PlayerJoinCredentials } from '../../../platform/rooms/types';
 import { emitAck, resumeClientSession, socket, suspendClientSession } from '../../../platform/net/socket';
 import { audio } from '../../../platform/audio/audio';
-import { menuUrl } from '../../../platform/session/resetInstance';
+import { menuUrl, pickerUrl } from '../../../platform/session/resetInstance';
 import { turnIndicatorVisible } from '../ui/gameUiRules';
 import { finalWagerRules } from '../rules/finalWagerRules';
 import { freeResponseReadingTimer } from '../ui/freeResponseFlow';
@@ -226,6 +226,16 @@ export function PlayerApp() {
     try {
       resumeClientSession();
       await audio.unlock();
+      // Room keys are shared by every game on this server. A key from another game opens that game's join screen instead.
+      const owner = await emitAck<{ game: string }>('room:lookup', { roomCode }).catch(() => null);
+      if (owner && owner.game !== 'trivia') {
+        const target = new URL(pickerUrl());
+        target.search = new URLSearchParams({ game: owner.game, mode: 'player', room: roomCode.trim().toUpperCase() }).toString();
+        suspendClientSession();
+        audio.stop();
+        location.href = target.toString();
+        return;
+      }
       const avatar = getAvatarOption(avatarId);
       const result = await emitAck<PlayerJoinCredentials>('player:join', {
         roomCode, name, avatar: avatar.fallback, avatarId, accent, buzzerSound, scoreEffect, victoryEffect

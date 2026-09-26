@@ -13,10 +13,11 @@ This folder is the maintained technical and gameplay reference for the current g
 - [`question-packs.md`](question-packs.md) — built-in pack authoring, automatic registration, metadata, and validation
 - [`development.md`](development.md) — repository layout, where changes belong, testing, CI, deployment, renaming
 - [`adding-a-game.md`](adding-a-game.md) — the platform/game contract and steps for adding a new game
+- [`deal-or-dud.md`](deal-or-dud.md) — Deal or Dud: rules, privacy, content pools, audio generation, real-device checks
 
 ## Runtime support
 
-Blue Stage has one supported multiplayer runtime: the laptop's Node/Socket.IO server. It hosts every registered game (currently Blue Stage Trivia, whose rules live in `TriviaEngine`) and serves Host, player, and Presentation browsers across a reachable LAN. GitHub Pages may show a static preview or documentation; it cannot host the multiplayer authority. `npm run dev` and `npm start` use the same server game path.
+Blue Stage has one supported multiplayer runtime: the laptop's Node/Socket.IO server. It hosts every registered game (currently Blue Stage Trivia, whose rules live in `TriviaEngine`, and Deal or Dud, whose rules live in `DealEngine`) and serves Host, player, and Presentation browsers across a reachable LAN. GitHub Pages may show a static preview or documentation; it cannot host the multiplayer authority. `npm run dev` and `npm start` use the same server game path.
 
 ## Documentation maintenance rule
 

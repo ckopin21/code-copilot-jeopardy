@@ -100,4 +100,19 @@ export interface ServerGame<Engine extends RoomEngine<Snapshot>, Snapshot extend
   onStateChange?(context: StateChangeContext<Snapshot>): void;
   /** Extra read-only GET endpoints, e.g. `/api/packs`. */
   httpRoutes?: Record<string, () => unknown>;
+  /** Extra GET endpoints that answer with a file body (audio, images) built from the query string. */
+  fileRoutes?: Record<string, (query: URLSearchParams) => Promise<FileRouteResult>>;
+  /**
+   * Helper programs the game runs beside the server, e.g. Deal or Dud's narrator voice. Started only by the real
+   * app (`npm run serve` / the START launchers; not tests, or when BLUE_STAGE_SERVICES=0) and stopped on exit.
+   */
+  startServices?(log: (line: string) => void): { stop(): void };
+}
+
+export interface FileRouteResult {
+  status: number;
+  contentType: string;
+  body: Uint8Array;
+  /** Browser cache lifetime; omitted means no caching. */
+  cacheSeconds?: number;
 }
