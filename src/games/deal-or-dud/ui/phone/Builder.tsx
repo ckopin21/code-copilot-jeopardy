@@ -1,45 +1,54 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { BuilderColumn, BuilderPicks, DealSnapshot, RoundState } from '../../types';
-import { CUSTOM_EMOJI, CUSTOM_MAX, audienceById, modifierById, productById, stepText } from '../../content/dealer';
+import { CUSTOM_EMOJI, CUSTOM_MAX, activeColumns, audienceById, connectorText, featureById, modifierById, pickedId, productById, stepDone, stepText } from '../../content/dealer';
+import { CONNECTORS } from '../../content/words';
 import { useClockSeconds } from '../net';
 import { Emoji } from '../Emoji';
 
 type Send = (event: string, payload?: Record<string, unknown>) => Promise<boolean>;
 type Step = BuilderColumn | 'name';
 
-/** The steps in reading order, so each pick lands left to right: "[twist] [product] for [who]". */
-const STEPS: { id: BuilderColumn; label: string; title: string; where: string; placeholder: string; example: string }[] = [
-  { id: 'modifiers', label: 'Twist', title: 'Pick a twist', where: 'the first word: what makes it special', placeholder: '[twist]', example: 'haunted' },
+type StepInfo = { id: BuilderColumn; label: string; title: string; where: string; placeholder: string; example: string; skip?: string };
+/** Every step in reading order, so each pick lands left to right: "[twist] [product] for [who], [feature]". */
+const ALL_STEPS: StepInfo[] = [
+  { id: 'modifiers', label: 'Twist', title: 'Pick a twist', where: 'the first word: what makes it special', placeholder: '[twist]', example: 'haunted', skip: 'No twist' },
   { id: 'products', label: 'Product', title: 'Pick a product', where: 'the thing you sell', placeholder: '[product]', example: 'hot tubs' },
-  { id: 'audiences', label: 'For', title: 'Who is it for?', where: 'the end, after "for"', placeholder: '[who]', example: 'bored astronauts' }
+  { id: 'audiences', label: 'Who', title: 'Who is it for?', where: 'pick the word first, then the who', placeholder: '[who]', example: 'bored astronauts', skip: 'Skip the who' },
+  { id: 'features', label: 'Feature', title: 'Add a feature', where: 'the end: the killer selling point', placeholder: '[feature]', example: 'with a built-in bidet', skip: 'No feature' }
 ];
 
 /**
- * The business as a sentence with a slot for each pick, in reading order: "[twist] [product] for [who]". Empty slots
- * show what goes there, and the slot the player is picking right now is highlighted, so it's clear where a card lands.
+ * The business as a sentence with a slot for each pick, in reading order: "[twist] [product] for [who], [feature]". Empty
+ * slots show what goes there, the slot being picked is highlighted, and skipped steps drop out.
  */
-function HeadlineSlots({ picks, step }: { picks: BuilderPicks; step: Step }) {
-  const slot = (item: typeof STEPS[number]) => {
+function HeadlineSlots({ picks, step, steps }: { picks: BuilderPicks; step: Step; steps: StepInfo[] }) {
+  const shown = (id: BuilderColumn) => steps.some((item) => item.id === id) && !(id !== 'products' && picks.skipped?.[id]);
+  const slot = (item: StepInfo) => {
     const text = stepText(picks, item.id);
-    return <span className={`dod-slot ${step === item.id ? 'is-active' : ''} ${text ? 'is-filled' : ''}`}>{text ?? item.placeholder}</span>;
+    return <span key={item.id} className={`dod-slot ${step === item.id ? 'is-active' : ''} ${text ? 'is-filled' : ''}`}>{text ?? item.placeholder}</span>;
   };
-  return <b className="dod-slots">{slot(STEPS[0])} {slot(STEPS[1])} for {slot(STEPS[2])}</b>;
+  const parts: ReactNode[] = [];
+  for (const item of steps) {
+    if (!shown(item.id)) continue;
+    if (item.id === 'audiences') parts.push(` ${connectorText(picks.connector)} `);
+    else if (item.id === 'features') parts.push(shown('audiences') ? ', ' : ' ');
+    else if (parts.length) parts.push(' ');
+    parts.push(slot(item));
+  }
+  return <b className="dod-slots">{parts}</b>;
 }
 
 function card(column: BuilderColumn, id: string | null): { emoji: string; text: string } | null {
-  const item = column === 'products' ? productById(id) : column === 'modifiers' ? modifierById(id) : audienceById(id);
+  const item = column === 'products' ? productById(id) : column === 'modifiers' ? modifierById(id) : column === 'features' ? featureById(id) : audienceById(id);
   return item ? { emoji: item.emoji, text: item.text } : null;
 }
-function picked(picks: BuilderPicks, column: BuilderColumn): string | null {
-  return column === 'products' ? picks.product : column === 'modifiers' ? picks.modifier : picks.audience;
-}
-/** Where a phone that just (re)opened the builder should be: the first step without a pick. */
-function firstOpenStep(picks: BuilderPicks): Step {
-  return STEPS.find((step) => !stepText(picks, step.id))?.id ?? 'name';
+/** Where a phone that just (re)opened the builder should be: the first step not done yet. */
+function firstOpenStep(picks: BuilderPicks, steps: StepInfo[]): Step {
+  return steps.find((step) => !stepDone(picks, step.id))?.id ?? 'name';
 }
 
 /** "✏️ Write your own" for a step: a small form in place of the cards. */
-function WriteOwn({ step, picks, send, onDone }: { step: typeof STEPS[number]; picks: BuilderPicks; send: Send; onDone: (saved: boolean) => void }) {
+function WriteOwn({ step, picks, send, onDone }: { step: StepInfo; picks: BuilderPicks; send: Send; onDone: (saved: boolean) => void }) {
   const [draft, setDraft] = useState(picks.custom?.[step.id] ?? '');
   const save = () => {
     const text = draft.trim();
@@ -103,12 +112,16 @@ export function BuildLocked({ room, round, send }: { room: DealSnapshot; round: 
 }
 
 /**
- * Three quick steps in reading order: a twist, a product, and who it's for. Each step deals six cards (🔀 deals new
- * ones) and has "✏️ Write your own". The twist and product cards only ever deal ones that fit each other.
+ * Quick steps in reading order: a twist, a product, who it's for and a feature (the host can switch off all but the
+ * product). Each step deals six cards (🔀 deals new ones), has "✏️ Write your own", and all but the product can be
+ * skipped. The who step also picks the word in front of it ("for", "made by", "tested on"…). The twist and product
+ * cards only ever deal ones that fit each other.
  */
 export function Builder({ room, round, send }: { room: DealSnapshot; round: RoundState; send: Send }) {
   const picks = round.builder;
-  const [step, setStep] = useState<Step>(() => firstOpenStep(picks));
+  const active = activeColumns(room.settings.builderSteps);
+  const STEPS = ALL_STEPS.filter((item) => active.includes(item.id));
+  const [step, setStep] = useState<Step>(() => firstOpenStep(picks, STEPS));
   const [writing, setWriting] = useState(false);
   const lockSeconds = useClockSeconds(room);
   const at = STEPS.findIndex((item) => item.id === step);
@@ -118,37 +131,50 @@ export function Builder({ room, round, send }: { room: DealSnapshot; round: Roun
     void send('player:builder-pick', { column, id });
     next();
   };
+  const skip = (column: BuilderColumn) => {
+    void send('player:builder-skip', { column });
+    next();
+  };
+  const skipped = (column: BuilderColumn) => column !== 'products' && Boolean(picks.skipped?.[column]);
+  const connector = connectorText(picks.connector);
 
   return <section className="dod-screen dod-builder"><div className="dod-screen-main">
-    <ol className="dod-build-steps" aria-label="Your three picks">
+    <ol className="dod-build-steps" aria-label="Your picks" style={{ gridTemplateColumns: `repeat(${STEPS.length}, 1fr)` }}>
       {STEPS.map((item, index) => {
         const written = picks.custom?.[item.id];
-        const chosen = written ? { emoji: CUSTOM_EMOJI, text: written } : card(item.id, picked(picks, item.id));
-        return <li key={item.id}><button className={`${step === item.id ? 'is-on' : ''} ${chosen ? 'is-done' : ''}`} aria-current={step === item.id ? 'step' : undefined} onClick={() => { setWriting(false); setStep(item.id); }}>
-          <small>{index + 1}. {item.label}</small><span>{chosen ? <><Emoji char={chosen.emoji}/> {chosen.text}</> : '—'}</span>
+        const chosen = written ? { emoji: CUSTOM_EMOJI, text: written } : card(item.id, pickedId(picks, item.id));
+        return <li key={item.id}><button className={`${step === item.id ? 'is-on' : ''} ${chosen || skipped(item.id) ? 'is-done' : ''}`} aria-current={step === item.id ? 'step' : undefined} onClick={() => { setWriting(false); setStep(item.id); }}>
+          <small>{index + 1}. {item.label}</small><span>{skipped(item.id) ? 'Skipped' : chosen ? <><Emoji char={chosen.emoji}/> {chosen.text}</> : '—'}</span>
         </button></li>;
       })}
     </ol>
-    <div className="dod-headline-preview"><small>Your business</small><HeadlineSlots picks={picks} step={step}/></div>
+    <div className="dod-headline-preview"><small>Your business</small><HeadlineSlots picks={picks} step={step} steps={STEPS}/></div>
     {current ? <>
-      <h2 className="dod-step-title">{current.title}</h2>
+      <h2 className="dod-step-title">{current.id === 'audiences' ? `Who is it ${connector}?` : current.title}</h2>
       <p className="dod-hint dod-step-where">{current.where}</p>
+      {current.id === 'audiences' && <div className="dod-connectors" role="group" aria-label="The word before the who">
+        {CONNECTORS.map((item) => {
+          const on = connector === item.text;
+          return <button key={item.id} className={on ? 'is-on' : ''} aria-pressed={on} onClick={() => void send('player:builder-connector', { connector: item.id })}>{item.text}</button>;
+        })}
+      </div>}
       {writing ? <WriteOwn step={current} picks={picks} send={send} onDone={(saved) => { if (saved) next(); else setWriting(false); }}/> : <>
         <div className="dod-hand" role="group" aria-label={current.title}>
-          {picks.hands[current.id].map((id) => {
+          {(picks.hands[current.id] ?? []).map((id) => {
             const item = card(current.id, id);
             if (!item) return null;
-            const on = !picks.custom?.[current.id] && picked(picks, current.id) === id;
+            const on = !picks.custom?.[current.id] && pickedId(picks, current.id) === id;
             return <button key={id} className={`dod-pick-card ${on ? 'is-on' : ''}`} aria-pressed={on} onClick={() => choose(current.id, id)}>
               <span className="dod-pick-emoji" aria-hidden="true"><Emoji char={item.emoji}/></span><b>{item.text}</b>
             </button>;
           })}
+          {current.skip && <button className={`dod-skip-card ${skipped(current.id) ? 'is-on' : ''}`} aria-pressed={skipped(current.id)} onClick={() => skip(current.id)}>🚫 {current.skip}</button>}
         </div>
         <div className="dod-row dod-hand-tools">
           {at > 0 ? <button className="dod-ghost" onClick={() => setStep(STEPS[at - 1].id)}>← Back</button> : <span/>}
           <button className="dod-ghost" onClick={() => void send('player:builder-reroll', { column: current.id })}>🔀 New cards</button>
           <button className={`dod-ghost ${picks.custom?.[current.id] ? 'is-on' : ''}`} onClick={() => setWriting(true)}>✏️ {picks.custom?.[current.id] ? 'Edit mine' : 'Write your own'}</button>
-          {stepText(picks, current.id) && <button className="dod-ghost" onClick={next}>Next →</button>}
+          {stepDone(picks, current.id) && <button className="dod-ghost" onClick={next}>Next →</button>}
         </div>
       </>}
     </> : <>

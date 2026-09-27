@@ -14,8 +14,8 @@ export interface TutorialStep {
 export const TUTORIAL_STEPS: readonly TutorialStep[] = [
   { id: 'tut-1', focus: 'studio', title: 'Four players, four rounds', seconds: 6,
     line: 'Welcome to Deal or Dud! Everyone pitches one ridiculous product. The other three players are the sharks.' },
-  { id: 'tut-2', focus: 'build', title: 'Build it together', seconds: 6,
-    line: 'First, everyone builds a product at once. Pick a product, a twist, and who it is for.' },
+  { id: 'tut-2', focus: 'build', title: 'Build it together', seconds: 8,
+    line: 'First, everyone builds a product at once. Pick a twist, a product, who it is for, and a killer feature.' },
   { id: 'tut-3', focus: 'pitch', title: 'Pitch time', seconds: 5,
     line: 'On your turn, you get one minute to pitch. Sharks, just listen.' },
   { id: 'tut-4', focus: 'questions', title: 'Questions open', seconds: 6,

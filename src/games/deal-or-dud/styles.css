@@ -613,3 +613,24 @@ html:has(.dod-app), body:has(.dod-app) { margin: 0; background: #05091a; }
 .dod-app .dod-write-own { display: grid; gap: 10px; flex: none; }
 .dod-app .dod-write-own label { display: grid; gap: 6px; font-weight: 800; }
 .dod-app .dod-write-own input { font: inherit; font-size: 20px; padding: 12px; border-radius: 12px; border: 2px solid var(--dod-gold); background: var(--dod-cream); color: var(--dod-ink); }
+
+/* Builder options: the word before the who, and a skip card for the optional steps. */
+.dod-app .dod-connectors { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; flex: none; }
+.dod-app .dod-connectors button { flex: 0 1 auto; padding: 7px 10px; border-radius: 999px; border: 2px solid #ffffff30; background: #ffffff10; color: white; font-weight: 800; font-size: 14px; }
+.dod-app .dod-connectors button.is-on { border-color: var(--dod-gold); background: #ffc24a2e; color: var(--dod-gold); }
+.dod-app .dod-skip-card { grid-column: 1 / -1; padding: 12px; border-radius: 14px; border: 2px dashed #ffffff45; background: transparent; color: white; font-weight: 800; font-size: 16px; }
+.dod-app .dod-skip-card.is-on { border-style: solid; border-color: var(--dod-gold); color: var(--dod-gold); background: #ffc24a1f; }
+.dod-app .dod-build-steps span { font-size: 12px; }
+
+/* Longer headlines (twist, product, who and feature). */
+.dod-app .dod-headline h1.is-xlong { font-size: 28px; }
+.dod-app .dod-headline h1.is-xxlong { font-size: 23px; }
+.dod-app .dod-topbar.has-hostbar .dod-headline h1.is-xlong { font-size: 26px; }
+.dod-app .dod-topbar.has-hostbar .dod-headline h1.is-xxlong { font-size: 21px; }
+.dod-app .dod-product-card.is-stage-big.is-long b { font-size: 40px; }
+.dod-app .dod-product-card.is-stage-big.is-xlong b { font-size: 32px; }
+.dod-app .dod-product-card.is-stage-corner.is-long b { font-size: 21px; }
+.dod-app .dod-product-card.is-stage-corner.is-xlong b { font-size: 17px; }
+.dod-app.dod-phone .dod-product-card.is-xlong:not(.is-small) b { font-size: 17px; }
+.dod-app .dod-demo-card:nth-child(5) { animation-delay: 1.8s; }
+.dod-app .dod-step-grid { grid-template-columns: repeat(3, 1fr); gap: 8px 20px; }

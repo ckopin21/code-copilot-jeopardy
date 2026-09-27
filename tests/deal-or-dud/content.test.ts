@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { HAND_SIZE, buildHeadline, businessNames, columnPool, dealHand, emptyBuilder, tonePool } from '../../src/games/deal-or-dud/content/dealer';
-import { AUDIENCES, MODIFIERS, PRODUCTS } from '../../src/games/deal-or-dud/content/words';
+import { AUDIENCES, CONNECTORS, FEATURES, MODIFIERS, PRODUCTS } from '../../src/games/deal-or-dud/content/words';
 import { AVATAR_PRESETS, FORECAST_CARDS, NAME_PATTERNS } from '../../src/games/deal-or-dud/content/cues';
 import type { ProductForm, Tone } from '../../src/games/deal-or-dud/types';
 
 const TONES: Tone[] = ['clean', 'silly', 'crude'];
 const FORMS: ProductForm[] = ['food', 'gadget', 'goods', 'pet', 'service', 'rental', 'digital', 'event'];
-/** The deck can be as absurd as it likes, but never sexual. */
-const SEXUAL = /\b(sex|sexy|sexual|nude|naked|strip|stripper|porn|horny|kinky|fetish|erotic|lingerie|nsfw|booty|boob|thong|orgy|seduc|lust|condom|viagra|onlyfans|hooker|brothel|bedroom)\w*/i;
+/**
+ * The deck can be as crude and absurd as it likes, and jokes about sexuality and dating are fine, but no sex: no sex acts,
+ * nudity, porn or body parts in that sense.
+ */
+const SEX = /\b(sex|having sex|sex toy|nude|naked|stripper|porn|horny|kinky|fetish|erotic|lingerie|nsfw|booty call|boob|nipple|thong|orgy|orgasm|seduc|condom|viagra|onlyfans|hooker|brothel|penis|vagina|dick|cock|pussy|dildo|vibrator|masturbat|cum|hookup|hook up|foreplay|threesome|blowjob|handjob|snatch|squirt|69)\b/i;
 
 function seeded(seed: number) {
   return () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
@@ -15,7 +18,7 @@ function seeded(seed: number) {
 
 describe('deal-or-dud content ids', () => {
   it('keeps ids unique', () => {
-    for (const pool of [MODIFIERS, PRODUCTS, AUDIENCES, AVATAR_PRESETS, FORECAST_CARDS, NAME_PATTERNS]) {
+    for (const pool of [MODIFIERS, PRODUCTS, AUDIENCES, FEATURES, CONNECTORS, AVATAR_PRESETS, FORECAST_CARDS, NAME_PATTERNS]) {
       const ids = pool.map((item) => item.id);
       expect(new Set(ids).size).toBe(ids.length);
     }
@@ -27,23 +30,30 @@ describe('deal-or-dud card builder', () => {
     expect(tonePool(PRODUCTS, 'clean').length).toBeGreaterThanOrEqual(60);
     expect(tonePool(MODIFIERS, 'clean').length).toBeGreaterThanOrEqual(35);
     expect(tonePool(AUDIENCES, 'clean').length).toBeGreaterThanOrEqual(35);
+    expect(tonePool(FEATURES, 'clean').length).toBeGreaterThanOrEqual(HAND_SIZE * 4);
     for (const tone of TONES) for (const form of FORMS) expect(tonePool(PRODUCTS, tone).filter((product) => product.form === form).length, `${tone} ${form}`).toBeGreaterThanOrEqual(5);
   });
 
   it('gives every card an emoji', () => {
-    for (const item of [...PRODUCTS, ...MODIFIERS, ...AUDIENCES]) expect(item.emoji, item.id).toMatch(/\p{Extended_Pictographic}|\p{Regional_Indicator}|[🟠🟢]/u);
+    for (const item of [...PRODUCTS, ...MODIFIERS, ...AUDIENCES, ...FEATURES]) expect(item.emoji, item.id).toMatch(/\p{Extended_Pictographic}|\p{Regional_Indicator}|[🟠🟢]/u);
   });
 
-  it('keeps the whole deck, names included, free of anything sexual', () => {
+  it('keeps sex out of the whole deck, names included', () => {
     const texts = [
       ...MODIFIERS.flatMap((item) => [item.text, item.root ?? '']),
       ...PRODUCTS.flatMap((item) => [item.text, item.short, ...item.roots]),
       ...AUDIENCES.map((item) => item.text),
+      ...FEATURES.map((item) => item.text),
       ...AVATAR_PRESETS.map((item) => item.label),
       ...NAME_PATTERNS.map((item) => item.text),
       ...FORECAST_CARDS.flatMap((item) => [item.title, item.question, ...item.clues])
     ];
-    expect(texts.filter((text) => SEXUAL.test(text))).toEqual([]);
+    expect(texts.filter((text) => SEX.test(text))).toEqual([]);
+  });
+
+  it('writes every feature so it reads after any product, one or many ("with…", not "that explodes")', () => {
+    expect(FEATURES.length).toBeGreaterThanOrEqual(40);
+    for (const feature of FEATURES) expect(feature.text, feature.id).toMatch(/^(with|plus|now|guaranteed|powered|narrated|delivered|shipped|signed|approved|blessed|sold|assembled|endorsed|covered|wrapped)\b/);
   });
 
   it('offers at least a full hand of twists for every product, in every tone', () => {
@@ -96,6 +106,14 @@ describe('deal-or-dud headlines', () => {
     expect(buildHeadline({ product: null, modifier: 'edible', audience: 'the-irs', custom: { products: 'flying hot tubs' } })).toBe('Edible flying hot tubs for the IRS');
     expect(buildHeadline({ product: 'wifi-stealers', modifier: null, audience: null, custom: { modifiers: 'extremely haunted', audiences: 'my cousin Greg' } })).toBe('Extremely haunted apps that steal wifi passwords for my cousin Greg');
     expect(businessNames({ product: null, modifier: null, custom: { products: 'flying hot tubs' } }, 'crude', seeded(3)).some((name) => name.includes('Flying'))).toBe(true);
+  });
+
+  it('adds the word before the who, a feature, and leaves skipped steps out', () => {
+    expect(buildHeadline({ product: 'gas-station-sushi', modifier: 'radioactive', audience: 'the-irs', connector: 'made-by', feature: 'bidet' }))
+      .toBe('Radioactive gas station sushi made by the IRS, with a built-in bidet');
+    expect(buildHeadline({ product: 'gas-station-sushi', modifier: 'radioactive', audience: 'the-irs', feature: 'bidet', skipped: { audiences: true, modifiers: true } }))
+      .toBe('Gas station sushi with a built-in bidet');
+    expect(buildHeadline({ product: 'raccoon-butlers', modifier: null, audience: 'your-ex', connector: 'nonsense', custom: { features: 'plus a tiny hat' } })).toBe('Raccoon butlers for your ex, plus a tiny hat');
   });
 
   it('builds "twist product for audience" headlines', () => {

@@ -64,8 +64,13 @@ export interface DealSettings {
   captions: boolean;
   /** Extra ways for a presenter to score, each switchable in the settings. */
   bonuses: BonusSettings;
+  /** Which optional builder steps are in the game (the product always is). */
+  builderSteps: BuilderStepSettings;
   audio: AudioSettings;
 }
+
+export type BuilderStepSettings = Record<OptionalColumn, boolean>;
+export const DEFAULT_BUILDER_STEPS: BuilderStepSettings = { modifiers: true, audiences: true, features: true };
 
 export type Phase =
   | 'lobby'
@@ -115,13 +120,20 @@ export interface SharkOut {
   at: number;
 }
 
-export type BuilderColumn = 'products' | 'modifiers' | 'audiences';
+export type BuilderColumn = 'products' | 'modifiers' | 'audiences' | 'features';
+/** The steps a host can switch off, or a player can skip. The product is always there. */
+export type OptionalColumn = Exclude<BuilderColumn, 'products'>;
 
-/** A player's picks in the three-step card builder. Ids refer to the content pools. */
+/** A player's picks in the card builder. Ids refer to the content pools. */
 export interface BuilderPicks {
   product: string | null;
   modifier: string | null;
   audience: string | null;
+  feature?: string | null;
+  /** The word before the who: "for", "made by", "tested on"… (a `CONNECTORS` id). Missing means "for". */
+  connector?: string;
+  /** Steps the player chose to leave out ("No twist"). */
+  skipped?: Partial<Record<OptionalColumn, true>>;
   /** The cards currently offered in each step (🔀 deals new ones). */
   hands: Record<BuilderColumn, string[]>;
   /** A step the player wrote themselves ("✏️ Write your own"), instead of a card. Its card pick is then null. */
@@ -133,7 +145,7 @@ export interface LockedPremise {
   mainProductId: string;
   businessName: string;
   form: ProductForm;
-  /** The product, twist and audience cards' emoji, for the product card on the TV and phones. */
+  /** The picked cards' emoji in reading order (twist, product, who, feature), for the product card on the TV and phones. */
   emojis: string[];
 }
 
@@ -270,7 +282,7 @@ export function pitchSeconds(stageSeconds: number): number {
 
 /** The presets only set the stage clock (pitch and questions). Every other timer has one flat default. */
 export const STAGE_PRESETS: Record<Exclude<TimerPreset, 'custom'>, number> = { quick: 120, standard: 180, relaxed: 240 };
-export const DEFAULT_TIMERS: TimerSettings = { prep: 75, stage: 180, offers: 45, reveal: 10, scores: 5, tiebreaker: 20 };
+export const DEFAULT_TIMERS: TimerSettings = { prep: 90, stage: 180, offers: 45, reveal: 10, scores: 5, tiebreaker: 20 };
 /** The timers under "More timers" in the host settings. */
 export const OTHER_TIMERS: readonly (keyof TimerSettings)[] = ['prep', 'offers', 'reveal', 'scores', 'tiebreaker'];
 
@@ -293,6 +305,7 @@ export const DEFAULT_SETTINGS: DealSettings = {
   tone: GAME_TONE,
   tutorial: true,
   bonuses: { ...DEFAULT_BONUSES },
+  builderSteps: { ...DEFAULT_BUILDER_STEPS },
   captions: true,
   audio: { music: 55, effects: 75, narration: 90, muted: false }
 };

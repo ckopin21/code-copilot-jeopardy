@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import type { AudioSettings, BonusSettings, DealPlayer, DealSettings, DealSnapshot } from '../types';
+import type { AudioSettings, BonusSettings, DealPlayer, DealSettings, DealSnapshot, OptionalColumn } from '../types';
 import { BONUS_POINTS, DEFAULT_TIMERS, OTHER_TIMERS, PLAYER_COUNT, STAGE_PRESETS, TIMER_LIMITS, estimateMinutes, totalRounds, type TimerSettings } from '../types';
 import { useHostRoom } from './net';
 import { TvStage } from './TvStage';
@@ -64,6 +64,13 @@ const BONUS_OPTIONS: { id: keyof BonusSettings; title: string; text: string }[] 
   { id: 'pitchVote', title: 'Pitch of the night', text: 'voted by everyone at the end' }
 ];
 
+/** The builder steps a host can switch off. The product is always in. */
+const STEP_OPTIONS: { id: OptionalColumn; title: string; text: string }[] = [
+  { id: 'modifiers', title: 'Twist', text: 'the word in front: "cocaine-laced toasters"' },
+  { id: 'audiences', title: 'Who', text: 'made by, tested on…: "toasters made by Satan"' },
+  { id: 'features', title: 'Feature', text: 'the selling point: "…, with a built-in bidet"' }
+];
+
 function SettingsPage({ room, send, onClose, onStart }: { room: DealSnapshot; send: Send; onClose: () => void; onStart: () => void }) {
   const settings = room.settings;
   const update = (updates: Partial<DealSettings>) => void send('host:update-settings', { updates });
@@ -113,6 +120,15 @@ function SettingsPage({ room, send, onClose, onStart }: { room: DealSnapshot; se
           {BONUS_OPTIONS.map((option) => <label key={option.id} className="dod-check">
             <input type="checkbox" checked={settings.bonuses[option.id]} onChange={(event) => update({ bonuses: { ...settings.bonuses, [option.id]: event.target.checked } })}/>
             <span><b>{option.title} +{BONUS_POINTS[option.id]}</b> {option.text}</span>
+          </label>)}
+        </div>
+      </section>
+      <section>
+        <h3>Product builder <small>The product is always in. Players can skip any step you leave on</small></h3>
+        <div className="dod-bonus-grid dod-step-grid">
+          {STEP_OPTIONS.map((option) => <label key={option.id} className="dod-check">
+            <input type="checkbox" checked={settings.builderSteps?.[option.id] !== false} onChange={(event) => update({ builderSteps: { ...settings.builderSteps, [option.id]: event.target.checked } })}/>
+            <span><b>{option.title}</b> {option.text}</span>
           </label>)}
         </div>
       </section>

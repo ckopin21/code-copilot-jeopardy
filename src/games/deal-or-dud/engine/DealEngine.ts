@@ -4,15 +4,16 @@ import type { PlayerJoinInput } from '../../../platform/players/playerJoin';
 import { ROOM_CODE_ALPHABET, randomToken, secureEqual } from '../../../platform/rooms/tokens';
 import { mergeStoredRooms, serializeStoredRooms } from '../../../platform/rooms/roomStorageRecovery';
 import {
-  BONUS_POINTS, DEFAULT_BONUSES, DEFAULT_SETTINGS, DEFAULT_TIMERS, GAME_ID, GAME_TONE, STAGE_PRESETS, OFFER_CHOICES, PLAYER_COUNT, REACTIONS, REACTION_GAP_MS,
+  BONUS_POINTS, DEFAULT_BONUSES, DEFAULT_BUILDER_STEPS, DEFAULT_SETTINGS, DEFAULT_TIMERS, GAME_ID, GAME_TONE, STAGE_PRESETS, OFFER_CHOICES, PLAYER_COUNT, REACTIONS, REACTION_GAP_MS,
   PITCH_LIMITS, ROUND_COUNT, RULE_TIMINGS, TIMER_LIMITS, pitchSeconds, toneAllows, totalRounds,
-  type AudioSettings, type BonusSettings, type BuilderColumn, type ClockState, type DealPlayer, type DealSettings, type DealSnapshot,
+  type AudioSettings, type BonusSettings, type BuilderColumn, type BuilderStepSettings, type ClockState, type DealPlayer, type DealSettings, type DealSnapshot,
   type OfferChoice, type Phase, type ReactionEmoji, type RoundState, type TimerSettings
 } from '../types';
 import {
-  CUSTOM_EMOJI, audienceById, buildHeadline, businessNames, cleanCustom, columnPool, dealHand, emptyBuilder, modifierById, modifierFits, pick, productById,
-  stepText, tonePool, type Rng
+  COLUMNS, CUSTOM_EMOJI, OPTIONAL_COLUMNS, PICK_KEY, activeColumns, audienceById, buildHeadline, businessNames, cleanCustom, columnPool, dealHand, emptyBuilder,
+  featureById, modifierById, modifierFits, pick, productById, stepText, tonePool, type Rng
 } from '../content/dealer';
+import { CONNECTORS } from '../content/words';
 import { AVATAR_PRESETS, FORECAST_CARDS } from '../content/cues';
 import { scoreRound, voteWinners } from './scoring';
 
@@ -20,9 +21,6 @@ const ROOM_TTL_MS = 12 * 60 * 60 * 1000;
 const STORAGE_KEYS = { primary: 'deal-or-dud-rooms', backup: 'deal-or-dud-rooms-backup', recent: 'deal-or-dud-recent' };
 const MAX_PHOTO_CHARS = 150_000;
 const LIVE_PHASES: readonly Phase[] = ['build', 'stage', 'offers'];
-/** The builder steps in reading order: "[twist] [product] for [who]". */
-const COLUMNS: readonly BuilderColumn[] = ['modifiers', 'products', 'audiences'];
-const PICK_KEY = { products: 'product', modifiers: 'modifier', audiences: 'audience' } as const;
 /** Reactions kept on the snapshot; older ones have long floated off the TV. */
 const MAX_REACTIONS = 12;
 
@@ -104,6 +102,17 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
         || room.state.history.some((result) => typeof result.total !== 'number');
       room.state.upcoming ??= [];
       room.state.votes ??= null;
+      for (const round of [room.state.round, ...room.state.upcoming]) {
+        if (!round) continue;
+        const builder = round.builder;
+        builder.hands.features ??= [];
+        builder.feature ??= null;
+        builder.connector ??= 'for';
+        builder.skipped ??= {};
+        if (room.state.phase === 'build' && !round.premise && !builder.hands.features.length) {
+          builder.hands.features = dealHand('features', builder, room.state.settings.tone, this.rng, this.cardsInPlay(room, round, 'features'));
+        }
+      }
       if (legacy && room.state.phase !== 'lobby') this.resetToLobby(room, false);
       if (LIVE_PHASES.includes(room.state.phase) && !room.state.paused) this.applyPause(room, 'host');
       this.rooms.set(room.state.code, room);
@@ -468,7 +477,8 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
       if (typeof updates.tutorial === 'boolean') settings.tutorial = updates.tutorial;
       if (updates.pitches !== undefined) settings.pitches = clamp(updates.pitches, PITCH_LIMITS.min, PITCH_LIMITS.max, settings.pitches);
       if (updates.bonuses) settings.bonuses = cleanBonuses({ ...settings.bonuses, ...updates.bonuses });
-    } else if (updates.timers || updates.timerSteps || updates.timerPreset || updates.tutorial !== undefined || updates.pitches !== undefined || updates.bonuses) {
+      if (updates.builderSteps) settings.builderSteps = cleanBuilderSteps({ ...settings.builderSteps, ...updates.builderSteps });
+    } else if (updates.timers || updates.timerSteps || updates.timerPreset || updates.tutorial !== undefined || updates.pitches !== undefined || updates.bonuses || updates.builderSteps) {
       throw new Error('Game settings can only change between games');
     }
     return this.commit(room);
@@ -574,8 +584,7 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
   /** Cards other players hold or picked in a step (products also skip ones already locked), so hands don't overlap. */
   private cardsInPlay(room: Room, own: RoundState, column: BuilderColumn): string[] {
     const others = room.state.upcoming.filter((round) => round !== own);
-    const key = column === 'products' ? 'product' : column === 'modifiers' ? 'modifier' : 'audience';
-    const held = others.flatMap((round) => [...round.builder.hands[column], round.builder[key] ?? '']).filter(Boolean);
+    const held = others.flatMap((round) => [...(round.builder.hands[column] ?? []), round.builder[PICK_KEY[column]] ?? '']).filter(Boolean);
     return column === 'products' ? [...held, ...room.usedProductIds] : held;
   }
   /** Brings the next built product on stage. One clock: pitch time first, then questions. */
@@ -613,34 +622,67 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
     round.nameOptions = businessNames(round.builder, room.state.settings.tone, this.rng);
   }
 
-  // Builder: three steps in reading order (twist, product, who), each a card from a hand or the player's own words.
+  /** A builder step this game uses (the host can switch off the twist, the who and the feature). */
+  private builderStep(room: Room, column: unknown): BuilderColumn {
+    if (!COLUMNS.includes(column as BuilderColumn)) throw new Error('Unknown step');
+    if (!activeColumns(room.state.settings.builderSteps).includes(column as BuilderColumn)) throw new Error('That step is switched off in this game');
+    return column as BuilderColumn;
+  }
+  private unskip(round: RoundState, step: BuilderColumn): void {
+    if (step !== 'products' && round.builder.skipped?.[step]) { round.builder.skipped = { ...round.builder.skipped }; delete round.builder.skipped[step]; }
+  }
+
+  // Builder: up to four steps in reading order (twist, product, who, feature), each a card from a hand, the player's own
+  // words, or (except the product) skipped.
   builderPick(code: string, playerId: string, column: unknown, id: unknown): DealSnapshot {
     const room = this.room(code);
     const round = this.openBuild(room, playerId);
-    if (!COLUMNS.includes(column as BuilderColumn)) throw new Error('Unknown step');
-    const step = column as BuilderColumn;
+    const step = this.builderStep(room, column);
     const picks = round.builder;
     const cardId = String(id ?? '');
-    if (!picks.hands[step].includes(cardId)) throw new Error('That card is not in your hand');
+    if (!picks.hands[step]?.includes(cardId)) throw new Error('That card is not in your hand');
     picks.custom = { ...picks.custom };
     delete picks.custom[step];
+    this.unskip(round, step);
     picks[PICK_KEY[step]] = cardId;
     if (step === 'modifiers') this.fitOther(room, round, 'products');
     if (step === 'products') this.fitOther(room, round, 'modifiers');
-    if (step !== 'audiences') this.refreshNames(room, round);
+    if (step === 'modifiers' || step === 'products') this.refreshNames(room, round);
     return this.commit(room);
   }
   /** "✏️ Write your own" for one step. The text replaces that step's card; an empty text goes back to picking a card. */
   builderCustom(code: string, playerId: string, column: unknown, value: unknown): DealSnapshot {
     const room = this.room(code);
     const round = this.openBuild(room, playerId);
-    if (!COLUMNS.includes(column as BuilderColumn)) throw new Error('Unknown step');
-    const step = column as BuilderColumn;
+    const step = this.builderStep(room, column);
     const picks = round.builder;
     const text = cleanCustom(value);
     picks.custom = { ...picks.custom };
-    if (text) { picks.custom[step] = text; picks[PICK_KEY[step]] = null; } else delete picks.custom[step];
-    if (step !== 'audiences') this.refreshNames(room, round);
+    if (text) { picks.custom[step] = text; picks[PICK_KEY[step]] = null; this.unskip(round, step); } else delete picks.custom[step];
+    if (step === 'modifiers' || step === 'products') this.refreshNames(room, round);
+    return this.commit(room);
+  }
+  /** "No twist" (or who, or feature): the step is left out of the headline. Picking a card or writing one brings it back. */
+  builderSkip(code: string, playerId: string, column: unknown): DealSnapshot {
+    const room = this.room(code);
+    const round = this.openBuild(room, playerId);
+    const step = this.builderStep(room, column);
+    if (step === 'products') throw new Error('Every business needs a product');
+    const picks = round.builder;
+    picks.skipped = { ...picks.skipped, [step]: true };
+    picks[PICK_KEY[step]] = null;
+    picks.custom = { ...picks.custom };
+    delete picks.custom[step];
+    if (step === 'modifiers') this.refreshNames(room, round);
+    return this.commit(room);
+  }
+  /** The word before the who: "for", "made by", "tested on"… */
+  builderConnector(code: string, playerId: string, connector: unknown): DealSnapshot {
+    const room = this.room(code);
+    const round = this.openBuild(room, playerId);
+    this.builderStep(room, 'audiences');
+    if (!CONNECTORS.some((item) => item.id === connector)) throw new Error('Unknown connector');
+    round.builder.connector = String(connector);
     return this.commit(room);
   }
   /**
@@ -663,8 +705,7 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
   builderReroll(code: string, playerId: string, column: unknown): DealSnapshot {
     const room = this.room(code);
     const round = this.openBuild(room, playerId);
-    if (!COLUMNS.includes(column as BuilderColumn)) throw new Error('Unknown step');
-    const step = column as BuilderColumn;
+    const step = this.builderStep(room, column);
     round.builder.hands[step] = dealHand(step, round.builder, room.state.settings.tone, this.rng, this.cardsInPlay(room, round, step));
     return this.commit(room);
   }
@@ -694,12 +735,12 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
     return this.commit(room);
   }
 
-  /** Fills any step left open with a random card from its hand (one that fits), so every locked product has all three parts. */
+  /** Fills any step left open (not skipped) with a random card from its hand (one that fits), so a locked product has every part. */
   private fillPicks(room: Room, round: RoundState): void {
     const tone = room.state.settings.tone;
     const picks = round.builder;
-    for (const column of COLUMNS) {
-      if (stepText(picks, column)) continue;
+    for (const column of activeColumns(room.state.settings.builderSteps)) {
+      if (stepText(picks, column) || (column !== 'products' && picks.skipped?.[column])) continue;
       const fitting = new Set(columnPool(column, picks, tone).map((item) => item.id));
       let hand = picks.hands[column].filter((id) => fitting.has(id));
       if (!hand.length) hand = dealHand(column, { ...picks, hands: { ...picks.hands, [column]: [] } }, tone, this.rng, this.cardsInPlay(room, round, column));
@@ -726,9 +767,11 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
     }
     const product = productById(picks.product);
     if (!round.nameOptions.length) this.refreshNames(room, round);
-    // In reading order, like the headline: twist, product, who. A written-in step shows a pencil.
-    const emojiFor = (column: BuilderColumn, card: { emoji: string } | undefined) => picks.custom?.[column] ? CUSTOM_EMOJI : card?.emoji;
-    const emojis = [emojiFor('modifiers', modifierById(picks.modifier)), emojiFor('products', product), emojiFor('audiences', audienceById(picks.audience))]
+    // In reading order, like the headline: twist, product, who, feature. A written-in step shows a pencil; a skipped one nothing.
+    const steps = activeColumns(room.state.settings.builderSteps);
+    const emojiFor = (column: BuilderColumn, card: { emoji: string } | undefined) =>
+      !steps.includes(column) || (column !== 'products' && picks.skipped?.[column]) ? undefined : picks.custom?.[column] ? CUSTOM_EMOJI : card?.emoji;
+    const emojis = [emojiFor('modifiers', modifierById(picks.modifier)), emojiFor('products', product), emojiFor('audiences', audienceById(picks.audience)), emojiFor('features', featureById(picks.feature))]
       .filter((item): item is string => Boolean(item));
     const fallbackName = round.nameOptions[0] ?? product?.roots[0] ?? 'Mystery Co.';
     round.premise = { headline, mainProductId: product?.id ?? 'custom', businessName: round.typedName || fallbackName, form: product?.form ?? 'goods', emojis };
@@ -1120,7 +1163,15 @@ function migrateSettings(settings: DealSettings): void {
   settings.tone = GAME_TONE;
   settings.pitches = clamp(settings.pitches, PITCH_LIMITS.min, PITCH_LIMITS.max, 1);
   settings.bonuses = cleanBonuses(settings.bonuses);
+  settings.builderSteps = cleanBuilderSteps(settings.builderSteps);
   delete (settings as Partial<DealSettings> & { complexity?: unknown }).complexity;
+}
+
+/** Every optional builder step as a boolean, with the default (on) for any a save doesn't have. */
+function cleanBuilderSteps(steps: Partial<BuilderStepSettings> | undefined): BuilderStepSettings {
+  const next = { ...DEFAULT_BUILDER_STEPS };
+  for (const key of OPTIONAL_COLUMNS) if (typeof steps?.[key] === 'boolean') next[key] = steps[key]!;
+  return next;
 }
 
 /** Every bonus switch as a boolean, with the default for any a save doesn't have. */

@@ -82,6 +82,11 @@ function StageProduct({ room }: { room: DealSnapshot }) {
   return <ProductCard key={big ? 'big' : 'corner'} premise={round.premise} className={big ? 'is-stage-big' : 'is-stage-corner'}/>;
 }
 
+/** Long headlines step down in size so they stay clear of the scoreboard (a four-card headline can run past 120 characters). */
+function headlineSize(headline: string): string {
+  return headline.length > 110 ? 'is-xxlong' : headline.length > 80 ? 'is-xlong' : headline.length > 58 ? 'is-long' : headline.length > 44 ? 'is-mid' : '';
+}
+
 /** The top row: headline on the left; host controls (Host tab only) beside the phase label on the right. */
 function TopBar({ room, hostBar }: { room: DealSnapshot; hostBar?: ReactNode }) {
   const seconds = useClockSeconds(room);
@@ -93,7 +98,7 @@ function TopBar({ room, hostBar }: { room: DealSnapshot; hostBar?: ReactNode }) 
       {premise ? <>
         <div className="dod-business-name">{premise.businessName}</div>
         {/* Long headlines step down in size so they stay clear of the scoreboard. */}
-        <h1 key={premise.headline} className={premise.headline.length > 58 ? 'is-long' : premise.headline.length > 44 ? 'is-mid' : ''}>{premise.headline}</h1>
+        <h1 key={premise.headline} className={headlineSize(premise.headline)}>{premise.headline}</h1>
       </> : <>
         <div className="dod-business-name">Deal or Dud</div>
         <h1>{room.phase === 'lobby' ? 'The studio is open' : room.phase === 'build' ? (room.roundIndex >= 3 ? `New products! Pitch ${Math.floor((room.roundIndex + 1) / 4) + 1} of ${room.settings.pitches}` : 'Everyone is building a business…') : PHASE_LABEL[room.phase]}</h1>
@@ -296,14 +301,20 @@ function LobbyMessage({ room }: { room: DealSnapshot }) {
 // ---------- tutorial ----------
 /** Where a bid tag clears each shark's head in the tutorial (the tutorial layer starts 90px down the stage). */
 const DEMO_BID_TOPS = [420, 372, 330];
-const DEMO_CARDS = [{ emoji: '🍣', step: 'Product', text: 'Gas station sushi' }, { emoji: '☢️', step: 'Twist', text: 'Radioactive' }, { emoji: '🧾', step: 'For', text: 'The IRS' }];
-const DEMO_PREMISE = { headline: 'Radioactive gas station sushi for the IRS', businessName: 'Sushi Crimes Inc.', mainProductId: 'demo', form: 'food' as const, emojis: ['🍣', '☢️', '🧾'] };
+const DEMO_HEADLINE = 'Cocaine-laced gas station sushi made by Satan, with a built-in bidet';
+const DEMO_CARDS = [
+  { emoji: '❄️', step: 'Twist', text: 'Cocaine-laced' },
+  { emoji: '🍣', step: 'Product', text: 'Gas station sushi' },
+  { emoji: '😈', step: 'Made by', text: 'Satan' },
+  { emoji: '🚿', step: 'Feature', text: 'Built-in bidet' }
+];
+const DEMO_PREMISE = { headline: DEMO_HEADLINE, businessName: 'Sushi Crimes Inc.', mainProductId: 'demo', form: 'food' as const, emojis: DEMO_CARDS.map((card) => card.emoji) };
 
 function TutorialDemo({ focus }: { focus: TutorialFocus }) {
   switch (focus) {
     case 'build':
       return <div className="dod-demo-build">
-        <p>“Radioactive gas station sushi for the IRS”</p>
+        <p>“{DEMO_HEADLINE}”</p>
         {DEMO_CARDS.map((card) => <div key={card.step} className="dod-demo-card"><small>{card.step}</small><span><Emoji char={card.emoji}/></span><b>{card.text}</b></div>)}
       </div>;
     case 'pitch':

@@ -8,7 +8,7 @@ import { execFileSync } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { AVATAR_PRESETS } from '../../src/games/deal-or-dud/content/cues';
-import { AUDIENCES, MODIFIERS, PRODUCTS } from '../../src/games/deal-or-dud/content/words';
+import { AUDIENCES, FEATURES, MODIFIERS, PRODUCTS } from '../../src/games/deal-or-dud/content/words';
 import { REACTIONS } from '../../src/games/deal-or-dud/types';
 import { BID_LABELS } from '../../src/games/deal-or-dud/ui/labels';
 import { emojiKey } from '../../src/games/deal-or-dud/ui/emojiKey';
@@ -21,7 +21,7 @@ const EXTRA = ['🏆', '🔒', '🍞', '🦜', '👵', '🎤', '❓', '🥁', '�
 
 const wanted = new Set<string>([
   ...AVATAR_PRESETS.flatMap((preset) => [preset.emoji, preset.prop ?? '']),
-  ...PRODUCTS.map((item) => item.emoji), ...MODIFIERS.map((item) => item.emoji), ...AUDIENCES.map((item) => item.emoji),
+  ...PRODUCTS.map((item) => item.emoji), ...MODIFIERS.map((item) => item.emoji), ...AUDIENCES.map((item) => item.emoji), ...FEATURES.map((item) => item.emoji),
   ...REACTIONS, ...Object.values(BID_LABELS).map((item) => item.emoji), ...EXTRA
 ].filter(Boolean));
 

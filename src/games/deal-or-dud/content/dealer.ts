@@ -1,7 +1,7 @@
 // Pure content logic: builder hands, headlines and business names. Shared by server and phones.
-import type { BuilderColumn, BuilderPicks, ProductForm, Tone } from '../types';
+import type { BuilderColumn, BuilderPicks, OptionalColumn, ProductForm, Tone } from '../types';
 import { toneAllows } from '../types';
-import { AUDIENCES, MODIFIERS, PRODUCTS, type ModifierWord, type ProductWord } from './words';
+import { AUDIENCES, CONNECTORS, FEATURES, MODIFIERS, PRODUCTS, type ModifierWord, type ProductWord } from './words';
 import { NAME_PATTERNS, type ToneLine } from './cues';
 
 export type Rng = () => number;
@@ -30,6 +30,20 @@ export function shuffle<T>(items: readonly T[], rng: Rng): T[] {
 export const modifierById = (id: string | null | undefined) => MODIFIERS.find((item) => item.id === id);
 export const productById = (id: string | null | undefined) => PRODUCTS.find((item) => item.id === id);
 export const audienceById = (id: string | null | undefined) => AUDIENCES.find((item) => item.id === id);
+export const featureById = (id: string | null | undefined) => FEATURES.find((item) => item.id === id);
+/** The word before the who ("made by"); an unknown or missing id is "for". */
+export const connectorText = (id: string | null | undefined) => (CONNECTORS.find((item) => item.id === id) ?? CONNECTORS[0]).text;
+
+/** Every builder step in reading order: "[twist] [product] for [who], [feature]". */
+export const COLUMNS: readonly BuilderColumn[] = ['modifiers', 'products', 'audiences', 'features'];
+export const OPTIONAL_COLUMNS: readonly OptionalColumn[] = ['modifiers', 'audiences', 'features'];
+/** Where each step's card pick lives on `BuilderPicks`. */
+export const PICK_KEY = { products: 'product', modifiers: 'modifier', audiences: 'audience', features: 'feature' } as const;
+
+/** A step's card pick. */
+export function pickedId(picks: HeadlinePicks, column: BuilderColumn): string | null {
+  return picks[PICK_KEY[column]] ?? null;
+}
 
 export function tonePool<T extends { tone?: Tone }>(items: readonly T[], tone: Tone): T[] {
   return items.filter((item) => toneAllows(tone, item.tone));
@@ -48,6 +62,7 @@ export function columnPool(column: BuilderColumn, picks: Pick<BuilderPicks, 'pro
   const modifier = modifierById(picks.modifier);
   if (column === 'products') return tonePool(PRODUCTS, tone).filter((item) => !modifier || modifierFits(modifier, item));
   if (column === 'audiences') return tonePool(AUDIENCES, tone);
+  if (column === 'features') return tonePool(FEATURES, tone);
   return tonePool(MODIFIERS, tone).filter((item) => !product || modifierFits(item, product));
 }
 
@@ -70,7 +85,7 @@ export function dealHand(column: BuilderColumn, picks: BuilderPicks, tone: Tone,
 }
 
 export function emptyBuilder(): BuilderPicks {
-  return { product: null, modifier: null, audience: null, hands: { products: [], modifiers: [], audiences: [] }, custom: {} };
+  return { product: null, modifier: null, audience: null, feature: null, connector: 'for', skipped: {}, hands: { products: [], modifiers: [], audiences: [], features: [] }, custom: {} };
 }
 
 /** A player's written-in text, cleaned: one line, no extra spaces, at most CUSTOM_MAX characters. */
@@ -79,26 +94,42 @@ export function cleanCustom(value: unknown): string {
 }
 
 /** What a step says in the headline: the written-in text, or the picked card's text. */
-export function stepText(picks: Pick<BuilderPicks, 'product' | 'modifier' | 'audience' | 'custom'>, column: BuilderColumn): string | null {
+export function stepText(picks: HeadlinePicks, column: BuilderColumn): string | null {
   const custom = picks.custom?.[column];
   if (custom) return custom;
   if (column === 'products') return productById(picks.product)?.text ?? null;
   if (column === 'modifiers') return modifierById(picks.modifier)?.text ?? null;
+  if (column === 'features') return featureById(picks.feature)?.text ?? null;
   return audienceById(picks.audience)?.text ?? null;
 }
 
+/** A step is done when it has a card, the player's own words, or the player skipped it. */
+export function stepDone(picks: HeadlinePicks, column: BuilderColumn): boolean {
+  return Boolean(stepText(picks, column) || (column !== 'products' && picks.skipped?.[column]));
+}
+
+/** What the headline needs from the picks. Only the product, twist and who are required, so older callers still fit. */
+export type HeadlinePicks = Pick<BuilderPicks, 'product' | 'modifier' | 'audience'> & Partial<Pick<BuilderPicks, 'feature' | 'connector' | 'skipped' | 'custom'>>;
+
 export function capitalize(text: string): string { return text.charAt(0).toUpperCase() + text.slice(1); }
 
-/** "[Twist] [product] for [audience]". Missing picks are left out; a card twist that doesn't fit a card product too. */
-export function buildHeadline(picks: Pick<BuilderPicks, 'product' | 'modifier' | 'audience'> & { custom?: BuilderPicks['custom'] }): string {
+/**
+ * "[Twist] [product] [for] [who], [feature]". Missing and skipped picks are left out, and so is a card twist that doesn't
+ * fit a card product. The feature follows a comma after a who ("…for the IRS, with a built-in bidet"), or the product.
+ */
+export function buildHeadline(picks: HeadlinePicks): string {
   const productText = stepText(picks, 'products');
   if (!productText) return '';
+  const skipped = picks.skipped ?? {};
   const product = productById(picks.product);
   const modifier = modifierById(picks.modifier);
-  const twist = picks.custom?.modifiers || (modifier && (!product || picks.custom?.products || modifierFits(modifier, product)) ? modifier.text : null);
-  const audience = stepText(picks, 'audiences');
-  const core = [twist, productText].filter(Boolean).join(' ');
-  return capitalize(audience ? `${core} for ${audience}` : core);
+  const twist = skipped.modifiers ? null : picks.custom?.modifiers || (modifier && (!product || picks.custom?.products || modifierFits(modifier, product)) ? modifier.text : null);
+  const audience = skipped.audiences ? null : stepText(picks, 'audiences');
+  const feature = skipped.features ? null : stepText(picks, 'features');
+  let text = [twist, productText].filter(Boolean).join(' ');
+  if (audience) text += ` ${connectorText(picks.connector)} ${audience}`;
+  if (feature) text += audience ? `, ${feature}` : ` ${feature}`;
+  return capitalize(text);
 }
 
 /** Name roots from a written-in step: its longest word, capitalized ("flying hot tubs" gives "Flying"). */
@@ -125,4 +156,9 @@ export function businessNames(picks: Pick<BuilderPicks, 'product' | 'modifier'> 
 
 export function toneLine(pool: readonly ToneLine[], tone: Tone, rng: Rng): ToneLine {
   return pick(tonePool(pool, tone), rng);
+}
+
+/** The steps in this game, in reading order: the product always, the others unless the host switched them off. */
+export function activeColumns(steps: Partial<Record<OptionalColumn, boolean>> | undefined): BuilderColumn[] {
+  return COLUMNS.filter((column) => column === 'products' || steps?.[column] !== false);
 }

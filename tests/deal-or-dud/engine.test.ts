@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { DealEngine } from '../../src/games/deal-or-dud/engine/DealEngine';
 import { sanitizeDealSnapshot } from '../../src/games/deal-or-dud/engine/sanitize';
 import { gameAwards, revealOrder, scoreRound, topBidders, voteWinners } from '../../src/games/deal-or-dud/engine/scoring';
-import { buildHeadline, modifierById, productById } from '../../src/games/deal-or-dud/content/dealer';
+import { buildHeadline, featureById, modifierById, productById } from '../../src/games/deal-or-dud/content/dealer';
 import { pitchSeconds, type DealPlayer, type DealSnapshot, type RoundResult } from '../../src/games/deal-or-dud/types';
 
 class MemoryStorage implements Storage {
@@ -133,14 +133,15 @@ describe('DealEngine', () => {
     engine.builderPick(code, presenter, 'products', hands().products[0]);
     engine.builderPick(code, presenter, 'modifiers', hands().modifiers[0]);
     engine.builderPick(code, presenter, 'audiences', hands().audiences[0]);
+    engine.builderPick(code, presenter, 'features', hands().features[0]);
     const picks = snap().upcoming[0].builder;
     buildAll();
     let state = snap();
     expect(state.phase).toBe('stage');
     expect(state.clock!.totalMs).toBe(180_000);
     expect(state.round!.premise!.headline).toBe(buildHeadline(picks));
-    // In reading order, like the headline: twist, product, who.
-    expect(state.round!.premise!.emojis).toEqual([modifierById(picks.modifier)!.emoji, productById(picks.product)!.emoji, expect.any(String)]);
+    // In reading order, like the headline: twist, product, who, feature.
+    expect(state.round!.premise!.emojis).toEqual([modifierById(picks.modifier)!.emoji, productById(picks.product)!.emoji, expect.any(String), featureById(picks.feature)!.emoji]);
     // Pitch time: the sharks' buttons are locked.
     expect(state.round!.questionsOpen).toBe(false);
     expect(() => engine.react(code, s1, '😂')).toThrow(/Pitch time/);
@@ -337,11 +338,48 @@ describe('DealEngine', () => {
     expect(reveal.round!.result!.total).toBe(700);
   });
 
+  it('lets a player skip optional steps, pick the word before the who, and never skip the product', () => {
+    engine.startGame(code, host);
+    const me = ids[1];
+    const mine = () => snap().upcoming[1].builder;
+    engine.builderPick(code, me, 'products', mine().hands.products[0]);
+    engine.builderSkip(code, me, 'modifiers');
+    expect(() => engine.builderSkip(code, me, 'products')).toThrow(/needs a product/);
+    engine.builderConnector(code, me, 'made-from');
+    expect(() => engine.builderConnector(code, me, 'eaten-by')).toThrow(/Unknown connector/);
+    engine.builderPick(code, me, 'audiences', mine().hands.audiences[0]);
+    engine.builderPick(code, me, 'features', mine().hands.features[0]);
+    engine.builderSkip(code, me, 'features');
+    expect(mine().feature).toBeNull();
+    engine.lockPremiseRequest(code, me);
+    const premise = snap().upcoming[1].premise!;
+    // Skipped steps stay out: no twist, no feature, and nothing filled in for them at the lock.
+    expect(mine().modifier).toBeNull();
+    expect(premise.headline).toBe(buildHeadline(mine()));
+    expect(premise.headline).toContain(' made from ');
+    expect(premise.headline).not.toContain(',');
+    expect(premise.emojis).toHaveLength(2);
+  });
+
+  it('leaves out builder steps the host switched off', () => {
+    engine.updateSettings(code, host, { builderSteps: { modifiers: false, audiences: true, features: false } });
+    engine.startGame(code, host);
+    const me = ids[0];
+    expect(() => engine.builderPick(code, me, 'modifiers', snap().upcoming[0].builder.hands.modifiers[0])).toThrow(/switched off/);
+    expect(() => engine.builderSkip(code, me, 'features')).toThrow(/switched off/);
+    buildAll();
+    const round = snap().round!;
+    expect(round.builder.modifier).toBeNull();
+    expect(round.builder.feature).toBeNull();
+    expect(round.premise!.headline).toMatch(/ for /);
+    expect(round.premise!.emojis).toHaveLength(2);
+  });
+
   it('deals the builder in reading order, six cards a step, with twists and products that fit each other', () => {
     engine.startGame(code, host);
     const me = ids[1];
     const mine = () => snap().upcoming[1].builder;
-    for (const column of ['modifiers', 'products', 'audiences'] as const) expect(mine().hands[column]).toHaveLength(6);
+    for (const column of ['modifiers', 'products', 'audiences', 'features'] as const) expect(mine().hands[column]).toHaveLength(6);
     expect(() => engine.builderPick(code, me, 'products', 'not-a-card')).toThrow(/not in your hand/);
     // The twist comes first; the product cards are then only ones it fits.
     const twist = mine().hands.modifiers.find((id) => modifierById(id)!.forms.length < 8) ?? mine().hands.modifiers[0];
@@ -406,17 +444,17 @@ describe('DealEngine', () => {
 
   it('auto-locks every product when the build clock runs out, filling empty picks, and starts round 1', () => {
     engine.startGame(code, host);
-    expect(snap().clock!.totalMs).toBe(75_000);
+    expect(snap().clock!.totalMs).toBe(90_000);
     engine.lockPremiseRequest(code, ids[2]);
-    advance(75_000);
+    advance(90_000);
     expect(snap().phase).toBe('stage');
     expect(snap().round!.presenterId).toBe(ids[0]);
     // Nothing was picked, so every part of the headline came from the dealt cards.
     const picks = snap().round!.builder;
-    expect([picks.product, picks.modifier, picks.audience].every(Boolean)).toBe(true);
+    expect([picks.product, picks.modifier, picks.audience, picks.feature].every(Boolean)).toBe(true);
     expect(snap().round!.premise!.headline).toMatch(/ for /);
     expect(snap().upcoming.map((round) => round.presenterId)).toEqual(ids.slice(1));
-    expect(snap().upcoming.every((round) => round.premise && round.premise.emojis.length === 3)).toBe(true);
+    expect(snap().upcoming.every((round) => round.premise && round.premise.emojis.length === 4)).toBe(true);
   });
 
   it('builds everyone at once, each phone privately, and pitches them back to back', () => {
@@ -698,7 +736,7 @@ describe('DealEngine', () => {
   it('applies timer steps on top of a preset, in order, within limits', () => {
     engine.updateSettings(code, host, { timerPreset: 'quick' });
     // Presets only change the stage clock.
-    expect(snap().settings.timers).toEqual({ prep: 75, stage: 120, offers: 45, reveal: 10, scores: 5, tiebreaker: 20 });
+    expect(snap().settings.timers).toEqual({ prep: 90, stage: 120, offers: 45, reveal: 10, scores: 5, tiebreaker: 20 });
     engine.updateSettings(code, host, { timerSteps: { reveal: 5, scores: -10 } });
     expect(snap().settings.timers.reveal).toBe(15);
     expect(snap().settings.timers.scores).toBe(3);
