@@ -130,6 +130,11 @@ With the narrator service running (`--only=tutorial|lines|suspect` does one part
 FFMPEG=<path to ffmpeg.exe> npx tsx scripts/deal-or-dud/render-narration.ts
 ```
 
+## Art and motion
+
+- **3D emoji art.** Avatars, props, builder cards and the scorecard icons draw as Microsoft Fluent Emoji 3D images (MIT; the notice is `public/deal-or-dud/art/LICENSE-fluent-emoji.txt`). `scripts/deal-or-dud/copy-art.ts` copies the image for every emoji in the content pools from the full set (`C:\Users\caleb\code\tools\fluent-emoji\assets\`, or `FLUENT_EMOJI=<folder>`) into `public/deal-or-dud/art/<code points>.png` at 128px, and writes `src/games/deal-or-dud/artManifest.ts`. `ui/Emoji.tsx` draws the image when one exists and the text emoji otherwise, so a new word with a new emoji still works; re-run the script (with `FFMPEG=<path>`) to give it art.
+- **Motion** is CSS only: builder cards deal in, scorecard tiles flip over one after another at the reveal, the GOOD/BAD stamp slams down, points rows and standings slide in, scores count up on the nameplates (`ui/CountUp.tsx`), and banners and headlines slide in on each phase. Everything switches off under the system's reduce-motion setting.
+
 ## Selfies
 
 "Take a photo" is a file input with `capture="user"`, so a tap opens the phone's own camera app. This works over the plain-HTTP LAN; an in-page live camera would need HTTPS. The phone then crops the photo to 192px. Photos live only in the room's saved state and expire with the room (12 hours idle). If the camera is refused or missing, the preset characters still work.

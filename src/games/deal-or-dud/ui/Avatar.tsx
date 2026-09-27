@@ -1,5 +1,6 @@
 import { AVATAR_PRESETS } from '../content/cues';
 import type { PlayerLook } from '../types';
+import { Emoji } from './Emoji';
 
 export function presetOf(id: string) {
   return AVATAR_PRESETS.find((preset) => preset.id === id) ?? AVATAR_PRESETS[0];
@@ -13,7 +14,7 @@ export function Avatar({ look, size = 96, className = '' }: { look: PlayerLook; 
   }
   const preset = presetOf(look.presetId);
   return <span className={`dod-avatar preset ${className}`} style={{ ...style, background: `radial-gradient(circle at 35% 30%, ${preset.bg}ee, ${preset.bg} 60%, #0008 140%)` }} aria-label={preset.label}>
-    <span className="dod-avatar-emoji" aria-hidden="true">{preset.emoji}</span>
-    {preset.prop && <span className="dod-avatar-prop" aria-hidden="true" style={{ fontSize: size * 0.3 }}>{preset.prop}</span>}
+    <span className="dod-avatar-emoji" aria-hidden="true"><Emoji char={preset.emoji}/></span>
+    {preset.prop && <span className="dod-avatar-prop" aria-hidden="true" style={{ fontSize: size * 0.3 }}><Emoji char={preset.prop}/></span>}
   </span>;
 }

@@ -387,7 +387,7 @@ html:has(.dod-app), body:has(.dod-app) { margin: 0; background: #05091a; }
 @keyframes dod-flip { from { transform: perspective(900px) rotateX(88deg); opacity: 0.2; } }
 
 /* The tutorial shows the board as one row so it stays clear of the title and the sharks. */
-.dod-app .dod-tutorial .dod-scoreboard { top: 250px; grid-template-columns: repeat(4, 1fr); }
+.dod-app .dod-tutorial .dod-scoreboard { top: 160px; grid-template-columns: repeat(4, 1fr); }
 .dod-app .dod-tutorial .dod-tile { grid-template-columns: 1fr; justify-items: center; text-align: center; gap: 8px; min-height: 0; padding: 12px; }
 .dod-app .dod-tutorial .dod-tile-icon { width: 64px; height: 64px; font-size: 42px; }
 .dod-app .dod-tutorial .dod-tile-head, .dod-app .dod-tutorial .dod-tile-line { justify-content: center; }
@@ -458,3 +458,36 @@ html:has(.dod-app), body:has(.dod-app) { margin: 0; background: #05091a; }
 .dod-app .dod-ideas { flex: none; display: grid; gap: 3px; font-size: 14px; }
 .dod-app .dod-ideas small { font-size: 11px; font-weight: 800; color: var(--dod-muted); text-transform: uppercase; letter-spacing: 0.06em; }
 .dod-app .dod-ideas .dod-link { justify-self: start; padding: 2px 0; font-size: 13px; }
+
+/* ---------- Fluent 3D emoji art ---------- */
+.dod-app .dod-emoji { display: inline-block; width: 1em; height: 1em; vertical-align: -0.14em; object-fit: contain; user-select: none; -webkit-user-drag: none; }
+.dod-app .dod-avatar-emoji .dod-emoji { width: 1.12em; height: 1.12em; vertical-align: middle; filter: drop-shadow(0 3px 4px #0006); }
+.dod-app .dod-avatar-prop .dod-emoji { width: 1.15em; height: 1.15em; }
+.dod-app .dod-pick-emoji .dod-emoji { width: 1.25em; height: 1.25em; filter: drop-shadow(0 3px 3px #0004); }
+.dod-app .dod-tile-icon .dod-emoji, .dod-app .dod-demo-card .dod-emoji { filter: drop-shadow(0 4px 6px #0007); }
+
+/* ---------- Motion (all of it switches off under prefers-reduced-motion, above) ---------- */
+@keyframes dod-stamp { from { transform: scale(2.6) rotate(-16deg); opacity: 0; } 60% { transform: scale(0.94) rotate(-3deg); opacity: 1; } }
+@keyframes dod-rise { from { transform: translate(-50%, 24px); opacity: 0; } }
+@keyframes dod-slide-in { from { transform: translateX(-40px); opacity: 0; } }
+@keyframes dod-fade-up { from { transform: translateY(10px); opacity: 0; } }
+@keyframes dod-bump { 40% { transform: scale(1.25); } }
+.dod-app .dod-stamp { animation: dod-stamp 0.55s 0.15s cubic-bezier(.2,1.3,.4,1) both; }
+.dod-app .dod-banner { animation: dod-rise 0.45s cubic-bezier(.2,1.2,.4,1) both; }
+.dod-app .dod-headline h1 { animation: dod-slide-in 0.5s cubic-bezier(.2,1.1,.4,1) both; }
+.dod-app .dod-score.is-counting { display: inline-block; color: #fff3c4; animation: dod-bump 0.45s ease-out; }
+.dod-app .dod-standings li, .dod-app .dod-deltas li { animation: dod-fade-up 0.4s both; }
+.dod-app .dod-standings li:nth-child(2), .dod-app .dod-deltas li:nth-child(2) { animation-delay: 0.08s; }
+.dod-app .dod-standings li:nth-child(3), .dod-app .dod-deltas li:nth-child(3) { animation-delay: 0.16s; }
+.dod-app .dod-standings li:nth-child(4), .dod-app .dod-deltas li:nth-child(4) { animation-delay: 0.24s; }
+.dod-app .dod-deltas li { animation-delay: 1.8s; }
+.dod-app .dod-deltas li:nth-child(2) { animation-delay: 1.9s; }
+.dod-app .dod-deltas li:nth-child(3) { animation-delay: 2s; }
+.dod-app .dod-deltas li:nth-child(4) { animation-delay: 2.1s; }
+.dod-app .dod-screen-main > * { animation: dod-fade-up 0.25s both; }
+.dod-app .dod-check-row { animation: dod-fade-up 0.3s both; }
+.dod-app .dod-check-row:nth-child(2) { animation-delay: 0.06s; }
+.dod-app .dod-check-row:nth-child(3) { animation-delay: 0.12s; }
+.dod-app .dod-check-row:nth-child(4) { animation-delay: 0.18s; }
+.dod-app .dod-headline h1.is-mid { font-size: 42px; }
+.dod-app .dod-headline h1.is-long { font-size: 34px; }

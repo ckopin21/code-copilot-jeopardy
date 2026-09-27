@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { BuilderColumn, BuilderPicks, DealSnapshot, RoundState } from '../../types';
 import { audienceById, buildHeadline, modifierById, productById } from '../../content/dealer';
 import { useClockSeconds } from '../net';
+import { Emoji } from '../Emoji';
 
 type Send = (event: string, payload?: Record<string, unknown>) => Promise<boolean>;
 type Step = BuilderColumn | 'name';
@@ -66,7 +67,7 @@ export function Builder({ room, round, send }: { room: DealSnapshot; round: Roun
         const chosen = card(item.id, picked(picks, item.id));
         const reachable = index === 0 || Boolean(picks.product);
         return <li key={item.id}><button className={`${step === item.id ? 'is-on' : ''} ${chosen ? 'is-done' : ''}`} disabled={!reachable} aria-current={step === item.id ? 'step' : undefined} onClick={() => setStep(item.id)}>
-          <small>{index + 1}. {item.label}</small><span>{chosen ? `${chosen.emoji} ${chosen.text}` : '—'}</span>
+          <small>{index + 1}. {item.label}</small><span>{chosen ? <><Emoji char={chosen.emoji}/> {chosen.text}</> : '—'}</span>
         </button></li>;
       })}
     </ol>
@@ -79,7 +80,7 @@ export function Builder({ room, round, send }: { room: DealSnapshot; round: Roun
           if (!item) return null;
           const on = picked(picks, current.id) === id;
           return <button key={id} className={`dod-pick-card ${on ? 'is-on' : ''}`} aria-pressed={on} onClick={() => choose(current.id, id)}>
-            <span className="dod-pick-emoji" aria-hidden="true">{item.emoji}</span><b>{item.text}</b>
+            <span className="dod-pick-emoji" aria-hidden="true"><Emoji char={item.emoji}/></span><b>{item.text}</b>
           </button>;
         })}
       </div>

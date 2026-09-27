@@ -5,6 +5,8 @@ import { estimateMinutes } from '../types';
 import { CATEGORIES } from '../content/scorecard';
 import { StudioSet, CHAIR_SPOTS, PRESENTER_SPOT } from './StudioSet';
 import { Avatar } from './Avatar';
+import { Emoji } from './Emoji';
+import { CountUp } from './CountUp';
 import { PHASE_LABEL, TUTORIAL_TIMELINE, formatClock, offerLabel, playerById, rankOf, signed, standings } from './labels';
 import { useClockSeconds, useNow, useServerOffset } from './net';
 import type { TutorialFocus } from '../tutorialScript';
@@ -46,7 +48,7 @@ function SeatedShark({ player, spot, offerTag, highlight, dim, locked }: {
     </div>
     <div className="dod-nameplate">
       <span className="dod-name">{player.name}</span>
-      <span className="dod-score">{player.score}</span>
+      <CountUp className="dod-score" value={player.score}/>
       {locked && <span className="dod-lock" aria-label="Locked">🔒</span>}
     </div>
   </div>;
@@ -64,7 +66,7 @@ function StandingPresenter({ player, label = 'Presenter' }: { player: DealPlayer
       <rect x="108" y="168" width="44" height="90" rx="12" fill="#1b2438"/>
       <path d="M30 60 L6 150 L26 156 L50 80 Z M170 60 L194 150 L174 156 L150 80 Z" fill="#26324d"/>
     </svg>
-    <div className="dod-nameplate presenter"><span className="dod-name">{player.name}</span><span className="dod-score">{player.score}</span></div>
+    <div className="dod-nameplate presenter"><span className="dod-name">{player.name}</span><CountUp className="dod-score" value={player.score}/></div>
   </div>;
 }
 
@@ -81,7 +83,7 @@ export function ScoreBoard({ room, peeks, rows, demo }: { room: DealSnapshot; pe
       const row = rows.find((item) => item.category === category.id);
       const chips = peekers.length > 0 && <span className="dod-tile-peeks">{peekers.map((name) => <span key={name}>👀 {name}{row ? '' : ' peeked'}</span>)}</span>;
       return <article key={category.id} className={`dod-tile ${row ? (row.ok ? 'is-ok' : 'is-bad') : ''}`} style={{ animationDelay: `${row ? index * 0.45 : 0}s` }} data-category={category.id}>
-        <div className="dod-tile-icon" aria-hidden="true">{category.icon}</div>
+        <div className="dod-tile-icon" aria-hidden="true"><Emoji char={category.icon}/></div>
         <div className="dod-tile-body">
           <div className="dod-tile-head"><h3>{category.label}</h3>{row && <span className="dod-tile-mark">{row.ok ? '✅' : '❌'} {row.ok ? category.okWord : category.badWord}</span>}{row && chips}</div>
           {row ? <p>{row.text}</p> : <div className="dod-tile-line"><span className="dod-tile-secret">🔒 Secret</span>{chips}</div>}
@@ -106,7 +108,8 @@ function TopBar({ room }: { room: DealSnapshot }) {
     <div className="dod-headline">
       {premise ? <>
         <div className="dod-business-name">{premise.businessName}</div>
-        <h1>{premise.headline}</h1>
+        {/* Long headlines step down in size so they stay clear of the scoreboard. */}
+        <h1 key={premise.headline} className={premise.headline.length > 58 ? 'is-long' : premise.headline.length > 44 ? 'is-mid' : ''}>{premise.headline}</h1>
       </> : <>
         <div className="dod-business-name">Deal or Dud</div>
         <h1>{room.phase === 'lobby' ? 'The studio is open' : room.phase === 'build' ? 'Everyone is building a business…' : PHASE_LABEL[room.phase]}</h1>
@@ -165,7 +168,7 @@ function Standings({ room, title }: { room: DealSnapshot; title: string }) {
   const next = room.phase === 'break' ? room.players[nextIndex] : null;
   return <section className="dod-standings">
     <h2>{title}</h2>
-    <ol>{standings(room).map((player) => <li key={player.id}><span className="rank">{rankOf(room, player)}</span><Avatar look={player.look} size={64}/><b>{player.name}</b><strong>{player.score}</strong></li>)}</ol>
+    <ol>{standings(room).map((player) => <li key={player.id}><span className="rank">{rankOf(room, player)}</span><Avatar look={player.look} size={64}/><b>{player.name}</b><strong><CountUp value={player.score}/></strong></li>)}</ol>
     {next && <p className="dod-next">Next presenter: <b>{next.name}</b></p>}
   </section>;
 }
@@ -228,7 +231,7 @@ function TutorialDemo({ room, focus }: { room: DealSnapshot; focus: TutorialFocu
   switch (focus) {
     case 'build':
       return <div className="dod-demo-build">
-        {DEMO_CARDS.map((card) => <div key={card.step} className="dod-demo-card"><small>{card.step}</small><span>{card.emoji}</span><b>{card.text}</b></div>)}
+        {DEMO_CARDS.map((card) => <div key={card.step} className="dod-demo-card"><small>{card.step}</small><span><Emoji char={card.emoji}/></span><b>{card.text}</b></div>)}
         <p>“Pirate-themed toasters for grandmas”</p>
       </div>;
     case 'phone-scorecard':

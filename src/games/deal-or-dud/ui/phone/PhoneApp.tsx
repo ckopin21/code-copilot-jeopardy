@@ -4,6 +4,7 @@ import type { CategoryId, DealPlayer, DealSnapshot, OfferChoice, Peek, PlayerLoo
 import { OFFER_CHOICES } from '../../types';
 import { usePlayerRoom, useClockSeconds } from '../net';
 import { Avatar } from '../Avatar';
+import { Emoji } from '../Emoji';
 import { AvatarPicker, recallLook, rememberLook } from './AvatarPicker';
 import { BuildLocked, Builder } from './Builder';
 import { PHASE_LABEL, formatClock, offerLabel, playerById, signed, standings } from '../labels';
@@ -104,7 +105,7 @@ function Screen({ children, action }: { children: ReactNode; action?: ReactNode 
 function CheckRow({ room, category, row, peeks }: { room: DealSnapshot; category: CategoryInfo; row?: ScoreRow; peeks: Peek[] }) {
   const peekers = peeks.filter((item) => item.category === category.id).map((item) => playerById(room, item.sharkId)?.name).filter(Boolean);
   return <div className={`dod-check-row ${row ? (row.ok ? 'is-ok' : 'is-bad') : ''}`}>
-    <span className="dod-check-icon" aria-hidden="true">{category.icon}</span>
+    <span className="dod-check-icon" aria-hidden="true"><Emoji char={category.icon}/></span>
     <div>
       <small>{category.label}{peekers.length > 0 && <em> · 👀 {peekers.join(', ')}</em>}</small>
       {row && <b>{row.ok ? '✅' : '❌'} {row.text}</b>}
@@ -183,13 +184,13 @@ function SharkStage({ room, round, me, send }: { room: DealSnapshot; round: Roun
         const peekers = round.peeks.filter((item) => item.category === category.id).map((item) => item.sharkId === me.id ? 'you' : playerById(room, item.sharkId)?.name);
         const own = mine?.category === category.id;
         return <button key={category.id} className={`dod-peek ${pending === category.id ? 'is-pending' : ''} ${own ? 'is-mine' : ''}`} disabled={Boolean(mine) && !own} aria-pressed={own} onClick={() => tap(category.id)}>
-          <span aria-hidden="true">{category.icon}</span><b>{category.label}</b>
+          <span aria-hidden="true"><Emoji char={category.icon}/></span><b>{category.label}</b>
           <small>{pending === category.id ? 'Tap again to peek 👀' : peekers.length ? `👀 ${peekers.join(', ')}` : mine ? '' : 'Tap to peek'}</small>
         </button>;
       })}
     </div>
     <MyPeek round={round} me={me}/>
-    <div className="dod-ideas"><small>Things to ask</small>{ideas.map((idea) => <span key={idea.id}>{categoryInfo(idea.category).icon} {idea.text}</span>)}<button className="dod-link" onClick={() => setSeed((value) => value + 1)}>🔀 Other ideas</button></div>
+    <div className="dod-ideas"><small>Things to ask</small>{ideas.map((idea) => <span key={idea.id}><Emoji char={categoryInfo(idea.category).icon}/> {idea.text}</span>)}<button className="dod-link" onClick={() => setSeed((value) => value + 1)}>🔀 Other ideas</button></div>
   </Screen>;
 }
 
