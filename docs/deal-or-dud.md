@@ -8,26 +8,38 @@ Start it from the game picker at `/`, or go straight to `/?game=deal-or-dud&mode
 
 | Screen | Where | Shows |
 | --- | --- | --- |
-| Host (TV) | `?game=deal-or-dud&mode=host` | Studio set, public facts, clock, offers, reveal, scores. Host controls, settings, and the soundtrack. |
+| Host (TV) | `?game=deal-or-dud&mode=host` | Studio set, the four scorecard tiles (who peeked at what; the answers only at the reveal), clock, offers, reveal, scores. Host controls, settings, and the soundtrack. |
 | Presentation | Host's display link | The same TV view for a second screen. Sound is off unless "Play sound here" is tapped. |
-| Every phone, at the start | `?mode=player` | Product builder and business name, then "Locked in" (the name can still change) until everyone is done. |
-| Presenter phone | `?mode=player` | Secret verdict, six-card dossier (3 good, 3 bad), optional "Show on TV", partner choice. |
-| Shark phone | `?mode=player` | Question ideas, the facts on the TV, bid and lock. |
-| First player's phone | same | Adds a 🎛 button in the header: pause/resume, lock everyone in, skip the pitch, questions and waits, volumes. |
+| Every phone, at the start | `?mode=player` | Three quick card picks (product, twist, audience) and the business name, then "Locked in" (the name can still change) until everyone is done. |
+| Presenter phone | `?mode=player` | Secret verdict and the full scorecard (✅/❌ and a line for each check, plus who peeked where), a pitch idea, partner choice. |
+| Shark phone | `?mode=player` | The one peek (tap a check, tap again), its answer, things to ask, "I'm ready to bid", then bid and lock. |
+| First player's phone | same | Adds a 🎛 button in the header: pause/resume, lock everyone in, skip to bids, skip the waits, volumes. |
 
-The TV never receives the verdict, hidden cards, bids before everyone locks, or seat codes. That boundary is `engine/sanitize.ts` and is covered by `tests/deal-or-dud/engine.test.ts`.
+Before the reveal, the TV never receives the verdict or any scorecard row, a shark's phone receives only the row it peeked at, and nobody sees bids before everyone locks or anyone else's seat code. Who peeked at which check is public. That boundary is `engine/sanitize.ts` and is covered by `tests/deal-or-dud/engine.test.ts`.
 
 ## Game flow (all enforced in `engine/DealEngine.ts`)
 
-**Build, once, before round 1** (default 45s). Everyone builds their own product on their phone at the same time. Each phone sees only its own; the TV shows who has locked in. The last lock starts round 1; when the clock runs out (or the host taps "Lock everyone in"), open products lock as they are and a missing product is supplied. The four products wait in `upcoming` (in join order, which is the pitch order) until their round. Nobody sees their GOOD/BAD file until their own pitch starts.
+**Build, once, before round 1** (default 1:15). Everyone builds their own product on their phone at the same time with three quick card picks: 1 of 4 **products**, then 1 of 4 **twists** (only ones that fit the product), then 1 of 4 **audiences** ("Pirate-themed toasters for grandmas"). Each step has 🔀 New cards and Back, and tapping a pick at the top changes it. After the picks come the business-name chips and "Lock it in". The server deals the hands so no two players hold the same product. Each phone sees only its own; the TV shows who has locked in. The last lock starts round 1; when the clock runs out (or the host taps "Lock everyone in"), open products lock as they are and any empty pick gets a random card from its hand. The four products wait in `upcoming` (in join order, which is the pitch order) until their round. Nobody sees their scorecard until their own round starts.
 
-Then four rounds, each opening straight into its pitch:
+**The scorecard.** When a product locks, the verdict is a fair coin. Four fixed checks, the same every round, each come back ✅ or ❌ with one short line:
 
-1. **Pitch** (one clock, default 90s). The three good facts go on the TV at once. The presenter reads their secret file (GOOD or BAD, plus three hidden bad facts) and pitches on the same clock. The presenter ("Done pitching") or the host (Skip) can end it early.
-2. **Questions** (150s). Fact checks are verbal: if a shark asks about something a hidden bad fact covers, the presenter must say it. The presenter may also tap "Show on TV" to put a card on the board; nothing else appears on its own. Questions end when the clock runs out, when all three sharks tap "I'm ready to bid" (a second tap takes it back), or when the host skips.
-3. **Bids** (45s). Each shark picks $0 to $500K in $100K steps and locks it with one tap (final). A bid that isn't locked counts as $0.
-4. **Partner** (20s). Only when sharks tie at the top bid; the presenter chooses, and a timeout picks at random.
-5. **The truth** (15s): verdict, all six facts, explanation, a "what happened later" line, points. Then a 12s scores break (skippable).
+| Check | Tile | ✅ means |
+| --- | --- | --- |
+| `works` 🔧 | Does it work? | Yes |
+| `demand` 🙋 | Do people want it? | Yes |
+| `money` 💰 | Does it make money? | Yes |
+| `trouble` 🚨 | Any trouble? (safety, lawsuits, bad reviews) | All clear (no trouble) |
+
+A GOOD business gets 3 ✅ (70%) or 4 (30%). A BAD one gets 2 (50%), 1 (35%) or 0 (15%), so it still has real strengths to sell. Which checks pass is random.
+
+Then four rounds, each opening straight on stage:
+
+1. **On stage** (one clock, default 3:00, 1:00 to 10:00 in settings). The presenter's phone shows the verdict and all four rows; they pitch and talk around the ❌s while the sharks ask anything. **Each shark gets one peek per round**: tap a check (then tap again to confirm) and only that phone shows its ✅/❌ and line. Sharks can share it, keep it, or bluff. The TV shows who peeked at what, never the answer. The stage ends when the clock runs out, when all three sharks tap "I'm ready to bid" (a second tap takes it back), or when the host skips.
+2. **Bids** (45s). Each shark picks $0 to $500K in $100K steps and locks it with one tap (final). A bid that isn't locked counts as $0.
+3. **Partner** (20s). Only when sharks tie at the top bid; the presenter chooses, and a timeout picks at random.
+4. **The truth** (10s): the four tiles flip to ✅/❌ with their lines, the verdict, a one-sentence explanation, a "what happened later" line, points. Then a 5s scores break. Both are skippable.
+
+Timer presets: Quick (build 0:55, stage 2:00), Standard (1:15, 3:00), Relaxed (1:40, 4:00).
 
 After four rounds a tie at the top goes to the **Final Forecast** tiebreaker: tied players guess a number privately; closest wins; one repeat with a new card; then a random draw.
 
@@ -44,13 +56,13 @@ A $500K deal on a GOOD business gives the presenter and the shark 7 each.
 
 ## Phone layout
 
-Every phone screen fits the viewport without page scrolling: a header (name, score, room key and seat code, clock), the screen's content, and its main button at the bottom of the column. Long lists are paged or tabbed instead of scrolled: the builder shows 12 options at a time ("More options"), the presenter's cards and pitch ideas sit behind tabs, and the shark's facts and question ideas share a tab bar. On a very small screen the content area can still scroll as a fallback.
+Every phone screen fits the viewport without page scrolling: a header (name, score, room key and seat code, clock), the screen's content, and its main button at the bottom of the column. The builder shows one step of four big cards at a time, the presenter's scorecard is four short rows, and the shark's peek is a 2×2 grid with two talking points under it. On a very small screen the content area can still scroll as a fallback. The e2e test checks both at 390×844.
 
 ## Pause and disconnects
 
 - The Host or the first player can pause at any time. Every deadline shifts by the paused time.
 - If the presenter's phone drops mid-round, the round pauses by itself and resumes when it reconnects. A phone dropping during the build doesn't pause; its product locks with the others.
-- Rooms saved mid-game by a version from before the shared build go back to their lobby on load (their later rounds were never built).
+- Rooms saved mid-game by an older version (before the shared build, or with the fact-card dossier and separate pitch and question clocks) go back to their lobby on load with their players. Old timer settings move to the stage clock: a named preset takes the new preset values; custom timers keep the build, offer and tiebreaker values and get the standard 3:00 stage.
 - A server restart restores rooms paused.
 - The game needs exactly four players. Removing a player mid-game returns the room to the lobby. In the lobby, the Host screen shows a Remove button (with a confirm) next to any offline player, so an abandoned seat never blocks the start.
 - **Seat codes.** Every player gets a 4-digit seat code, shown under their name on their phone with the room key. Entering the room key and seat code on any phone ("Already playing? Get your seat back") takes the seat back and signs the old phone out. Ten wrong codes in a minute pause further tries. Only the owner's phone ever receives its code.
@@ -62,14 +74,16 @@ Every phone screen fits the viewport without page scrolling: a header (name, sco
 
 ## Content (`src/games/deal-or-dud/content/`)
 
-- `words.ts`: 56 modifiers, 104 products, 50 audiences (45, 93 and 40 of them Clean). Each has a tone, and modifiers list the product forms they fit (food, gadget, goods, pet, service, rental, digital, event). The builder disables picks that would make a broken headline.
-- `profilesGood.ts` / `profilesBad.ts`: 23 GOOD and 23 BAD business families with 92 complete six-card variants, at least two per family (3 favorable, 3 unfavorable, distinct subjects). Every card has Simple / Standard / Challenge wording.
-- `cues.ts`: pitch cues, shark question ideas, "later" jokes, business-name patterns, avatar presets, tiebreaker cards.
-- The verdict is a fair coin flip, independent of the words, with no per-game quota. Dossiers and headlines never repeat within a game, and recently used dossiers are deprioritized across games on the same server.
+- `words.ts`: the builder cards, each with an emoji and a tone: 84 products, 50 twists, 51 audiences (71, 38 and 40 of them Clean). Twists list the product forms they fit (food, gadget, goods, pet, service, rental, digital, event), and a twist hand only deals ones that fit the picked product, so headlines never break.
+- `scorecard.ts`: the four checks and the line pools, one pool per check and result (✅/❌). Lines can name the product and its customers, carry `forms` when they only suit some products (no crashing apps for cupcakes), and carry a tone. Also the shark talking points per check.
+- `dealer.ts`: hands, headlines, names, and `dealScorecard` (which checks pass, and a fresh line for each).
+- `cues.ts`: pitch ideas, "later" jokes, business-name patterns, avatar presets, tiebreaker cards.
+- Products, headlines and scorecard lines never repeat within a game, and recently used lines are deprioritized across games on the same server.
 
 `tests/deal-or-dud/content.test.ts` enforces the content rules:
-- at most one number per card, no business jargon, cards short enough to read at a glance
-- subjects fit the product form, and every product form has at least 6 GOOD and 6 BAD variants
+- every line fits a tile (48 characters), has at most one number and no business jargon
+- every check, result and product form has at least 3 lines in every tone
+- every product has at least 8 twists that fit it, in every tone
 - Clean pools contain no crude, gross or creepy words
 - every tone has enough material for four rounds
 
@@ -79,26 +93,27 @@ Run it after any content edit:
 npx vitest run tests/deal-or-dud
 ```
 
-The tests can't check whether a high schooler can explain the outcome in one sentence. Read new profiles aloud with their `explain` line before shipping them.
+The tests can't check whether a line reads naturally with every product it fits. Read new lines aloud with a couple of products of each form before shipping them.
 
 ## Audio (`public/deal-or-dud/audio/`)
 
 - **Music and stings** are synthesized by `scripts/deal-or-dud/render-music.ts` (no samples). Loops are WAV so they loop without gaps; stings are MP3.
-  - Loops: lobby, discussion bed, offer pulse.
+  - Loops: lobby, stage bed (`discussion-bed.wav`), offer pulse.
   - Stings: fanfare, pitch intro, GOOD/BAD reveals, winner.
 - **Sound effects** `lock.mp3` (poker chips), `card.mp3` (card placed) and `tick.mp3` come from Kenney's CC0 packs (kenney.nl: Casino Audio, Interface Sounds). The tick counts down the last 5 seconds of the build, bid, partner and tiebreaker clocks.
-- Only the Host tab plays sound by default. Music ducks under narration. The discussion bed plays at a low level; the offer pulse is only slightly louder. Card stings are soft.
+- Only the Host tab plays sound by default. Music ducks under narration. The stage bed plays at a low level; the offer pulse is only slightly louder. A peek plays a soft card flip.
 
 ### The hosts (narration)
 
 Two host voices, `adam` and `george`, take turns. They are cloned by Chatterbox (MIT, runs on the PC's GPU) from reference clips made with Kokoro-82M.
 
 - **Fixed lines** (phase calls, time warnings, verdicts) are in `src/games/deal-or-dud/audio/narrationLines.ts` and recorded to `voice/<line>-<variant>-<voice>.mp3`. The tutorial script is `tutorialScript.ts`; its clips are `tut-*.mp3`, and `narrationDurations.ts` is generated with them.
-- **Live lines** say player and business names ("Ava is in the building!", "Round two! Please welcome Ben, founder of …", "Ben just struck gold!"). The TV asks `/api/deal-or-dud/voice`, which forwards to the narrator service on the same computer (`DEAL_VOICE_URL`, default `http://127.0.0.1:5123`).
+- **Live lines** say player and business names ("Ava is in the building!", "Round two! Please welcome Ben, founder of …", "Ben just struck gold!"). Each round opens with the round call, the founder intro, then "Sharks, you each get one peek." The TV asks `/api/deal-or-dud/voice`, which forwards to the narrator service on the same computer (`DEAL_VOICE_URL`, default `http://127.0.0.1:5123`).
 - **Rendered ahead** by the server (`voicePrep.ts`, from `onStateChange`): each player's name lines while the lobby fills, and every pitch intro as soon as its product locks during the build. Only the narrator's cache is filled, so a product stays secret until its pitch. This is what keeps a slower computer (a MacBook Air) on time: by round 2 the intros play instantly.
 - **Without the narrator service** (or if a line takes over 4 seconds) the TV plays a fixed fallback line instead ("Our next entrepreneur is in the hot seat!"), so the game never waits on it.
-- **What is said when** is decided in `audio/narrationPlan.ts` (pure, tested in `tests/deal-or-dud/narration.test.ts`) and played by `audio/narrator.ts`, one line at a time. A new phase cuts off the previous line. Warnings play at 30 s (on clocks of 55 s or more) and 10 s, and are dropped if they cannot start within 2.5 s.
-- **Names** are spoken with emoji and symbols removed. The host can set a pronunciation in the lobby list (🗣 → type it how it sounds → ▶ to hear it); it is stored on the player as `sayAs`. Product names are only spoken once the pitch makes them public.
+- **What is said when** is decided in `audio/narrationPlan.ts` (pure, tested in `tests/deal-or-dud/narration.test.ts`) and played by `audio/narrator.ts`, one line at a time. A new phase cuts off the previous line. Stage warnings play at 60 s (on clocks of 2:00 or more), 30 s (55 s or more) and 10 s, and are dropped if they cannot start within 2.5 s.
+- **The tutorial** (`tutorialScript.ts`, 7 steps, about 45 s): the shared build, going on stage, the four checks, one peek each, bids, the truth. The TV shows a demo for each step (`TutorialDemo` in `ui/TvStage.tsx`).
+- **Names** are spoken with emoji and symbols removed. The host can set a pronunciation in the lobby list (🗣 → type it how it sounds → ▶ to hear it); it is stored on the player as `sayAs`. Product names are only spoken once their round makes them public.
 - **Captions** show the current line on the screen that plays the sound when Captions is on.
 
 **The narrator service** is `scripts/deal-or-dud/voice/voice_server.py` with the two reference voices in `refs/`. It caches every line, re-rolls takes whose length doesn't fit the text, and only listens on its own computer. It uses an NVIDIA GPU, Apple silicon (MPS), or the CPU (slow).
@@ -127,6 +142,6 @@ FFMPEG=<path to ffmpeg.exe> npx tsx scripts/deal-or-dud/render-narration.ts
 
 See `docs/real-device-test-matrix.md` for the general procedure. Game-specific checks:
 - **Selfies**: on iPhone Safari and Android Chrome, "Take a photo" opens the front camera, crop and retake work, and denying the camera still lets you pick a preset.
-- **Sound**: the soundtrack starts after "Settings & start", the discussion bed stays quiet enough to talk over, and narration is intelligible from across the room.
+- **Sound**: the soundtrack starts after "Settings & start", the stage bed stays quiet enough to talk over, and narration is intelligible from across the room.
 - **Screen lock**: lock the presenter's phone mid-round. The TV should show "Paused — waiting for the presenter's phone", then resume on unlock.
-- **Readability**: the TV headline, cards and clock are readable from the couch.
+- **Readability**: the TV headline, scorecard tiles and clock are readable from the couch.
