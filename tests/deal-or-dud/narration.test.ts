@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { DealEngine } from '../../src/games/deal-or-dud/engine/DealEngine';
 import { sanitizeDealSnapshot } from '../../src/games/deal-or-dud/engine/sanitize';
-import { FIXED_LINES, HOST_VOICES, LIVE_LINES, MAX_LIVE_TEXT, fixedLineFile, speakable, type FixedLineId } from '../../src/games/deal-or-dud/audio/narrationLines';
+import { FIXED_LINES, HOST_VOICES, JOIN_GREETINGS, LIVE_LINES, MAX_LIVE_TEXT, fixedLineFile, speakable, type FixedLineId } from '../../src/games/deal-or-dud/audio/narrationLines';
 import { dueWarning, lobbyPrefetch, planNarration, spokenName, type NarrationPlan, type Utterance } from '../../src/games/deal-or-dud/audio/narrationPlan';
 import { voiceRoute } from '../../src/games/deal-or-dud/voiceRoute';
 import { linesToPrepare, prepareVoices } from '../../src/games/deal-or-dud/voicePrep';
@@ -183,9 +183,24 @@ describe('narration plan', () => {
     const before = fresh.snapshot(room.roomCode);
     fresh.setLook(room.roomCode, joined.playerId, { presetId: 'tycoon-shark' });
     const plan = planNarration(before, fresh.snapshot(room.roomCode))!;
-    expect(spoken(plan)).toEqual(['Zed is in the building!']);
+    const greetings = JOIN_GREETINGS.map((greet) => greet('Zed'));
+    expect(spoken(plan)).toHaveLength(1);
+    expect(greetings).toContain(spoken(plan)[0]);
     expect(plan.interrupt).toBe(false);
     expect(lobbyPrefetch(fresh.snapshot(room.roomCode)).map((line) => line.text)).toContain('Zed takes the lead!');
+  });
+
+  it('greets each of the four players with a different line', () => {
+    const fresh = new DealEngine(new MemoryStorage(), { rng: seeded(7), now: () => now });
+    const room = fresh.createRoom('http://lan:3000');
+    const heard: string[] = [];
+    for (const name of ['Ava', 'Ben', 'Cleo', 'Dev']) {
+      const joined = fresh.joinPlayer(room.roomCode, { ...JOIN, roomCode: room.roomCode, name });
+      const before = fresh.snapshot(room.roomCode);
+      fresh.setLook(room.roomCode, joined.playerId, { presetId: 'tycoon-shark' });
+      heard.push(spoken(planNarration(before, fresh.snapshot(room.roomCode))!)[0].replace(name, 'NAME'));
+    }
+    expect(new Set(heard).size).toBe(4);
   });
 
   it('warns once near the end of a clock, only inside the window', () => {

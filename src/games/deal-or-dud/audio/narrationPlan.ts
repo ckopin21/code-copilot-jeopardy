@@ -37,7 +37,14 @@ function nameLine(room: DealSnapshot, playerId: string | null | undefined, build
   return player?.sayAs ? { ...line, caption: build(player.name).text } : line;
 }
 
-const ROUND_LINES: readonly FixedLineId[] = ['round-1', 'round-2', 'round-3', 'round-4'];
+/** Which lobby greeting a player gets: their seat, shifted by the room code so each room starts somewhere new. */
+export function greetingVariant(room: DealSnapshot, playerId: string): number {
+  const seat = Math.max(0, room.players.findIndex((player) => player.id === playerId));
+  const shift = [...room.code].reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  return seat + shift;
+}
+
+const ROUND_LINES: readonly FixedLineId[] =['round-1', 'round-2', 'round-3', 'round-4'];
 
 /**
  * "Please welcome Ava, founder of Flakely! Breakfast cereal." The TV says it when the stage opens; the server
@@ -119,7 +126,8 @@ export function planNarration(before: DealSnapshot, room: DealSnapshot): Narrati
     const arrived = room.players.filter((player) => player.lookSet && !before.players.some((old) => old.id === player.id && old.lookSet));
     // Greetings are a bonus: without a speakable name or the live narrator, the lobby stays quiet.
     const items: Utterance[] = arrived.flatMap((player) => {
-      const line = nameLine(room, player.id, LIVE_LINES.joined);
+      const variant = greetingVariant(room, player.id);
+      const line = nameLine(room, player.id, (name) => LIVE_LINES.joined(name, variant));
       return line ? [{ live: line }] : [];
     });
     return items.length ? { items, interrupt: false, staleMs: 8_000 } : null;

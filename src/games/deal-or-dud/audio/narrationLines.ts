@@ -70,9 +70,24 @@ function sentence(value: string): string {
   return /[.!?]$/.test(text) ? text : `${text}.`;
 }
 
+/** Lobby greetings. Each seat gets a different one (see `greetingVariant`), so four players hear four lines. */
+export const JOIN_GREETINGS: readonly ((name: string) => string)[] = [
+  (name) => `${name} is in the building!`,
+  (name) => `Here comes ${name}!`,
+  (name) => `Look who just walked in. It's ${name}!`,
+  (name) => `Welcome to the studio, ${name}!`,
+  (name) => `${name} has arrived, checkbook in hand!`,
+  (name) => `Make some noise for ${name}!`,
+  (name) => `${name} is here, and ready to make a deal!`,
+  (name) => `Everybody say hello to ${name}!`
+];
+
 /** Live lines. A null name means the line cannot be built, so the caller plays the fallback. */
 export const LIVE_LINES = {
-  joined: (name: string): LiveLine => ({ text: `${name} is in the building!`, voice: 'george', fallback: null }),
+  joined: (name: string, variant = 0): LiveLine => {
+    const index = ((variant % JOIN_GREETINGS.length) + JOIN_GREETINGS.length) % JOIN_GREETINGS.length;
+    return { text: JOIN_GREETINGS[index](name), voice: index % 2 ? 'adam' : 'george', fallback: null };
+  },
   /** Only the host's ▶ pronunciation test uses this now. */
   hotSeat: (name: string): LiveLine => ({ text: `${name}, you're in the hot seat!`, voice: 'adam', fallback: 'hot-seat' }),
   pitch: (name: string, business: string, headline: string): LiveLine => ({
