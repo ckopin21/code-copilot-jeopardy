@@ -495,3 +495,5 @@ html:has(.dod-app), body:has(.dod-app) { margin: 0; background: #05091a; }
 /* Phone header: leave the game (opens the same dialog as the Back button). */
 .dod-app .dod-leave-open { flex: none; background: transparent; color: var(--dod-muted); border: 1px solid #ffffff40; border-radius: 999px; padding: 6px 10px; font: inherit; font-size: 13px; font-weight: 700; }
 .dod-app .dod-leave .is-danger { color: #ff9a8a; border-color: #ff9a8a80; }
+.dod-app .dod-vip-panel > button:disabled { opacity: 0.55; }
+.dod-app .dod-join .dod-join-hint { grid-column: 1 / -1; margin: 6px 0 0; font-size: 16px; color: #3b4459; }

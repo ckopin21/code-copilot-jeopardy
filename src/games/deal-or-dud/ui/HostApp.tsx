@@ -123,14 +123,16 @@ function JoinPanel({ room, joinUrl, send, enableSound }: { room: DealSnapshot; j
   </JoinCard>;
 }
 
-function HostBar({ room, send, soundOn, enableSound, openSettings }: { room: DealSnapshot; send: Send; soundOn: boolean; enableSound: () => void; openSettings: () => void }) {
+function HostBar({ room, send, soundOn, enableSound, openSettings, onStart }: { room: DealSnapshot; send: Send; soundOn: boolean; enableSound: () => void; openSettings: () => void; onStart: () => void }) {
   const [audioOpen, setAudioOpen] = useState(false);
   const [confirmEnd, setConfirmEnd] = useState(false);
   const skippable = ['tutorial', 'build', 'stage', 'reveal', 'break', 'final', 'forecast-result'].includes(room.phase);
   const pausable = !['lobby', 'gameover'].includes(room.phase);
+  const allReady = room.players.length === PLAYER_COUNT && room.players.every((player) => player.lookSet && player.connected);
   return <nav className="dod-hostbar" aria-label="Host controls">
     {!soundOn && <button className="dod-primary" onClick={enableSound}>🔊 Turn on sound</button>}
-    {room.phase === 'lobby' && <button className="dod-primary" onClick={openSettings}>Settings & start</button>}
+    {room.phase === 'lobby' && allReady && <button className="dod-primary" onClick={onStart}>▶ {room.settings.tutorial ? 'Start with the tutorial' : 'Start the game'}</button>}
+    {room.phase === 'lobby' && <button className={allReady ? '' : 'dod-primary'} onClick={openSettings}>Settings & start</button>}
     {pausable && (room.paused ? <button onClick={() => void send('host:resume')}>▶ Resume</button> : <button onClick={() => void send('host:pause')}>⏸ Pause</button>)}
     {skippable && <button onClick={() => void send('host:continue')}>{room.phase === 'tutorial' ? 'Skip tutorial' : room.phase === 'build' ? 'Lock everyone in ▶▶' : room.phase === 'stage' ? 'Skip to bids ▶▶' : 'Skip ▶▶'}</button>}
     {(room.phase === 'lobby' || room.phase === 'break') && <button onClick={() => { enableSound(); void send('host:replay-tutorial'); }}>Replay tutorial</button>}
@@ -174,6 +176,6 @@ export function HostApp() {
           <button onClick={() => void navigator.clipboard?.writeText(credentials.presentationUrl)}>Copy display link</button>
         </div>}
       </>}
-      hostBar={<HostBar room={room} send={send} soundOn={soundOn} enableSound={enableSound} openSettings={() => { enableSound(); setSettingsOpen(true); }}/>}/>
+      hostBar={<HostBar room={room} send={send} soundOn={soundOn} enableSound={enableSound} openSettings={() => { enableSound(); setSettingsOpen(true); }} onStart={start}/>}/>
   </main>;
 }

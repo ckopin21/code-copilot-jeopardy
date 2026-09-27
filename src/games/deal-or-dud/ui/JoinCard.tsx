@@ -23,9 +23,13 @@ export function JoinCard({ room, joinUrl, children }: { room: DealSnapshot; join
   </aside>;
 }
 
-/** The plain player list for screens without host tools. */
+/** The plain player list for screens without host tools, with a note on who can start the game. */
 export function JoinedList({ room }: { room: DealSnapshot }) {
-  return <ul>{room.players.map((player) => <li key={player.id} className={player.lookSet ? 'ready' : ''}>
-    {player.name}{player.lookSet ? ' ✓' : ' (choosing avatar…)'}{player.connected ? '' : ' · offline'}
-  </li>)}</ul>;
+  const vip = room.players.find((player) => player.id === room.vipId);
+  return <>
+    <ul>{room.players.map((player) => <li key={player.id} className={player.lookSet ? 'ready' : ''}>
+      {player.name}{player.lookSet ? ' ✓' : ' (choosing avatar…)'}{player.connected ? '' : ' · offline'}
+    </li>)}</ul>
+    <p className="dod-join-hint">{vip ? `${vip.name} starts the game with the 🎛 button on their phone (or the host screen).` : 'The first player to join gets the 🎛 host button on their phone.'}</p>
+  </>;
 }

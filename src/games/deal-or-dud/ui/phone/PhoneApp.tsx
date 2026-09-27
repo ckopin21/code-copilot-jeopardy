@@ -1,7 +1,7 @@
 // Phone controller. The presenter's phone shows their secret verdict and scorecard; a shark's phone is its one peek, talking points and the offer control.
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { CategoryId, DealPlayer, DealSnapshot, OfferChoice, Peek, PlayerLook, RoundState, ScoreRow } from '../../types';
-import { OFFER_CHOICES } from '../../types';
+import { OFFER_CHOICES, PLAYER_COUNT } from '../../types';
 import { usePlayerRoom, useClockSeconds } from '../net';
 import { Avatar } from '../Avatar';
 import { Emoji } from '../Emoji';
@@ -242,9 +242,12 @@ function ForecastView({ room, me, send }: { room: DealSnapshot; me: DealPlayer; 
 function VipControls({ room, send }: { room: DealSnapshot; send: Send }) {
   const [open, setOpen] = useState(false);
   const skippable = ['tutorial', 'build', 'stage', 'reveal', 'break', 'final', 'forecast-result'].includes(room.phase);
+  const allReady = room.players.length === PLAYER_COUNT && room.players.every((player) => player.lookSet && player.connected);
   return <div className="dod-vip">
     <button className="dod-vip-toggle" onClick={() => setOpen((value) => !value)} aria-expanded={open}>🎛</button>
     {open && <div className="dod-vip-panel">
+      {room.phase === 'lobby' && <button disabled={!allReady} onClick={() => { setOpen(false); void send('player:vip', { action: 'start' }); }}>{allReady ? '▶ Start the game' : `Start when 4 players are in (${room.players.length}/4)`}</button>}
+      {room.phase === 'gameover' && <button onClick={() => { setOpen(false); void send('player:vip', { action: 'new-game' }); }}>↻ Play again</button>}
       {!['lobby', 'gameover'].includes(room.phase) && (room.paused ? <button onClick={() => { setOpen(false); void send('player:vip', { action: 'resume' }); }}>▶ Resume</button> : <button onClick={() => { setOpen(false); void send('player:vip', { action: 'pause' }); }}>⏸ Pause</button>)}
       {skippable && <button onClick={() => { setOpen(false); void send('player:vip', { action: 'continue' }); }}>{room.phase === 'build' ? 'Lock everyone in ▶▶' : room.phase === 'stage' ? 'Skip to bids ▶▶' : 'Skip ▶▶'}</button>}
       <AudioControls audio={room.settings.audio} onAudio={(audio) => void send('player:vip', { action: 'audio', audio })}/>

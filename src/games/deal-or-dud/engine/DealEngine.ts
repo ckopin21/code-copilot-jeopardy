@@ -230,7 +230,8 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
   }
   reconnectHost(code: string, hostToken: string): DealSnapshot {
     const room = this.hostRoom(code, hostToken);
-    room.state.hostConnected = true;
+    // Saving the change lets other screens (and local tools) see that the host is back.
+    if (!room.state.hostConnected) { room.state.hostConnected = true; this.commit(room); }
     return this.snapshot(code);
   }
   setHostConnected(code: string, connected: boolean): void {
@@ -498,7 +499,9 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
   }
 
   startGame(code: string, hostToken: string): DealSnapshot {
-    const room = this.hostRoom(code, hostToken);
+    return this.beginGame(this.hostRoom(code, hostToken));
+  }
+  private beginGame(room: Room): DealSnapshot {
     this.requirePhase(room, 'lobby');
     const ready = room.state.players.filter((player) => player.lookSet);
     if (room.state.players.length !== PLAYER_COUNT || ready.length !== PLAYER_COUNT) throw new Error('Deal or Dud needs exactly 4 players with avatars picked');
@@ -954,6 +957,13 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
       case 'pause': return this.pauseRoom(room);
       case 'resume': return this.resumeRoom(room);
       case 'continue': return this.continueRoom(room);
+      // A game run from phones alone (TV display, no Host tab) still needs a way to start and to play again.
+      case 'start': return this.beginGame(room);
+      case 'new-game':
+        this.requirePhase(room, 'gameover');
+        this.resetToLobby(room, false);
+        room.state.gameNumber += 1;
+        return this.commit(room);
       case 'audio':
         room.state.settings.audio = this.cleanAudio({ ...room.state.settings.audio, ...(payload.audio as Partial<AudioSettings> ?? {}) });
         return this.commit(room);

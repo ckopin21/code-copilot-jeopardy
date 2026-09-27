@@ -576,6 +576,13 @@ describe('DealEngine', () => {
     expect(() => engine.leaveGame(code, ids[3])).not.toThrow();
   });
 
+  it('lets the first player start the game from their phone, and nobody else', () => {
+    expect(() => engine.vipAction(code, ids[1], 'start', {})).toThrow(/first player/);
+    engine.vipAction(code, ids[0], 'start', {});
+    expect(snap().phase).not.toBe('lobby');
+    expect(() => engine.vipAction(code, ids[0], 'new-game', {})).toThrow();
+  });
+
   it('slows down seat code guessing', () => {
     const wrong = snap().players.some((player) => player.seatCode === '9999') ? '9998' : '9999';
     for (let i = 0; i < 10; i++) expect(() => engine.joinPlayer(code, { ...JOIN, roomCode: code, name: 'X', seatCode: wrong })).toThrow(/does not match/);

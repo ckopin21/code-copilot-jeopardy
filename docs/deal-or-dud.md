@@ -8,12 +8,12 @@ Start it from the game picker at `/`, or go straight to `/?game=deal-or-dud&mode
 
 | Screen | Where | Shows |
 | --- | --- | --- |
-| Host (TV) | `?game=deal-or-dud&mode=host` | Studio set, the four scorecard tiles (who peeked at what; the answers only at the reveal), clock, offers, reveal, scores. Host controls, settings, and the soundtrack. |
-| Presentation | Host's display link | The same TV view for a second screen, including the lobby's join card (QR code, room key, link, who is in). Plays sound by default, like the Host tab. |
+| Host (TV) | `?game=deal-or-dud&mode=host` | In the lobby: the join card, "Settings & start", and a direct Start button once all four players are ready. Studio set, the four scorecard tiles (who peeked at what; the answers only at the reveal), clock, offers, reveal, scores. Host controls, settings, and the soundtrack. |
+| Presentation | Host's display link | The same TV view for a second screen, including the lobby's join card (QR code, room key, link, who is in, and who can start the game). It has no host controls. Plays sound by default, like the Host tab. |
 | Every phone, at the start | `?mode=player` | Three quick card picks (product, twist, audience) and the business name, then "Locked in" (the name can still change) until everyone is done. |
 | Presenter phone | `?mode=player` | Secret verdict and the full scorecard (✅/❌ and a line for each check, plus who peeked where), a pitch idea, partner choice. |
 | Shark phone | `?mode=player` | The one peek (tap a check, tap again), its answer, things to ask, "I'm ready to bid", then bid and lock. |
-| First player's phone | same | Adds a 🎛 button in the header: pause/resume, lock everyone in, skip to bids, skip the waits, volumes. |
+| First player's phone | same | Adds a 🎛 button: start the game (once four players are ready), pause/resume, lock everyone in, skip to bids, skip the waits, volumes, and Play again at the end. So a game can run from the TV display and phones alone; settings (timers, tone, tutorial) are only on the Host screen. |
 
 Before the reveal, the TV never receives the verdict or any scorecard row, a shark's phone receives only the row it peeked at, and nobody sees bids before everyone locks or anyone else's seat code. Who peeked at which check is public. That boundary is `engine/sanitize.ts` and is covered by `tests/deal-or-dud/engine.test.ts`.
 
