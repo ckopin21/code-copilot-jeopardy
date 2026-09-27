@@ -9,7 +9,7 @@ Start it from the game picker at `/`, or go straight to `/?game=deal-or-dud&mode
 | Screen | Where | Shows |
 | --- | --- | --- |
 | Host (TV) | `?game=deal-or-dud&mode=host` | Studio set, the four scorecard tiles (who peeked at what; the answers only at the reveal), clock, offers, reveal, scores. Host controls, settings, and the soundtrack. |
-| Presentation | Host's display link | The same TV view for a second screen. Sound is off unless "Play sound here" is tapped. |
+| Presentation | Host's display link | The same TV view for a second screen. Plays sound by default, like the Host tab. |
 | Every phone, at the start | `?mode=player` | Three quick card picks (product, twist, audience) and the business name, then "Locked in" (the name can still change) until everyone is done. |
 | Presenter phone | `?mode=player` | Secret verdict and the full scorecard (✅/❌ and a line for each check, plus who peeked where), a pitch idea, partner choice. |
 | Shark phone | `?mode=player` | The one peek (tap a check, tap again), its answer, things to ask, "I'm ready to bid", then bid and lock. |
@@ -103,7 +103,7 @@ The tests can't check whether a line reads naturally with every product it fits.
   - **Game over:** music stays off while the winner sting plays, then the after-winner loop starts (timed from the sting's real length) and runs until the host plays again (back to the lobby loop) or closes the screen. A screen opened on a finished game starts the loop at once.
   - Earlier sets are backed up in `tools\deal-or-dud-audio-backup\`: `music-v1\` (synthesized; its generator `scripts/deal-or-dud/render-music.ts` was removed and is in git history) and `music-v2-acestep\` (ACE-Step drafts, made by `tools\ace-step\`).
 - **Sound effects** `lock.mp3` (poker chips), `card.mp3` (card placed) and `tick.mp3` come from Kenney's CC0 packs (kenney.nl: Casino Audio, Interface Sounds). The tick counts down the last 5 seconds of the build, bid, partner and tiebreaker clocks.
-- Only the Host tab plays sound by default. Music ducks under narration, and so do the long stings (fanfare, pitch intro, winner), by about 6 dB, because the hosts talk over them. The stage bed plays at a low level; the offer pulse is only slightly louder. A peek plays a soft card flip.
+- Sound is on by default on the Host tab and the Presentation screen (phones never play music). Each screen tries to start sound as it opens; browsers that block that start it at the first click, tap or key press anywhere on the page (`audio/useAutoSound.ts`), and "Play sound here" shows until then. If the Host tab and a Presentation screen are both open in the same room, untick "Play sound on this screen" in the host settings so the room hears one soundtrack. Music ducks under narration, and so do the long stings (fanfare, pitch intro, winner), by about 6 dB, because the hosts talk over them. The stage bed plays at a low level; the offer pulse is only slightly louder. A peek plays a soft card flip.
 
 ### The hosts (narration)
 

@@ -4,8 +4,8 @@ import { DEFAULT_TIMERS, PLAYER_COUNT, TIMER_LIMITS, estimateMinutes, type Timer
 import { useHostRoom } from './net';
 import { TvStage } from './TvStage';
 import { formatClock } from './labels';
-import { dealAudio } from '../audio/dealAudio';
 import { useSoundtrack } from '../audio/useSoundtrack';
+import { useAutoSound } from '../audio/useAutoSound';
 import { narrator } from '../audio/narrator';
 import { LIVE_LINES, speakable } from '../audio/narrationLines';
 import { toggleFullscreen } from '../../../platform/ui/fullscreen';
@@ -163,10 +163,9 @@ function HostBar({ room, send, soundOn, enableSound, openSettings }: { room: Dea
 export function HostApp() {
   const { room, credentials, send, error, setError } = useHostRoom();
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [soundOn, setSoundOn] = useState(dealAudio.unlocked);
+  const { soundOn, unlockSound } = useAutoSound();
   const [soundHere, setSoundHere] = useState(() => { try { return localStorage.getItem('blue-stage-deal-or-dud-sound-here') !== 'off'; } catch { return true; } });
 
-  const unlockSound = useCallback(() => dealAudio.unlock().then((ok) => { setSoundOn(ok); return ok; }), []);
   const enableSound = useCallback(() => { void unlockSound(); }, [unlockSound]);
   const tutorialDone = useCallback(() => { void send('host:skip-tutorial'); }, [send]);
   useSoundtrack(room, soundOn && soundHere, tutorialDone);
