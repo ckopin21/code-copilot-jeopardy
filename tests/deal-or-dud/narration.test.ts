@@ -220,7 +220,7 @@ describe('narration plan', () => {
   });
 
   it('skips the one-minute warning on a short stage clock', () => {
-    engine.updateSettings(code, host, { timers: { prep: 55, stage: 90, offers: 30, tiebreaker: 15 } });
+    engine.updateSettings(code, host, { timers: { stage: 90 } as never });
     engine.startGame(code, host);
     buildAll();
     expect(dueWarning(tv(), 59_000)).toBeNull();

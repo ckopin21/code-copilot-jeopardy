@@ -115,7 +115,10 @@ class DealAudio {
     return this.context ? this.load(file) : Promise.resolve(null);
   }
 
-  /** Crossfades to a loop. Level changes are gradual so the offer phase gets tenser without a jump. */
+  /**
+   * Switches loops: the old one fades out in well under a second and the new one comes in just after, so two songs
+   * barely overlap.
+   */
   async music(track: MusicTrack): Promise<void> {
     if (!this.context || track === this.currentTrack) return;
     this.currentTrack = track;
@@ -123,8 +126,9 @@ class DealAudio {
     const old = this.currentSource;
     this.currentSource = null;
     if (old) {
-      old.gain.gain.setTargetAtTime(0, context.currentTime, 0.6);
-      window.setTimeout(() => { try { old.source.stop(); } catch { /* already stopped */ } }, 3_000);
+      old.gain.gain.cancelScheduledValues(context.currentTime);
+      old.gain.gain.setTargetAtTime(0, context.currentTime, 0.18);
+      window.setTimeout(() => { try { old.source.stop(); } catch { /* already stopped */ } }, 1_000);
     }
     if (!track) return;
     const loop = MUSIC_FILES[track];
@@ -136,10 +140,13 @@ class DealAudio {
     source.loopStart = loop.loopStart;
     source.loopEnd = Math.min(loop.loopEnd, buffer.duration);
     const gain = context.createGain();
+    // After another loop, wait for most of its fade-out before coming in.
+    const at = context.currentTime + (old ? 0.35 : 0);
     gain.gain.value = 0;
-    gain.gain.setTargetAtTime(MUSIC_LEVEL[track], context.currentTime, 0.8);
+    gain.gain.setValueAtTime(0, at);
+    gain.gain.setTargetAtTime(MUSIC_LEVEL[track], at, 0.3);
     source.connect(gain).connect(this.musicBus!);
-    source.start(0, loop.loopStart);
+    source.start(at, loop.loopStart);
     this.currentSource = { source, gain };
   }
 

@@ -497,3 +497,18 @@ html:has(.dod-app), body:has(.dod-app) { margin: 0; background: #05091a; }
 .dod-app .dod-leave .is-danger { color: #ff9a8a; border-color: #ff9a8a80; }
 .dod-app .dod-vip-panel > button:disabled { opacity: 0.55; }
 .dod-app .dod-join .dod-join-hint { grid-column: 1 / -1; margin: 6px 0 0; font-size: 16px; color: #3b4459; }
+
+/* Host controls sit in the top row, just left of the phase label, clear of the tutorial title and the boards below. */
+.dod-app .dod-phase-row { display: flex; align-items: center; gap: 12px; }
+.dod-app .dod-topbar .dod-hostbar { position: relative; right: auto; top: auto; max-width: none; flex-wrap: nowrap; gap: 8px; pointer-events: auto; z-index: 30; }
+.dod-app .dod-topbar .dod-hostbar > button { font-size: 17px; padding: 7px 12px; white-space: nowrap; }
+.dod-app .dod-topbar.has-hostbar .dod-headline { max-width: 880px; }
+/* The tutorial title rides in the top row too, so it never covers the demo boards and pop-ups. */
+.dod-app .dod-tutorial-title { top: -70px; left: 820px; font-size: 40px; z-index: 5; }
+/* With host controls in the row, headlines get less width, so they step down a size to stay clear of the scorecard. */
+.dod-app .dod-topbar.has-hostbar .dod-headline h1 { font-size: 44px; }
+.dod-app .dod-topbar.has-hostbar .dod-headline h1.is-mid { font-size: 38px; }
+.dod-app .dod-topbar.has-hostbar .dod-headline h1.is-long { font-size: 32px; }
+.dod-app .dod-phase { white-space: nowrap; }
+.dod-app .dod-topbar.has-hostbar .dod-headline { max-width: none; flex: 1 1 0; min-width: 0; margin-right: 24px; }
+.dod-app .dod-topbar.has-hostbar .dod-phase-box { flex: none; }

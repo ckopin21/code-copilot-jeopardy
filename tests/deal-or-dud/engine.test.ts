@@ -496,23 +496,32 @@ describe('DealEngine', () => {
     expect(restored.phase).toBe('lobby');
     expect(restored.round).toBeNull();
     expect(restored.players).toHaveLength(4);
-    expect(restored.settings.timers).toEqual({ prep: 50, stage: 180, offers: 40, tiebreaker: 25 });
+    // Custom timers keep what still exists; the stage clock and the new truth/scores timers get their defaults.
+    expect(restored.settings.timers).toEqual({ prep: 50, stage: 180, offers: 40, reveal: 10, scores: 5, tiebreaker: 25 });
+    // A named preset now only means a stage clock.
     const quick = second.snapshot(preset.roomCode).settings;
-    expect(quick.timers).toEqual({ prep: 55, stage: 120, offers: 30, tiebreaker: 15 });
+    expect(quick.timers).toEqual({ prep: 35, stage: 120, offers: 30, reveal: 10, scores: 5, tiebreaker: 15 });
+    expect(quick.timerPreset).toBe('quick');
+    expect(quick.tone).toBe('crude');
     expect('complexity' in quick).toBe(false);
   });
 
   it('rejects bad photos and settings changes mid-game', () => {
     expect(() => engine.setLook(code, ids[0], { photo: 'javascript:alert(1)' })).toThrow();
     engine.startGame(code, host);
-    expect(() => engine.updateSettings(code, host, { tone: 'crude' })).toThrow(/between games/);
+    expect(() => engine.updateSettings(code, host, { timerPreset: 'quick' })).toThrow(/between games/);
     engine.updateSettings(code, host, { audio: { music: 10, effects: 20, narration: 30, muted: true } });
     expect(snap().settings.audio.music).toBe(10);
   });
 
   it('applies timer steps on top of a preset, in order, within limits', () => {
     engine.updateSettings(code, host, { timerPreset: 'quick' });
-    expect(snap().settings.timers).toEqual({ prep: 55, stage: 120, offers: 30, tiebreaker: 15 });
+    // Presets only change the stage clock.
+    expect(snap().settings.timers).toEqual({ prep: 75, stage: 120, offers: 45, reveal: 10, scores: 5, tiebreaker: 20 });
+    engine.updateSettings(code, host, { timerSteps: { reveal: 5, scores: -10 } });
+    expect(snap().settings.timers.reveal).toBe(15);
+    expect(snap().settings.timers.scores).toBe(3);
+    expect(snap().settings.timerPreset).toBe('quick');
     for (let i = 0; i < 4; i++) engine.updateSettings(code, host, { timerSteps: { stage: -30 } });
     expect(snap().settings.timers.stage).toBe(60);
     expect(snap().settings.timerPreset).toBe('custom');

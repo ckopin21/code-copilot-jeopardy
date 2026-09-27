@@ -22,6 +22,10 @@ export interface TimerSettings {
   /** One clock for the whole time on stage: the pitch and the sharks' questions. */
   stage: number;
   offers: number;
+  /** How long "the truth" (the reveal) stays up. */
+  reveal: number;
+  /** The scores break between rounds. */
+  scores: number;
   tiebreaker: number;
 }
 
@@ -217,23 +221,28 @@ export interface DealSnapshot {
   joinUrl: string;
 }
 
-export const DEFAULT_TIMERS: Record<Exclude<TimerPreset, 'custom'>, TimerSettings> = {
-  quick: { prep: 55, stage: 120, offers: 30, tiebreaker: 15 },
-  standard: { prep: 75, stage: 180, offers: 45, tiebreaker: 20 },
-  relaxed: { prep: 100, stage: 240, offers: 60, tiebreaker: 30 }
-};
+/** The presets only set the stage clock (pitch and questions). Every other timer has one flat default. */
+export const STAGE_PRESETS: Record<Exclude<TimerPreset, 'custom'>, number> = { quick: 120, standard: 180, relaxed: 240 };
+export const DEFAULT_TIMERS: TimerSettings = { prep: 75, stage: 180, offers: 45, reveal: 10, scores: 5, tiebreaker: 20 };
+/** The timers under "More timers" in the host settings. */
+export const OTHER_TIMERS: readonly (keyof TimerSettings)[] = ['prep', 'offers', 'reveal', 'scores', 'tiebreaker'];
 
 export const TIMER_LIMITS: Record<keyof TimerSettings, { min: number; max: number; step: number; label: string }> = {
   prep: { min: 20, max: 180, step: 5, label: 'Product builder' },
   stage: { min: 60, max: 600, step: 30, label: 'On stage (pitch & questions)' },
   offers: { min: 20, max: 90, step: 5, label: 'Offer lock' },
+  reveal: { min: 5, max: 30, step: 1, label: 'The truth' },
+  scores: { min: 3, max: 20, step: 1, label: 'Scores between rounds' },
   tiebreaker: { min: 10, max: 40, step: 5, label: 'Tiebreaker guess' }
 };
 
+/** There is no tone setting: every game uses the full funny set of cards (clean, silly and mild bathroom humor). */
+export const GAME_TONE: Tone = 'crude';
+
 export const DEFAULT_SETTINGS: DealSettings = {
   timerPreset: 'standard',
-  timers: { ...DEFAULT_TIMERS.standard },
-  tone: 'silly',
+  timers: { ...DEFAULT_TIMERS },
+  tone: GAME_TONE,
   tutorial: true,
   captions: true,
   audio: { music: 55, effects: 75, narration: 90, muted: false }
@@ -243,8 +252,6 @@ export const DEFAULT_SETTINGS: DealSettings = {
 export const RULE_TIMINGS = {
   offersReveal: 5,
   partnerChoice: 20,
-  reveal: 10,
-  breakBetweenRounds: 5,
   forecastResult: 8,
   tutorialSeconds: 48
 } as const;
@@ -259,7 +266,7 @@ export function toneAllows(setting: Tone, itemTone: Tone | undefined): boolean {
 
 /** Plain-language total time estimate in minutes: one shared build, then four rounds. */
 export function estimateMinutes(timers: TimerSettings, tutorial: boolean): { low: number; high: number } {
-  const perRound = timers.stage + timers.offers + RULE_TIMINGS.offersReveal + RULE_TIMINGS.reveal + RULE_TIMINGS.breakBetweenRounds;
+  const perRound = timers.stage + timers.offers + RULE_TIMINGS.offersReveal + timers.reveal + timers.scores;
   const base = timers.prep + perRound * ROUND_COUNT + (tutorial ? RULE_TIMINGS.tutorialSeconds : 0) + 60 /* lobby and final scores */;
   return { low: Math.round((base * 0.85) / 60), high: Math.round((base * 1.05) / 60) };
 }

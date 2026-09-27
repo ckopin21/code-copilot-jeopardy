@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
-import type { AudioSettings, DealPlayer, DealSettings, DealSnapshot, Tone } from '../types';
-import { DEFAULT_TIMERS, PLAYER_COUNT, TIMER_LIMITS, estimateMinutes, type TimerSettings } from '../types';
+import type { AudioSettings, DealPlayer, DealSettings, DealSnapshot } from '../types';
+import { DEFAULT_TIMERS, OTHER_TIMERS, PLAYER_COUNT, STAGE_PRESETS, TIMER_LIMITS, estimateMinutes, type TimerSettings } from '../types';
 import { useHostRoom } from './net';
 import { TvStage } from './TvStage';
 import { JoinCard } from './JoinCard';
@@ -14,11 +14,6 @@ import { navigateInApp, pickerUrl } from '../../../platform/session/resetInstanc
 
 type Send = (event: string, payload?: Record<string, unknown>) => Promise<void>;
 
-const TONES: { id: Tone; label: string; allows: string }[] = [
-  { id: 'clean', label: 'Clean', allows: 'Wholesome products, audiences, jokes, and avatars. Nothing gross, creepy, or awkward. Fine for a strict classroom.' },
-  { id: 'silly', label: 'Silly', allows: 'Adds harmless weird ideas like haunted toasters, dramatic llamas, and polite zombies. Still clean.' },
-  { id: 'crude', label: 'Crude', allows: 'Adds mild bathroom humor (burps, toots, stinky socks). No sexual content, slurs, drugs, violence, or harsh swearing.' }
-];
 /** "45s" for short clocks, "3:00" once it's a minute or more. */
 function timerText(seconds: number): string {
   return seconds >= 60 ? formatClock(seconds) : `${seconds}s`;
@@ -36,6 +31,32 @@ export function AudioControls({ audio, captions, onAudio, onCaptions }: { audio:
   </div>;
 }
 
+function TimerStepper({ settings, timer, stepTimer }: { settings: DealSettings; timer: keyof TimerSettings; stepTimer: (key: keyof TimerSettings, step: number) => void }) {
+  const limit = TIMER_LIMITS[timer];
+  return <div className="dod-stepper">
+    <span>{limit.label}</span>
+    <button aria-label={`Less ${limit.label}`} onClick={() => stepTimer(timer, -limit.step)} disabled={settings.timers[timer] <= limit.min}>−</button>
+    <b>{timerText(settings.timers[timer])}</b>
+    <button aria-label={`More ${limit.label}`} onClick={() => stepTimer(timer, limit.step)} disabled={settings.timers[timer] >= limit.max}>+</button>
+    <small>Default {timerText(DEFAULT_TIMERS[timer])}</small>
+  </div>;
+}
+
+/** The timers that are not the stage clock: one flat default each, changed here if a group wants. */
+function TimersPage({ settings, send, stepTimer, onClose }: { settings: DealSettings; send: Send; stepTimer: (key: keyof TimerSettings, step: number) => void; onClose: () => void }) {
+  const reset = () => void send('host:update-settings', { updates: { timers: Object.fromEntries(OTHER_TIMERS.map((key) => [key, DEFAULT_TIMERS[key]])) } });
+  return <div className="dod-modal" role="dialog" aria-label="More timers">
+    <div className="dod-settings">
+      <header><h2>More timers</h2><p>Everything except the stage clock. The defaults suit most groups.</p></header>
+      <section><div className="dod-timers">{OTHER_TIMERS.map((key) => <TimerStepper key={key} settings={settings} timer={key} stepTimer={stepTimer}/>)}</div></section>
+      <footer>
+        <button className="dod-ghost" onClick={reset}>Reset these to defaults</button>
+        <button className="dod-primary" onClick={onClose}>Done</button>
+      </footer>
+    </div>
+  </div>;
+}
+
 function SettingsPage({ room, send, onClose, onStart }: { room: DealSnapshot; send: Send; onClose: () => void; onStart: () => void }) {
   const settings = room.settings;
   const update = (updates: Partial<DealSettings>) => void send('host:update-settings', { updates });
@@ -43,31 +64,18 @@ function SettingsPage({ room, send, onClose, onStart }: { room: DealSnapshot; se
   const stepTimer = (key: keyof TimerSettings, step: number) => void send('host:update-settings', { updates: { timerSteps: { [key]: step } } });
   const { low, high } = estimateMinutes(settings.timers, settings.tutorial);
   const ready = room.players.filter((player) => player.lookSet && player.connected).length;
+  const [moreTimers, setMoreTimers] = useState(false);
+  if (moreTimers) return <TimersPage settings={settings} send={send} stepTimer={stepTimer} onClose={() => setMoreTimers(false)}/>;
   return <div className="dod-modal" role="dialog" aria-label="Game settings">
     <div className="dod-settings">
       <header><h2>Game settings</h2><p>These apply to all four rounds. Rules and points stay the same in every setting.</p></header>
       <section>
-        <h3>Timers <small>About {low}–{high} minutes for four rounds</small></h3>
+        <h3>On stage clock <small>Pitch and questions · about {low}–{high} minutes for four rounds</small></h3>
         <div className="dod-segment">
-          {(['quick', 'standard', 'relaxed'] as const).map((preset) => <button key={preset} className={settings.timerPreset === preset ? 'is-on' : ''} onClick={() => update({ timerPreset: preset })}>{preset[0].toUpperCase() + preset.slice(1)}</button>)}
-          <span className={`dod-custom ${settings.timerPreset === 'custom' ? 'is-on' : ''}`}>Custom</span>
+          {(Object.keys(STAGE_PRESETS) as (keyof typeof STAGE_PRESETS)[]).map((preset) => <button key={preset} className={settings.timerPreset === preset ? 'is-on' : ''} onClick={() => update({ timerPreset: preset })}>{preset[0].toUpperCase() + preset.slice(1)} {timerText(STAGE_PRESETS[preset])}</button>)}
+          <TimerStepper settings={settings} timer="stage" stepTimer={stepTimer}/>
+          <button className="dod-ghost" onClick={() => setMoreTimers(true)}>More timers…</button>
         </div>
-        <div className="dod-timers">
-          {(Object.keys(TIMER_LIMITS) as (keyof TimerSettings)[]).map((key) => {
-            const limit = TIMER_LIMITS[key];
-            return <div key={key} className="dod-stepper">
-              <span>{limit.label}</span>
-              <button aria-label={`Less ${limit.label}`} onClick={() => stepTimer(key, -limit.step)} disabled={settings.timers[key] <= limit.min}>−</button>
-              <b>{timerText(settings.timers[key])}</b>
-              <button aria-label={`More ${limit.label}`} onClick={() => stepTimer(key, limit.step)} disabled={settings.timers[key] >= limit.max}>+</button>
-              <small>Standard {timerText(DEFAULT_TIMERS.standard[key])}</small>
-            </div>;
-          })}
-        </div>
-      </section>
-      <section>
-        <h3>Topic tone</h3>
-        <div className="dod-options">{TONES.map((option) => <button key={option.id} className={settings.tone === option.id ? 'is-on' : ''} onClick={() => update({ tone: option.id })}><b>{option.label}{option.id === 'silly' ? ' (default)' : ''}</b><span>{option.allows}</span></button>)}</div>
       </section>
       <section className="dod-two">
         <div>
@@ -135,7 +143,7 @@ function HostBar({ room, send, soundOn, enableSound, openSettings, onStart }: { 
     {room.phase === 'lobby' && <button className={allReady ? '' : 'dod-primary'} onClick={openSettings}>Settings & start</button>}
     {pausable && (room.paused ? <button onClick={() => void send('host:resume')}>▶ Resume</button> : <button onClick={() => void send('host:pause')}>⏸ Pause</button>)}
     {skippable && <button onClick={() => void send('host:continue')}>{room.phase === 'tutorial' ? 'Skip tutorial' : room.phase === 'build' ? 'Lock everyone in ▶▶' : room.phase === 'stage' ? 'Skip to bids ▶▶' : 'Skip ▶▶'}</button>}
-    {(room.phase === 'lobby' || room.phase === 'break') && <button onClick={() => { enableSound(); void send('host:replay-tutorial'); }}>Replay tutorial</button>}
+    {room.phase === 'break' && <button onClick={() => { enableSound(); void send('host:replay-tutorial'); }}>Replay tutorial</button>}
     {room.phase === 'gameover' && <button className="dod-primary" onClick={() => void send('host:new-game')}>Play again</button>}
     <button onClick={() => setAudioOpen((open) => !open)} aria-expanded={audioOpen}>🎚 Sound</button>
     <button onClick={() => void toggleFullscreen()}>⛶</button>

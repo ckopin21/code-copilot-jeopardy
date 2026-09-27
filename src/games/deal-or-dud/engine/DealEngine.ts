@@ -4,7 +4,7 @@ import type { PlayerJoinInput } from '../../../platform/players/playerJoin';
 import { ROOM_CODE_ALPHABET, randomToken, secureEqual } from '../../../platform/rooms/tokens';
 import { mergeStoredRooms, serializeStoredRooms } from '../../../platform/rooms/roomStorageRecovery';
 import {
-  CATEGORY_IDS, DEFAULT_SETTINGS, DEFAULT_TIMERS, GAME_ID, OFFER_CHOICES, PLAYER_COUNT, ROUND_COUNT, RULE_TIMINGS, TIMER_LIMITS,
+  CATEGORY_IDS, DEFAULT_SETTINGS, DEFAULT_TIMERS, GAME_ID, GAME_TONE, STAGE_PRESETS, OFFER_CHOICES, PLAYER_COUNT, ROUND_COUNT, RULE_TIMINGS, TIMER_LIMITS,
   toneAllows,
   type AudioSettings, type BuilderColumn, type CategoryId, type ClockState, type DealPlayer, type DealSettings, type DealSnapshot,
   type OfferChoice, type Phase, type RoundState, type TimerSettings
@@ -445,9 +445,10 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
     if (updates.audio) settings.audio = this.cleanAudio({ ...settings.audio, ...updates.audio });
     if (typeof updates.captions === 'boolean') settings.captions = updates.captions;
     if (lobby) {
-      if (updates.timerPreset && updates.timerPreset !== 'custom' && DEFAULT_TIMERS[updates.timerPreset]) {
+      // A preset only sets the stage clock; the other timers keep their own values.
+      if (updates.timerPreset && updates.timerPreset !== 'custom' && STAGE_PRESETS[updates.timerPreset]) {
         settings.timerPreset = updates.timerPreset;
-        settings.timers = { ...DEFAULT_TIMERS[updates.timerPreset] };
+        settings.timers = { ...settings.timers, stage: STAGE_PRESETS[updates.timerPreset] };
       }
       if (updates.timers || updates.timerSteps) {
         const next = { ...settings.timers };
@@ -458,22 +459,10 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
           if (Number.isFinite(step) && step !== 0) next[key] = clamp(next[key] + step, TIMER_LIMITS[key].min, TIMER_LIMITS[key].max, next[key]);
         }
         settings.timers = next;
-        const preset = (Object.keys(DEFAULT_TIMERS) as (keyof typeof DEFAULT_TIMERS)[])
-          .find((name) => (Object.keys(next) as (keyof TimerSettings)[]).every((key) => DEFAULT_TIMERS[name][key] === next[key]));
-        settings.timerPreset = preset ?? 'custom';
-      }
-      if (updates.tone && ['clean', 'silly', 'crude'].includes(updates.tone)) {
-        settings.tone = updates.tone;
-        // Keep preset avatars inside the chosen tone.
-        for (const player of room.state.players) {
-          if (player.look.kind === 'preset') {
-            const preset = AVATAR_PRESETS.find((item) => item.id === (player.look as { presetId: string }).presetId);
-            if (!toneAllows(settings.tone, preset?.tone)) player.look = { kind: 'preset', presetId: pick(tonePool(AVATAR_PRESETS, settings.tone), this.rng).id };
-          }
-        }
+        settings.timerPreset = stagePreset(next.stage);
       }
       if (typeof updates.tutorial === 'boolean') settings.tutorial = updates.tutorial;
-    } else if (updates.timers || updates.timerSteps || updates.timerPreset || updates.tone || updates.tutorial !== undefined) {
+    } else if (updates.timers || updates.timerSteps || updates.timerPreset || updates.tutorial !== undefined) {
       throw new Error('Game settings can only change between games');
     }
     return this.commit(room);
@@ -523,7 +512,7 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
     const back = room.state.tutorialReturn;
     room.state.tutorialReturn = null;
     if (back === 'lobby') { room.state.phase = 'lobby'; room.state.clock = null; return; }
-    if (back === 'break') { room.state.phase = 'break'; this.startClock(room, RULE_TIMINGS.breakBetweenRounds); return; }
+    if (back === 'break') { room.state.phase = 'break'; this.startClock(room, room.state.settings.timers.scores); return; }
     this.startBuild(room);
   }
   replayTutorial(code: string, hostToken: string): DealSnapshot {
@@ -843,12 +832,12 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
     };
     state.history.push(structuredClone(round.result));
     state.phase = 'reveal';
-    this.startClock(room, RULE_TIMINGS.reveal);
+    this.startClock(room, room.state.settings.timers.reveal);
   }
   private startBreak(room: Room): void {
     if (room.state.roundIndex >= ROUND_COUNT - 1) { this.startFinal(room); return; }
     room.state.phase = 'break';
-    this.startClock(room, RULE_TIMINGS.breakBetweenRounds);
+    this.startClock(room, room.state.settings.timers.scores);
   }
   private nextRoundOrFinal(room: Room): void {
     if (room.state.roundIndex >= ROUND_COUNT - 1) this.startFinal(room);
@@ -1000,20 +989,27 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
   debugRoom(code: string): Room { return this.room(code); }
 }
 
+/** The stage preset a stage clock matches, or 'custom'. */
+function stagePreset(stage: number): DealSettings['timerPreset'] {
+  return (Object.keys(STAGE_PRESETS) as (keyof typeof STAGE_PRESETS)[]).find((name) => STAGE_PRESETS[name] === stage) ?? 'custom';
+}
+
 /**
- * Settings saved by older versions had separate pitch and question clocks and a fact complexity. A named preset
- * takes the new preset values; custom timers keep what still exists and get the standard stage clock.
+ * Settings saved by older versions: separate pitch and question clocks (no `stage`), no truth/scores timers, a tone
+ * choice and a fact complexity. Old saves without a stage clock get the one their named preset now means; every
+ * missing timer gets its default; kept values are clamped. The tone is always the game's tone now.
  */
 function migrateSettings(settings: DealSettings): void {
   const timers = settings.timers as Partial<TimerSettings>;
-  if (typeof timers.stage !== 'number') {
-    const preset = settings.timerPreset !== 'custom' ? DEFAULT_TIMERS[settings.timerPreset] : undefined;
-    settings.timers = preset ? { ...preset } : {
-      prep: clamp(timers.prep, TIMER_LIMITS.prep.min, TIMER_LIMITS.prep.max, DEFAULT_TIMERS.standard.prep),
-      stage: DEFAULT_TIMERS.standard.stage,
-      offers: clamp(timers.offers, TIMER_LIMITS.offers.min, TIMER_LIMITS.offers.max, DEFAULT_TIMERS.standard.offers),
-      tiebreaker: clamp(timers.tiebreaker, TIMER_LIMITS.tiebreaker.min, TIMER_LIMITS.tiebreaker.max, DEFAULT_TIMERS.standard.tiebreaker)
-    };
+  const stage = typeof timers.stage === 'number' ? timers.stage
+    : settings.timerPreset !== 'custom' && STAGE_PRESETS[settings.timerPreset] ? STAGE_PRESETS[settings.timerPreset] : DEFAULT_TIMERS.stage;
+  const next = { ...DEFAULT_TIMERS };
+  for (const key of Object.keys(TIMER_LIMITS) as (keyof TimerSettings)[]) {
+    const value = key === 'stage' ? stage : timers[key];
+    next[key] = clamp(value, TIMER_LIMITS[key].min, TIMER_LIMITS[key].max, DEFAULT_TIMERS[key]);
   }
+  settings.timers = next;
+  settings.timerPreset = stagePreset(next.stage);
+  settings.tone = GAME_TONE;
   delete (settings as Partial<DealSettings> & { complexity?: unknown }).complexity;
 }

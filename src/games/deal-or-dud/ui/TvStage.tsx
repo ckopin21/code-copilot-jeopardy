@@ -99,12 +99,13 @@ function RoundBoard({ room }: { room: DealSnapshot }) {
   return <ScoreBoard room={room} peeks={round.peeks} rows={room.phase === 'reveal' ? round.result?.scorecard ?? [] : []}/>;
 }
 
-function TopBar({ room }: { room: DealSnapshot }) {
+/** The top row: headline on the left; host controls (Host tab only) beside the phase label on the right. */
+function TopBar({ room, hostBar }: { room: DealSnapshot; hostBar?: ReactNode }) {
   const seconds = useClockSeconds(room);
   const premise = room.round?.premise;
   const showClock = room.clock && !['reveal', 'break', 'gameover', 'tutorial', 'final', 'forecast-result', 'offers-reveal'].includes(room.phase);
   const frozen = room.clock?.endsAt === null;
-  return <header className="dod-topbar">
+  return <header className={`dod-topbar ${hostBar ? 'has-hostbar' : ''}`}>
     <div className="dod-headline">
       {premise ? <>
         <div className="dod-business-name">{premise.businessName}</div>
@@ -116,7 +117,10 @@ function TopBar({ room }: { room: DealSnapshot }) {
       </>}
     </div>
     <div className="dod-phase-box">
-      <div className="dod-phase">{room.round ? `Round ${room.round.index + 1} of 4 · ` : ''}{PHASE_LABEL[room.phase]}</div>
+      <div className="dod-phase-row">
+        {hostBar}
+        <div className="dod-phase">{room.round ? `Round ${room.round.index + 1} of 4 · ` : ''}{PHASE_LABEL[room.phase]}</div>
+      </div>
       {showClock && <div className={`dod-clock ${seconds <= 10 ? 'is-low' : ''} ${room.paused || frozen ? 'is-paused' : ''}`}>{formatClock(seconds)}{(room.paused || frozen) && <small>{room.paused ? 'PAUSED' : 'ON HOLD'}</small>}</div>}
     </div>
   </header>;
@@ -206,7 +210,7 @@ function LobbyMessage({ room }: { room: DealSnapshot }) {
   const { low, high } = estimateMinutes(room.settings.timers, room.settings.tutorial);
   return <section className="dod-lobby-note">
     <p>{ready < 4 ? `Waiting for players… ${ready}/4 in the studio` : 'All four players are in the studio!'}</p>
-    <p className="dod-sub">About {low}–{high} minutes · {room.settings.tone} topics</p>
+    <p className="dod-sub">About {low}–{high} minutes</p>
   </section>;
 }
 
@@ -308,7 +312,7 @@ export function TvStage({ room, hostBar, extra }: { room: DealSnapshot; hostBar?
         dim={bigPanel && room.phase !== 'reveal'} locked={(room.phase === 'offers' && round!.lockedOffers.includes(player.id)) || built(player.id)}/>;
     })}
     {presenter && !bigPanel && <StandingPresenter player={presenter} label={inRound ? 'Presenter' : room.phase === 'build' ? (built(presenter.id) ? 'Locked in 🔒' : 'Building…') : 'Waiting to play'}/>}
-    <TopBar room={room}/>
+    <TopBar room={room} hostBar={hostBar}/>
     <RoundBoard room={room}/>
     <div className="dod-overlays">
       {room.phase === 'lobby' && <LobbyMessage room={room}/>}
@@ -323,6 +327,5 @@ export function TvStage({ room, hostBar, extra }: { room: DealSnapshot; hostBar?
     {room.settings.captions && room.phase !== 'tutorial' && <NarrationCaption/>}
     {room.paused && <div className="dod-paused"><div>⏸ Paused{room.pauseReason === 'presenter-offline' ? ' — waiting for the presenter\'s phone to reconnect' : ''}</div></div>}
     {extra}
-    {hostBar}
   </Stage16x9>;
 }

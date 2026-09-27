@@ -1,7 +1,7 @@
 // Turns snapshot changes into music and stings on the one screen that plays sound.
 import { useEffect, useRef } from 'react';
 import type { DealSnapshot, Phase } from '../types';
-import { dealAudio, type MusicTrack } from './dealAudio';
+import { dealAudio, type MusicTrack, type Sting } from './dealAudio';
 import { TUTORIAL_TIMELINE } from '../ui/labels';
 import { tutorialElapsed } from '../ui/TvStage';
 import { useNarration } from './useNarration';
@@ -12,8 +12,20 @@ const MUSIC_FOR: Record<Phase, MusicTrack> = {
   final: null, forecast: 'offers', 'forecast-result': null, gameover: 'celebrate'
 };
 
-/** Game over: silence while the winner sting plays, then the celebration loop until the host moves on. */
-interface Celebration { code: string; ready: boolean }
+/**
+ * A musical sting that opens a phase (the fanfare, the round sting, the winner). The phase's loop waits until the sting
+ * has played, so two pieces of music never overlap. `key` ties the hold to one phase; a new phase drops it.
+ */
+interface Hold { key: string; ready: boolean }
+const phaseKey = (room: DealSnapshot) => `${room.code}:${room.gameNumber}:${room.roundIndex}:${room.phase}`;
+/** The sting that opens a phase, if any. */
+function openingSting(before: DealSnapshot, room: DealSnapshot): { name: Sting; level: number } | null {
+  if ((room.phase === 'tutorial' || room.phase === 'build') && before.phase === 'lobby') return { name: 'fanfare', level: 0.9 };
+  if (room.phase === 'stage') return { name: 'pitch', level: 0.8 };
+  if (room.phase === 'final') return { name: 'fanfare', level: 0.8 };
+  if (room.phase === 'gameover') return { name: 'winner', level: 1 };
+  return null;
+}
 
 const TICKING_PHASES: readonly Phase[] = ['build', 'offers', 'partner', 'forecast'];
 
@@ -21,13 +33,13 @@ export function useSoundtrack(room: DealSnapshot | null, enabled: boolean, onTut
   const previous = useRef<DealSnapshot | null>(null);
   const narrated = useRef<string>('');
   const ticked = useRef('');
-  const celebration = useRef<Celebration | null>(null);
-  const celebrationTimer = useRef(0);
+  const hold = useRef<Hold | null>(null);
+  const holdTimer = useRef(0);
   useNarration(room, enabled);
 
   const audioSettings = room?.settings.audio;
   useEffect(() => { if (audioSettings) dealAudio.applySettings(audioSettings); }, [audioSettings]);
-  useEffect(() => () => window.clearTimeout(celebrationTimer.current), []);
+  useEffect(() => () => window.clearTimeout(holdTimer.current), []);
 
   useEffect(() => {
     const before = previous.current;
@@ -35,33 +47,31 @@ export function useSoundtrack(room: DealSnapshot | null, enabled: boolean, onTut
     if (!room || !enabled) { if (!enabled) void dealAudio.music(null); return; }
     const sameRoom = !!before && before.code === room.code;
     const changed = sameRoom && before.phase !== room.phase;
-    if (room.phase !== 'gameover') {
-      celebration.current = null;
-      window.clearTimeout(celebrationTimer.current);
-    } else if (celebration.current?.code !== room.code) {
-      // Arriving at game over live: the winner sting plays first. Opening a screen that is already there: straight to the loop.
-      const current: Celebration = { code: room.code, ready: !changed };
-      celebration.current = current;
-      if (changed) {
-        void dealAudio.sting('winner', 1).then((seconds) => {
-          celebrationTimer.current = window.setTimeout(() => {
-            if (celebration.current !== current) return;
-            current.ready = true;
-            if (previous.current && !previous.current.paused) void dealAudio.music('celebrate');
-          }, seconds * 1000);
-        });
-      }
+    const key = phaseKey(room);
+    if (hold.current && hold.current.key !== key) { hold.current = null; window.clearTimeout(holdTimer.current); }
+    // A phase that opens with a musical sting: the sting plays alone, then the phase's loop comes in.
+    // (A screen opened mid-phase has no "before" and goes straight to the loop.)
+    const opener = changed ? openingSting(before, room) : null;
+    if (opener) {
+      const current: Hold = { key, ready: false };
+      hold.current = current;
+      window.clearTimeout(holdTimer.current);
+      void dealAudio.sting(opener.name, opener.level).then((seconds) => {
+        holdTimer.current = window.setTimeout(() => {
+          if (hold.current !== current) return;
+          current.ready = true;
+          const latest = previous.current;
+          if (latest && !latest.paused && phaseKey(latest) === current.key) void dealAudio.music(MUSIC_FOR[latest.phase]);
+        }, seconds * 1000);
+      });
     }
-    const waiting = room.phase === 'gameover' && !celebration.current?.ready;
+    const waiting = hold.current?.key === key && !hold.current.ready;
     void dealAudio.music(room.paused || waiting ? null : MUSIC_FOR[room.phase]);
     if (!sameRoom) return;
     const round = room.round;
     if (changed) {
-      if ((room.phase === 'tutorial' || room.phase === 'build') && (before.phase === 'lobby')) void dealAudio.sting('fanfare', 0.9);
-      if (room.phase === 'stage') void dealAudio.sting('pitch', 0.8);
       if (room.phase === 'reveal' && round?.result) void dealAudio.sting(round.result.verdict === 'good' ? 'good' : 'bad', 1);
       if (room.phase === 'offers-reveal') void dealAudio.sting('reveal-card', 0.8);
-      if (room.phase === 'final') void dealAudio.sting('fanfare', 0.8);
       if (before.phase === 'tutorial') dealAudio.stopNarration();
     }
     // A shark peeked: a soft card flip. Never loud over speech.
