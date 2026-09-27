@@ -80,7 +80,7 @@ function JoinScreen({ initialCode, join, rejoin, busyError }: {
       <AvatarPicker tone="clean" value={look} onChange={setLook}/>
       <div className="dod-row dod-join-actions">
         <button className="dod-ghost" onClick={() => setStep('name')}>Back</button>
-        <button className="dod-primary big" disabled={!look || busy} onClick={() => void submit()}>{busy ? 'Joining…' : 'Enter the studio'}</button>
+        <button className="dod-primary big" disabled={!look || busy} onClick={() => void submit()}>{busy ? 'Joining…' : 'Join the tank'}</button>
       </div>
     </>}
     {view === 'seat' && <form onSubmit={(event) => { event.preventDefault(); if (code.trim().length >= 4 && seatCode.length === 4) void submitSeat(); }}>
@@ -238,6 +238,18 @@ function ForecastView({ room, me, send }: { room: DealSnapshot; me: DealPlayer; 
   </section>;
 }
 
+/** "Change my name" in the lobby: a small inline form, before the game starts. */
+function NameEditor({ name, onSave }: { name: string; onSave: (name: string) => void }) {
+  const [draft, setDraft] = useState<string | null>(null);
+  if (draft === null) return <button className="dod-ghost" onClick={() => setDraft(name)}>Change my name</button>;
+  const save = () => { const next = draft.trim(); if (next && next !== name) onSave(next); setDraft(null); };
+  return <form className="dod-name-edit" onSubmit={(event) => { event.preventDefault(); save(); }}>
+    <input value={draft} maxLength={16} autoFocus aria-label="Your name" onChange={(event) => setDraft(event.target.value)}/>
+    <button className="dod-primary" type="submit" disabled={!draft.trim()}>Save</button>
+    <button className="dod-ghost" type="button" onClick={() => setDraft(null)}>Cancel</button>
+  </form>;
+}
+
 // ---------- VIP host controls ----------
 function VipControls({ room, send }: { room: DealSnapshot; send: Send }) {
   const [open, setOpen] = useState(false);
@@ -306,9 +318,12 @@ export function PhoneApp({ urlRoomCode }: { urlRoomCode: string }) {
   const lookEditable = room.phase === 'lobby' || room.phase === 'tutorial';
   let body: ReactNode;
   if (!me.lookSet || (changingLook && lookEditable)) {
-    body = <section><h2>Pick your look</h2><AvatarPicker tone={room.settings.tone} value={me.look} onChange={(look) => { rememberLook(look, me.name); setChangingLook(false); void send('player:set-look', look.kind === 'photo' ? { photo: look.photo } : { presetId: look.presetId }); }}/></section>;
+    body = <section><h2>Pick your look</h2><AvatarPicker tone={room.settings.tone} value={me.look} onChange={(look) => { rememberLook(look, me.name); setChangingLook(false); void send('player:set-look', look.kind === 'photo' ? { photo: look.photo } : { presetId: look.presetId }); }}/>
+      {me.lookSet && <button className="dod-ghost" onClick={() => setChangingLook(false)}>Keep my current look</button>}</section>;
   } else if (room.phase === 'lobby') {
-    body = <section className="dod-wait"><Avatar look={me.look} size={140}/><h2>You're in, {me.name}!</h2><p>{room.players.length}/4 players. Look at the TV.</p><button className="dod-ghost" onClick={() => setChangingLook(true)}>Change my look</button></section>;
+    body = <section className="dod-wait"><Avatar look={me.look} size={140}/><h2>You're in, {me.name}!</h2><p>{room.players.length}/4 players. Look at the TV.</p>
+      <NameEditor name={me.name} onSave={(name) => { rememberLook(me.look, name); void send('player:set-name', { name }); }}/>
+      <button className="dod-ghost" onClick={() => setChangingLook(true)}>Change my look</button></section>;
   } else if (room.phase === 'tutorial') {
     body = <section className="dod-wait"><h2>Watch the TV</h2><p>The tutorial is playing.</p><button className="dod-ghost" onClick={() => setChangingLook(true)}>Change my look</button></section>;
   } else if (room.phase === 'build') {

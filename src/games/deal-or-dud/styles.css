@@ -512,3 +512,6 @@ html:has(.dod-app), body:has(.dod-app) { margin: 0; background: #05091a; }
 .dod-app .dod-phase { white-space: nowrap; }
 .dod-app .dod-topbar.has-hostbar .dod-headline { max-width: none; flex: 1 1 0; min-width: 0; margin-right: 24px; }
 .dod-app .dod-topbar.has-hostbar .dod-phase-box { flex: none; }
+
+.dod-app .dod-name-edit { display: flex; gap: 8px; width: 100%; max-width: 360px; }
+.dod-app .dod-name-edit input { flex: 1; min-width: 0; font: inherit; font-size: 18px; padding: 10px 12px; border-radius: 10px; border: 2px solid var(--dod-gold); }

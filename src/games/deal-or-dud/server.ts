@@ -32,6 +32,7 @@ export const dealServerGame: ServerGame<DealEngine, DealSnapshot> = {
 
   playerActions: {
     'player:set-look': ({ engine, roomCode, playerId, payload }) => void engine.setLook(roomCode, playerId, payload),
+    'player:set-name': ({ engine, roomCode, playerId, payload }) => void engine.setName(roomCode, playerId, payload.name),
     'player:builder-pick': ({ engine, roomCode, playerId, payload }) => void engine.builderPick(roomCode, playerId, payload.column, payload.id),
     'player:builder-reroll': ({ engine, roomCode, playerId, payload }) => void engine.builderReroll(roomCode, playerId, payload.column),
     'player:builder-lock': ({ engine, roomCode, playerId }) => void engine.lockPremiseRequest(roomCode, playerId),

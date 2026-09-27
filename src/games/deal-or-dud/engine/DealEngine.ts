@@ -966,6 +966,17 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
     return this.commit(room);
   }
 
+  /** A player renames themselves before the game starts. The host's pronunciation was for the old name, so it goes. */
+  setName(code: string, playerId: string, value: unknown): DealSnapshot {
+    const room = this.room(code);
+    this.requirePhase(room, 'lobby');
+    const player = this.player(room, playerId);
+    const name = typeof value === 'string' ? value.replace(/\s+/g, ' ').trim().slice(0, 16) : '';
+    if (!name) throw new Error('Type a name first');
+    if (name !== player.name) { player.name = name; delete player.sayAs; }
+    return this.commit(room);
+  }
+
   // Player look
   setLook(code: string, playerId: string, payload: Record<string, unknown>): DealSnapshot {
     const room = this.room(code);
