@@ -40,7 +40,7 @@ function nameLine(room: DealSnapshot, playerId: string | null | undefined, build
 const ROUND_LINES: readonly FixedLineId[] = ['round-1', 'round-2', 'round-3', 'round-4'];
 
 /**
- * "Please welcome Ava, founder of Flakely! Breakfast cereal." The TV says it when the pitch starts; the server
+ * "Please welcome Ava, founder of Flakely! Breakfast cereal." The TV says it when the stage opens; the server
  * builds the same line from the full state as soon as the product locks and renders it ahead (voicePrep.ts).
  */
 export function pitchLine(room: DealSnapshot, round: RoundState): LiveLine | null {
@@ -79,12 +79,11 @@ function phasePlan(before: DealSnapshot, room: DealSnapshot): NarrationPlan | nu
       items.push({ fixed: 'build' });
       return { items, interrupt: true };
     }
-    case 'pitch': {
-      // Each round opens with its pitch: "Round two! Please welcome Ben, founder of…"
+    case 'stage': {
+      // Each round opens on stage: "Round two! Please welcome Ben, founder of… Sharks, you each get one peek."
       const opener: FixedLineId = ROUND_LINES[Math.min(Math.max(room.roundIndex, 0), ROUND_LINES.length - 1)];
-      return { items: [{ fixed: opener }, say(round ? pitchLine(room, round) : null, 'pitch')], interrupt: true, delayMs: 2_200 };
+      return { items: [{ fixed: opener }, say(round ? pitchLine(room, round) : null, 'pitch'), { fixed: 'peeks' }], interrupt: true, delayMs: 2_200 };
     }
-    case 'discussion': return { items: [{ fixed: 'questions' }], interrupt: true };
     case 'offers': return { items: [{ fixed: 'bids' }], interrupt: true };
     case 'offers-reveal': {
       const anyOffer = Object.values(round?.offers ?? {}).some((offer) => (offer ?? 0) > 0);
@@ -131,8 +130,7 @@ export function planNarration(before: DealSnapshot, room: DealSnapshot): Narrati
 interface Warning { at: number; line: FixedLineId; minTotal?: number }
 const WARNINGS: Partial<Record<Phase, readonly Warning[]>> = {
   build: [{ at: 10, line: 'build-10' }],
-  pitch: [{ at: 30, line: 'pitch-30', minTotal: 55 }, { at: 10, line: 'pitch-10' }],
-  discussion: [{ at: 30, line: 'questions-30', minTotal: 55 }, { at: 10, line: 'questions-10' }],
+  stage: [{ at: 60, line: 'stage-60', minTotal: 120 }, { at: 30, line: 'stage-30', minTotal: 55 }, { at: 10, line: 'stage-10' }],
   offers: [{ at: 10, line: 'bids-10', minTotal: 15 }],
   forecast: [{ at: 10, line: 'tiebreaker-10', minTotal: 15 }]
 };

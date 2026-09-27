@@ -7,7 +7,7 @@ import { tutorialElapsed } from '../ui/TvStage';
 import { useNarration } from './useNarration';
 
 const MUSIC_FOR: Record<Phase, MusicTrack> = {
-  lobby: 'lobby', tutorial: 'lobby', build: 'bed', pitch: 'bed', discussion: 'bed',
+  lobby: 'lobby', tutorial: 'lobby', build: 'bed', stage: 'bed',
   offers: 'offers', 'offers-reveal': 'offers', partner: 'offers', reveal: null, break: 'lobby',
   final: null, forecast: 'offers', 'forecast-result': null, gameover: 'lobby'
 };
@@ -33,23 +33,19 @@ export function useSoundtrack(room: DealSnapshot | null, enabled: boolean, onTut
     const round = room.round;
     if (changed) {
       if ((room.phase === 'tutorial' || room.phase === 'build') && (before.phase === 'lobby')) void dealAudio.sting('fanfare', 0.9);
-      if (room.phase === 'pitch') void dealAudio.sting('pitch', 0.8);
+      if (room.phase === 'stage') void dealAudio.sting('pitch', 0.8);
       if (room.phase === 'reveal' && round?.result) void dealAudio.sting(round.result.verdict === 'good' ? 'good' : 'bad', 1);
       if (room.phase === 'offers-reveal') void dealAudio.sting('reveal-card', 0.8);
       if (room.phase === 'final') void dealAudio.sting('fanfare', 0.8);
       if (room.phase === 'gameover') void dealAudio.sting('winner', 1);
       if (before.phase === 'tutorial') dealAudio.stopNarration();
     }
-    // New public cards: a soft chime. Never loud over speech.
-    const beforeFacts = before.round?.publicFacts.length ?? 0;
-    const facts = round?.publicFacts ?? [];
-    if (round && before.round?.index === round.index && facts.length > beforeFacts && room.phase !== 'reveal' && room.phase !== 'pitch') {
-      if (facts[facts.length - 1]) void dealAudio.sting('reveal-card', 0.4);
-    }
+    // A shark peeked: a soft card flip. Never loud over speech.
+    if (round && before.round?.index === round.index && room.phase === 'stage' && round.peeks.length > (before.round?.peeks.length ?? 0)) void dealAudio.sting('reveal-card', 0.4);
     if (round && before.round?.index === round.index && round.lockedOffers.length > (before.round?.lockedOffers.length ?? 0) && room.phase === 'offers') void dealAudio.sting('lock', 0.5);
   }, [room, enabled]);
 
-  // Countdown ticks in the last five seconds of the decision clocks (not over the pitch or questions, where people talk).
+  // Countdown ticks in the last five seconds of the decision clocks (not on stage, where people talk).
   useEffect(() => {
     if (!room || !enabled || room.paused || !room.clock?.endsAt || !TICKING_PHASES.includes(room.phase)) return;
     const offset = room.serverNow - Date.now();

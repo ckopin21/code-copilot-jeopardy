@@ -78,7 +78,7 @@ describe('narration plan', () => {
     engine.updateSettings(code, host, { tutorial: false });
   });
 
-  it('welcomes everyone to the build, then opens each round with its pitch', () => {
+  it('welcomes everyone to the build, then opens each round on stage with the peek reminder', () => {
     let before = tv();
     engine.startGame(code, host);
     let after = tv();
@@ -90,7 +90,7 @@ describe('narration plan', () => {
     const plan = planNarration(before, after)!;
     expect(plan.interrupt).toBe(true);
     expect(plan.delayMs).toBeGreaterThan(0);
-    expect(spoken(plan)).toEqual(['round-1', `Please welcome Ava, founder of ${premise.businessName}! ${premise.headline}.`]);
+    expect(spoken(plan)).toEqual(['round-1', `Please welcome Ava, founder of ${premise.businessName}! ${premise.headline}.`, 'peeks']);
   });
 
   it('prepares every pitch intro on the server as products lock, next round first', async () => {
@@ -100,7 +100,7 @@ describe('narration plan', () => {
     engine.lockPremiseRequest(code, ids[1]);
     const full = engine.snapshot(code);
     const lines = linesToPrepare(full).map((line) => line.text);
-    expect(lines).toEqual([1, 2].map((index) => `Please welcome ${full.players[index].name}, founder of ${full.upcoming[index].premise!.businessName}! ${full.upcoming[index].premise!.headline}.`));
+    expect(lines).toEqual([1, 2].map((index) => `Please welcome ${full.players[index].name}, founder of ${full.upcoming[index].premise!.businessName.replace(/[.!?]+$/, '')}! ${full.upcoming[index].premise!.headline}.`));
     // The TV says exactly the line the server prepared, so it plays from the narrator's cache.
     engine.lockPremiseRequest(code, ids[0]);
     engine.lockPremiseRequest(code, ids[3]);
@@ -125,7 +125,7 @@ describe('narration plan', () => {
     const after = tv();
     after.players[0].name = '🦈';
     expect(spokenName(after, ids[0])).toBeNull();
-    expect(spoken(planNarration(before, after))).toEqual(['round-1', 'pitch']);
+    expect(spoken(planNarration(before, after))).toEqual(['round-1', 'pitch', 'peeks']);
   });
 
   it('speaks the pronunciation but captions the typed name', () => {
@@ -145,8 +145,7 @@ describe('narration plan', () => {
   it('announces the verdict, the deal, and the leader', () => {
     engine.startGame(code, host);
     buildAll();
-    engine.endPitch(code, ids[0]);
-    advance(150_000);
+    advance(180_000);
     engine.lockOffer(code, ids[1], 300);
     engine.lockOffer(code, ids[2], 100);
     let before = tv();
@@ -161,7 +160,7 @@ describe('narration plan', () => {
     expect(reveal[0]).toBe(result.verdict === 'good' ? 'verdict-good' : 'verdict-bad');
     expect(reveal[1]).toBe(result.verdict === 'good' ? 'Ben just struck gold!' : 'Ouch. Ben just bought a dud.');
     before = after;
-    advance(15_000);
+    advance(10_000);
     after = tv();
     expect(after.phase).toBe('break');
     const leader = [...after.players].sort((a, b) => b.score - a.score)[0];
@@ -193,13 +192,24 @@ describe('narration plan', () => {
     engine.startGame(code, host);
     buildAll();
     const room = tv();
+    expect(room.phase).toBe('stage');
+    expect(dueWarning(room, 90_000)).toBeNull();
+    expect(dueWarning(room, 59_000)?.line).toBe('stage-60');
     expect(dueWarning(room, 45_000)).toBeNull();
-    expect(dueWarning(room, 29_000)?.line).toBe('pitch-30');
+    expect(dueWarning(room, 29_000)?.line).toBe('stage-30');
     expect(dueWarning(room, 20_000)).toBeNull();
-    expect(dueWarning(room, 9_500)?.line).toBe('pitch-10');
+    expect(dueWarning(room, 9_500)?.line).toBe('stage-10');
     expect(dueWarning(room, 29_000)?.key).not.toBe(dueWarning(room, 9_500)?.key);
     engine.pause(code, host);
     expect(dueWarning(tv(), 9_500)).toBeNull();
+  });
+
+  it('skips the one-minute warning on a short stage clock', () => {
+    engine.updateSettings(code, host, { timers: { prep: 55, stage: 90, offers: 30, tiebreaker: 15 } });
+    engine.startGame(code, host);
+    buildAll();
+    expect(dueWarning(tv(), 59_000)).toBeNull();
+    expect(dueWarning(tv(), 29_000)?.line).toBe('stage-30');
   });
 });
 

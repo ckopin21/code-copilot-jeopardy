@@ -1,14 +1,14 @@
-// Phone controller. The presenter's phone is their private backstage dossier; a shark's phone is question cues and the offer control.
+// Phone controller. The presenter's phone shows their secret verdict and scorecard; a shark's phone is its one peek, talking points and the offer control.
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import type { DealPlayer, DealSnapshot, FactCard, OfferChoice, PlayerLook, RoundState, SubjectId } from '../../types';
+import type { CategoryId, DealPlayer, DealSnapshot, OfferChoice, Peek, PlayerLook, RoundState, ScoreRow } from '../../types';
 import { OFFER_CHOICES } from '../../types';
 import { usePlayerRoom, useClockSeconds } from '../net';
 import { Avatar } from '../Avatar';
 import { AvatarPicker, recallLook, rememberLook } from './AvatarPicker';
 import { BuildLocked, Builder } from './Builder';
 import { PHASE_LABEL, formatClock, offerLabel, playerById, signed, standings } from '../labels';
-import { subjectLabel } from '../../content/subjects';
-import { PITCH_CUES, SHARK_QUESTIONS } from '../../content/cues';
+import { PITCH_CUES } from '../../content/cues';
+import { CATEGORIES, CATEGORY_QUESTIONS, categoryInfo, type CategoryInfo } from '../../content/scorecard';
 import { shuffle, tonePool } from '../../content/dealer';
 import { AudioControls } from '../HostApp';
 import { GAME_ID } from '../../types';
@@ -99,46 +99,28 @@ function Screen({ children, action }: { children: ReactNode; action?: ReactNode 
   return <section className="dod-screen"><div className="dod-screen-main">{children}</div>{action && <div className="dod-screen-action">{action}</div>}</section>;
 }
 
-function Tabs<T extends string>({ value, options, onChange }: { value: T; options: { id: T; label: string }[]; onChange: (id: T) => void }) {
-  return <div className="dod-tabs" role="tablist">{options.map((option) => <button key={option.id} role="tab" aria-selected={value === option.id} className={value === option.id ? 'is-on' : ''} onClick={() => onChange(option.id)}>{option.label}</button>)}</div>;
-}
-
-function FactList({ facts }: { facts: { id: string; subject: SubjectId; text: string }[] }) {
-  return <div className="dod-phone-facts">{facts.map((fact) => <div key={fact.id} className="dod-mini-card"><small>{subjectLabel(fact.subject)}</small>{fact.text}</div>)}</div>;
-}
-
-function CueList({ items, onMore }: { items: { id: string; text: string }[]; onMore?: () => void }) {
-  return <div className="dod-cues"><ul>{items.map((item) => <li key={item.id}>{item.text}</li>)}</ul>{onMore && <button className="dod-link" onClick={onMore}>🔀 Other ideas</button>}</div>;
-}
-
-// ---------- presenter ----------
-function DossierCard({ card, round, canReveal, send }: { card: FactCard; round: RoundState; canReveal: boolean; send: Send }) {
-  const [confirm, setConfirm] = useState(false);
-  const publicFact = round.publicFacts.find((fact) => fact.id === card.id);
-  return <div className={`dod-dossier-card ${card.polarity} ${publicFact ? 'is-public' : ''}`}>
-    <div className="dod-card-top"><small>{subjectLabel(card.subject)}</small>
-      {publicFact ? <span className="dod-on-tv">On TV ✓</span> : canReveal && (confirm
-        ? <span className="dod-row"><button className="dod-mini" onClick={() => setConfirm(false)}>Cancel</button><button className="dod-mini is-strong" onClick={() => { setConfirm(false); void send('player:reveal-card', { cardId: card.id }); }}>Show it</button></span>
-        : <button className="dod-mini" onClick={() => setConfirm(true)}>Show on TV</button>)}</div>
-    <p>{card.text}</p>
+// ---------- scorecard ----------
+/** One check as a phone row: icon and question, then ✅/❌ and the line once it's known, plus who peeked. */
+function CheckRow({ room, category, row, peeks }: { room: DealSnapshot; category: CategoryInfo; row?: ScoreRow; peeks: Peek[] }) {
+  const peekers = peeks.filter((item) => item.category === category.id).map((item) => playerById(room, item.sharkId)?.name).filter(Boolean);
+  return <div className={`dod-check-row ${row ? (row.ok ? 'is-ok' : 'is-bad') : ''}`}>
+    <span className="dod-check-icon" aria-hidden="true">{category.icon}</span>
+    <div>
+      <small>{category.label}{peekers.length > 0 && <em> · 👀 {peekers.join(', ')}</em>}</small>
+      {row && <b>{row.ok ? '✅' : '❌'} {row.text}</b>}
+    </div>
   </div>;
 }
 
-function PresenterDossier({ room, round, send }: { room: DealSnapshot; round: RoundState; send: Send }) {
-  const [view, setView] = useState<'unfavorable' | 'favorable' | 'ideas'>('unfavorable');
-  const canReveal = ['pitch', 'discussion', 'offers'].includes(room.phase);
+// ---------- presenter ----------
+function PresenterScorecard({ room, round }: { room: DealSnapshot; round: RoundState }) {
+  const [cue, setCue] = useState(0);
   const cues = round.pitchCueIds.map((id) => PITCH_CUES.find((item) => item.id === id)).filter(Boolean) as { id: string; text: string }[];
   return <>
     <div className={`dod-verdict verdict-${round.verdict}`}><b>{round.verdict === 'good' ? 'GOOD business' : 'BAD business'} <small>secret</small></b><span>{round.explanation}</span></div>
-    <Tabs value={view} onChange={setView} options={[
-      { id: 'unfavorable', label: '👎 Bad (hidden)' },
-      { id: 'favorable', label: '👍 Good (on TV)' },
-      ...(cues.length ? [{ id: 'ideas' as const, label: '💡 Ideas' }] : [])
-    ]}/>
-    {view === 'ideas'
-      ? <CueList items={cues}/>
-      : <div className="dod-dossier">{round.dossier.filter((card) => card.polarity === view).map((card) => <DossierCard key={card.id} card={card} round={round} canReveal={canReveal} send={send}/>)}</div>}
-    {view === 'unfavorable' && <p className="dod-rule">If a shark asks about one of these, you must say it.</p>}
+    <div className="dod-checks">{CATEGORIES.map((category) => <CheckRow key={category.id} room={room} category={category} row={round.scorecard.find((row) => row.category === category.id)} peeks={round.peeks}/>)}</div>
+    <p className="dod-rule">Only you see this. Pitch it, and talk your way around the ❌s. Sharks can peek at one check each.</p>
+    {cues.length > 0 && <button className="dod-idea" onClick={() => setCue((value) => value + 1)}>💡 {cues[cue % cues.length].text} <small>tap for another</small></button>}
   </>;
 }
 
@@ -148,38 +130,66 @@ function PresenterView({ room, round, send }: { room: DealSnapshot; round: Round
       <p>Both bid {offerLabel(round.offers[round.tiedSharkIds[0]])}.</p>
       {round.tiedSharkIds.map((id) => { const shark = playerById(room, id)!; return <button key={id} className="dod-primary big" onClick={() => void send('player:partner', { sharkId: id })}><Avatar look={shark.look} size={40}/> {shark.name}</button>; })}
     </Screen>;
-    default: return <Screen action={room.phase === 'pitch' ? <button className="dod-primary big" onClick={() => void send('player:end-pitch')}>Done pitching → questions</button>
-      : room.phase === 'discussion' ? <p className="dod-hint">Sharks ready to bid: {round.readyToBid.length}/3</p>
-        : room.phase === 'offers' ? <p className="dod-hint">Sharks are bidding. Keep selling!</p> : undefined}>
-      <PresenterDossier room={room} round={round} send={send}/>
+    default: return <Screen action={room.phase === 'stage' ? <p className="dod-hint">Sharks ready to bid: {round.readyToBid.length}/3</p>
+      : room.phase === 'offers' ? <p className="dod-hint">Sharks are bidding. Keep selling!</p> : undefined}>
+      <PresenterScorecard room={room} round={round}/>
     </Screen>;
   }
 }
 
 // ---------- shark ----------
+/** The shark's one line from the scorecard, once it has peeked. */
+function MyPeek({ round, me }: { round: RoundState; me: DealPlayer }) {
+  const peek = round.peeks.find((item) => item.sharkId === me.id);
+  const row = peek && round.scorecard.find((item) => item.category === peek.category);
+  if (!peek || !row) return null;
+  const category = categoryInfo(peek.category);
+  return <div className={`dod-my-peek ${row.ok ? 'is-ok' : 'is-bad'}`} aria-live="polite">
+    <small>🤫 Only you see this · {category.icon} {category.label}</small>
+    <b>{row.ok ? '✅' : '❌'} {row.text}</b>
+  </div>;
+}
+
 function OfferPanel({ round, me, send }: { round: RoundState; me: DealPlayer; send: Send }) {
   const locked = round.lockedOffers.includes(me.id);
   const [choice, setChoice] = useState<OfferChoice | null>(null);
   if (locked) return <Screen><div className="dod-wait"><h2>Locked 🔒</h2><p className="dod-big">{offerLabel(round.offers[me.id])}</p><p>Waiting for the other sharks…</p></div></Screen>;
   return <Screen action={<button className="dod-primary big" disabled={choice === null} onClick={() => void send('player:offer-lock', { choice })}>{choice === null ? 'Pick a bid' : `Lock in ${offerLabel(choice)} (final)`}</button>}>
     <h2>Your bid</h2>
+    <MyPeek round={round} me={me}/>
     <p className="dod-hint">Top bid wins. GOOD: +1 per $100K, +2 bonus. BAD: −1 per $100K. $0 on a BAD one: +1. No bid by the buzzer = $0.</p>
     <div className="dod-offer-grid">{OFFER_CHOICES.map((option) => <button key={option} className={`${choice === option ? 'is-on' : ''} ${option === 0 ? 'out' : ''}`} aria-pressed={choice === option} onClick={() => setChoice(option)}>{offerLabel(option)}</button>)}</div>
   </Screen>;
 }
 
-function SharkTalk({ room, round, me, send }: { room: DealSnapshot; round: RoundState; me: DealPlayer; send: Send }) {
-  const [view, setView] = useState<'facts' | 'ideas'>('facts');
+/** On stage: one peek at one check (tap, then tap again to confirm), the answer, and optional things to ask. */
+function SharkStage({ room, round, me, send }: { room: DealSnapshot; round: RoundState; me: DealPlayer; send: Send }) {
+  const [pending, setPending] = useState<CategoryId | null>(null);
   const [seed, setSeed] = useState(1);
-  const ideas = useMemo(() => shuffle(tonePool(SHARK_QUESTIONS, room.settings.tone), seededRandom(seed * 9301 + round.index * 49297)).slice(0, 4), [seed, round.index, room.settings.tone]);
+  const mine = round.peeks.find((item) => item.sharkId === me.id);
+  const ideas = useMemo(() => shuffle(tonePool(CATEGORY_QUESTIONS, room.settings.tone), seededRandom(seed * 9301 + round.index * 49297)).slice(0, 2), [seed, round.index, room.settings.tone]);
   const ready = round.readyToBid.includes(me.id);
-  return <Screen action={room.phase === 'discussion'
-    ? <button className={`big ${ready ? 'dod-ghost' : 'dod-primary'}`} onClick={() => void send('player:ready-to-bid')}>{ready ? `Ready ✓ (${round.readyToBid.length}/3) · tap to undo` : `I'm ready to bid (${round.readyToBid.length}/3)`}</button>
-    : <p className="dod-hint">Listen to the pitch. Questions come next.</p>}>
+  const tap = (category: CategoryId) => {
+    if (mine) return;
+    if (pending !== category) { setPending(category); return; }
+    setPending(null);
+    void send('player:peek', { category });
+  };
+  return <Screen action={<button className={`big ${ready ? 'dod-ghost' : 'dod-primary'}`} onClick={() => void send('player:ready-to-bid')}>{ready ? `Ready ✓ (${round.readyToBid.length}/3) · tap to undo` : `I'm ready to bid (${round.readyToBid.length}/3)`}</button>}>
     {round.premise && <div className="dod-premise"><small>{round.premise.businessName}</small><b>{round.premise.headline}</b></div>}
-    <Tabs value={view} onChange={setView} options={[{ id: 'facts', label: `Facts on TV (${round.publicFacts.length}/6)` }, { id: 'ideas', label: 'Question ideas' }]}/>
-    {view === 'facts' ? <FactList facts={round.publicFacts}/> : <CueList items={ideas} onMore={() => setSeed((value) => value + 1)}/>}
-    <p className="dod-rule">Ask about anything. If it touches a hidden bad fact, the presenter must tell you.</p>
+    <h3>{mine ? 'Your peek' : 'Your one peek: pick a check'}</h3>
+    <div className="dod-peek-grid" role="group" aria-label="Peek at one check">
+      {CATEGORIES.map((category) => {
+        const peekers = round.peeks.filter((item) => item.category === category.id).map((item) => item.sharkId === me.id ? 'you' : playerById(room, item.sharkId)?.name);
+        const own = mine?.category === category.id;
+        return <button key={category.id} className={`dod-peek ${pending === category.id ? 'is-pending' : ''} ${own ? 'is-mine' : ''}`} disabled={Boolean(mine) && !own} aria-pressed={own} onClick={() => tap(category.id)}>
+          <span aria-hidden="true">{category.icon}</span><b>{category.label}</b>
+          <small>{pending === category.id ? 'Tap again to peek 👀' : peekers.length ? `👀 ${peekers.join(', ')}` : mine ? '' : 'Tap to peek'}</small>
+        </button>;
+      })}
+    </div>
+    <MyPeek round={round} me={me}/>
+    <div className="dod-ideas"><small>Things to ask</small>{ideas.map((idea) => <span key={idea.id}>{categoryInfo(idea.category).icon} {idea.text}</span>)}<button className="dod-link" onClick={() => setSeed((value) => value + 1)}>🔀 Other ideas</button></div>
   </Screen>;
 }
 
@@ -188,18 +198,19 @@ function SharkView({ room, round, me, send }: { room: DealSnapshot; round: Round
   switch (room.phase) {
     case 'offers': return <OfferPanel round={round} me={me} send={send}/>;
     case 'offers-reveal': case 'partner': return <Screen><div className="dod-wait"><h2>Bids</h2><ul className="dod-offer-list">{round.sharkIds.map((id) => <li key={id}>{playerById(room, id)?.name}: <b>{offerLabel(round.offers[id])}</b></li>)}</ul>{room.phase === 'partner' && <p>{presenter?.name} is picking a partner…</p>}</div></Screen>;
-    default: return <SharkTalk room={room} round={round} me={me} send={send}/>;
+    default: return <SharkStage room={room} round={round} me={me} send={send}/>;
   }
 }
 
 // ---------- results ----------
-function RevealView({ round, me }: { round: RoundState; me: DealPlayer }) {
+function RevealView({ room, round, me }: { room: DealSnapshot; round: RoundState; me: DealPlayer }) {
   const result = round.result;
   if (!result) return null;
   const mine = result.scores.find((score) => score.playerId === me.id);
   return <section className={`dod-phone-reveal verdict-${result.verdict}`}>
     <div className="dod-stamp">{result.verdict === 'good' ? 'GOOD' : 'BAD'}</div>
     <p>{result.explanation}</p>
+    <div className="dod-checks">{CATEGORIES.map((category) => <CheckRow key={category.id} room={room} category={category} row={result.scorecard.find((row) => row.category === category.id)} peeks={round.peeks}/>)}</div>
     {mine && <p className="dod-big">{signed(mine.delta)} <small>{mine.reason}</small></p>}
   </section>;
 }
@@ -228,12 +239,12 @@ function ForecastView({ room, me, send }: { room: DealSnapshot; me: DealPlayer; 
 // ---------- VIP host controls ----------
 function VipControls({ room, send }: { room: DealSnapshot; send: Send }) {
   const [open, setOpen] = useState(false);
-  const skippable = ['tutorial', 'build', 'pitch', 'discussion', 'reveal', 'break', 'final', 'forecast-result'].includes(room.phase);
+  const skippable = ['tutorial', 'build', 'stage', 'reveal', 'break', 'final', 'forecast-result'].includes(room.phase);
   return <div className="dod-vip">
     <button className="dod-vip-toggle" onClick={() => setOpen((value) => !value)} aria-expanded={open}>🎛</button>
     {open && <div className="dod-vip-panel">
       {!['lobby', 'gameover'].includes(room.phase) && (room.paused ? <button onClick={() => { setOpen(false); void send('player:vip', { action: 'resume' }); }}>▶ Resume</button> : <button onClick={() => { setOpen(false); void send('player:vip', { action: 'pause' }); }}>⏸ Pause</button>)}
-      {skippable && <button onClick={() => { setOpen(false); void send('player:vip', { action: 'continue' }); }}>{room.phase === 'build' ? 'Lock everyone in ▶▶' : room.phase === 'pitch' ? 'Skip the pitch ▶▶' : room.phase === 'discussion' ? 'Skip to bids ▶▶' : 'Skip ▶▶'}</button>}
+      {skippable && <button onClick={() => { setOpen(false); void send('player:vip', { action: 'continue' }); }}>{room.phase === 'build' ? 'Lock everyone in ▶▶' : room.phase === 'stage' ? 'Skip to bids ▶▶' : 'Skip ▶▶'}</button>}
       <AudioControls audio={room.settings.audio} onAudio={(audio) => void send('player:vip', { action: 'audio', audio })}/>
     </div>}
   </div>;
@@ -300,7 +311,7 @@ export function PhoneApp({ urlRoomCode }: { urlRoomCode: string }) {
     body = !mine ? <section className="dod-wait"><h2>Everyone is building</h2></section>
       : mine.premise ? <BuildLocked room={room} round={mine} send={send}/> : <Builder room={room} round={mine} send={send}/>;
   } else if (round && ['reveal'].includes(room.phase)) {
-    body = <RevealView round={round} me={me}/>;
+    body = <RevealView room={room} round={round} me={me}/>;
   } else if (round && round.presenterId === me.id && room.phase !== 'break') {
     body = <PresenterView room={room} round={round} send={send}/>;
   } else if (round && room.phase !== 'break') {

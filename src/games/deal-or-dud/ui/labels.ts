@@ -1,4 +1,4 @@
-import type { DealPlayer, DealSnapshot, OfferChoice, Phase, RevealSource } from '../types';
+import type { DealPlayer, DealSnapshot, OfferChoice, Phase } from '../types';
 import { NARRATION_SECONDS } from '../narrationDurations';
 import { TUTORIAL_STEPS } from '../tutorialScript';
 
@@ -6,8 +6,7 @@ export const PHASE_LABEL: Record<Phase, string> = {
   lobby: 'Lobby',
   tutorial: 'How to play',
   build: 'Everyone builds',
-  pitch: 'Pitch',
-  discussion: 'Questions',
+  stage: 'On stage',
   offers: 'Bids',
   'offers-reveal': 'Bids revealed',
   partner: 'Choose a partner',
@@ -17,12 +16,6 @@ export const PHASE_LABEL: Record<Phase, string> = {
   forecast: 'Tiebreaker',
   'forecast-result': 'Tiebreaker',
   gameover: 'Winner'
-};
-
-export const SOURCE_LABEL: Record<RevealSource, string> = {
-  opening: 'Opening fact',
-  presenter: 'Shown by presenter',
-  final: 'Was hidden'
 };
 
 export function offerLabel(choice: OfferChoice | null | undefined): string {

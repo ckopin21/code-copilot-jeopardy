@@ -1,11 +1,11 @@
 // The shared TV view. Host and Presentation both render this; neither ever receives secrets.
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import type { DealPlayer, DealSnapshot, PublicFact } from '../types';
+import type { CategoryId, DealPlayer, DealSnapshot, Peek, ScoreRow } from '../types';
 import { estimateMinutes } from '../types';
-import { subjectLabel } from '../content/subjects';
+import { CATEGORIES } from '../content/scorecard';
 import { StudioSet, CHAIR_SPOTS, PRESENTER_SPOT } from './StudioSet';
 import { Avatar } from './Avatar';
-import { PHASE_LABEL, SOURCE_LABEL, TUTORIAL_TIMELINE, formatClock, offerLabel, playerById, rankOf, signed, standings } from './labels';
+import { PHASE_LABEL, TUTORIAL_TIMELINE, formatClock, offerLabel, playerById, rankOf, signed, standings } from './labels';
 import { useClockSeconds, useNow, useServerOffset } from './net';
 import type { TutorialFocus } from '../tutorialScript';
 import { useNarrationCaption } from '../audio/useNarration';
@@ -68,22 +68,33 @@ function StandingPresenter({ player, label = 'Presenter' }: { player: DealPlayer
   </div>;
 }
 
-function FactCardView({ fact, fresh }: { fact: Pick<PublicFact, 'subject' | 'text' | 'source'>; fresh?: boolean }) {
-  return <article className={`dod-card src-${fact.source} ${fresh ? 'is-fresh' : ''}`}>
-    <header><span className="dod-card-subject">{subjectLabel(fact.subject)}</span><span className="dod-card-source">{SOURCE_LABEL[fact.source]}</span></header>
-    <p>{fact.text}</p>
-    <footer>✓ Verified</footer>
-  </article>;
+const BOARD_PHASES = ['stage', 'offers', 'offers-reveal', 'partner', 'reveal'];
+
+/**
+ * The four checks. On stage they show only who peeked at what; at the reveal each tile flips to ✅ or ❌ with its line.
+ * `rows` is empty until the reveal: the TV never receives a row before then.
+ */
+export function ScoreBoard({ room, peeks, rows, demo }: { room: DealSnapshot; peeks: Peek[]; rows: ScoreRow[]; demo?: boolean }) {
+  return <section className={`dod-scoreboard ${rows.length ? 'is-revealed' : ''} ${demo ? 'is-demo' : ''}`} aria-label="The scorecard">
+    {CATEGORIES.map((category, index) => {
+      const peekers = peeks.filter((item) => item.category === category.id).map((item) => playerById(room, item.sharkId)?.name ?? item.sharkId);
+      const row = rows.find((item) => item.category === category.id);
+      const chips = peekers.length > 0 && <span className="dod-tile-peeks">{peekers.map((name) => <span key={name}>👀 {name}{row ? '' : ' peeked'}</span>)}</span>;
+      return <article key={category.id} className={`dod-tile ${row ? (row.ok ? 'is-ok' : 'is-bad') : ''}`} style={{ animationDelay: `${row ? index * 0.45 : 0}s` }} data-category={category.id}>
+        <div className="dod-tile-icon" aria-hidden="true">{category.icon}</div>
+        <div className="dod-tile-body">
+          <div className="dod-tile-head"><h3>{category.label}</h3>{row && <span className="dod-tile-mark">{row.ok ? '✅' : '❌'} {row.ok ? category.okWord : category.badWord}</span>}{row && chips}</div>
+          {row ? <p>{row.text}</p> : <div className="dod-tile-line"><span className="dod-tile-secret">🔒 Secret</span>{chips}</div>}
+        </div>
+      </article>;
+    })}
+  </section>;
 }
 
-function FactBoard({ room }: { room: DealSnapshot }) {
-  const now = useNow(1000);
-  const offset = useServerOffset(room);
-  const facts = room.round?.publicFacts ?? [];
-  if (!facts.length) return null;
-  return <section className={`dod-board count-${Math.min(6, facts.length)}`} aria-label="Verified facts">
-    {facts.map((fact) => <FactCardView key={fact.id} fact={fact} fresh={now + offset - fact.revealedAt < 6000}/>)}
-  </section>;
+function RoundBoard({ room }: { room: DealSnapshot }) {
+  const round = room.round;
+  if (!round || !BOARD_PHASES.includes(room.phase)) return null;
+  return <ScoreBoard room={room} peeks={round.peeks} rows={room.phase === 'reveal' ? round.result?.scorecard ?? [] : []}/>;
 }
 
 function TopBar({ room }: { room: DealSnapshot }) {
@@ -96,7 +107,6 @@ function TopBar({ room }: { room: DealSnapshot }) {
       {premise ? <>
         <div className="dod-business-name">{premise.businessName}</div>
         <h1>{premise.headline}</h1>
-        {premise.addOn && <div className="dod-addon">+ Add-on: {premise.addOn}</div>}
       </> : <>
         <div className="dod-business-name">Deal or Dud</div>
         <h1>{room.phase === 'lobby' ? 'The studio is open' : room.phase === 'build' ? 'Everyone is building a business…' : PHASE_LABEL[room.phase]}</h1>
@@ -122,8 +132,7 @@ function PhaseOverlay({ room }: { room: DealSnapshot }) {
   }
   if (!round) return null;
   return <>
-    {room.phase === 'pitch' && <Banner>{presenter?.name} is pitching. The three good facts are on the board. Sharks, listen first.</Banner>}
-    {room.phase === 'discussion' && <Banner>Ask anything. Hit a hidden bad fact and the presenter must admit it. <span className="dod-banner-count">Ready to bid {round.readyToBid.length}/3</span></Banner>}
+    {room.phase === 'stage' && <Banner>{presenter?.name} is on stage. Sharks: ask anything, and use your one peek on your phone. <span className="dod-banner-count">Ready to bid {round.readyToBid.length}/3</span></Banner>}
     {room.phase === 'offers' && <Banner>Negotiate out loud, then lock in a bid from $0 to $500K on your phone.</Banner>}
     {room.phase === 'partner' && <Banner tone="alert">Tie at the top! {presenter?.name} chooses a partner.</Banner>}
   </>;
@@ -194,16 +203,18 @@ function LobbyMessage({ room }: { room: DealSnapshot }) {
   const { low, high } = estimateMinutes(room.settings.timers, room.settings.tutorial);
   return <section className="dod-lobby-note">
     <p>{ready < 4 ? `Waiting for players… ${ready}/4 in the studio` : 'All four players are in the studio!'}</p>
-    <p className="dod-sub">About {low}–{high} minutes · {room.settings.tone} topics · {room.settings.complexity} facts</p>
+    <p className="dod-sub">About {low}–{high} minutes · {room.settings.tone} topics</p>
   </section>;
 }
 
 // ---------- tutorial ----------
-const DEMO_FACTS: Pick<PublicFact, 'subject' | 'text' | 'source'>[] = [
-  { subject: 'sales', text: 'It sold 10,000 in its first month.', source: 'opening' },
-  { subject: 'stores', text: 'Stores ordered 5,000 more.', source: 'opening' },
-  { subject: 'reviews', text: 'Most buyers rate it 5 stars.', source: 'opening' }
+const DEMO_ROWS: ScoreRow[] = [
+  { category: 'works', ok: true, text: 'Works exactly like it says', lineId: 'demo-1' },
+  { category: 'demand', ok: true, text: 'Kids beg their parents for it', lineId: 'demo-2' },
+  { category: 'money', ok: false, text: 'Costs more to make than it sells for', lineId: 'demo-3' },
+  { category: 'trouble', ok: true, text: 'Passed every safety check', lineId: 'demo-4' }
 ];
+const DEMO_CARDS = [{ emoji: '🍞', step: 'Product', text: 'Toasters' }, { emoji: '🦜', step: 'Twist', text: 'Pirate-themed' }, { emoji: '👵', step: 'For', text: 'Grandmas' }];
 
 export function tutorialElapsed(room: DealSnapshot, now: number, offset: number): number {
   const clock = room.clock;
@@ -212,23 +223,33 @@ export function tutorialElapsed(room: DealSnapshot, now: number, offset: number)
   return (clock.totalMs - remaining) / 1000;
 }
 
-function TutorialDemo({ focus }: { focus: TutorialFocus }) {
+function TutorialDemo({ room, focus }: { room: DealSnapshot; focus: TutorialFocus }) {
+  const peekDemo: Peek[] = [{ sharkId: room.players[1]?.id ?? 'A shark', category: 'money' as CategoryId }];
   switch (focus) {
-    case 'phone-dossier':
+    case 'build':
+      return <div className="dod-demo-build">
+        {DEMO_CARDS.map((card) => <div key={card.step} className="dod-demo-card"><small>{card.step}</small><span>{card.emoji}</span><b>{card.text}</b></div>)}
+        <p>“Pirate-themed toasters for grandmas”</p>
+      </div>;
+    case 'phone-scorecard':
       return <div className="dod-demo-phone"><div className="dod-demo-screen">
-        <div className="dod-demo-secret">🤫 Secret: <b>BAD</b> business</div>
-        <div className="dod-demo-cards">{['👍 Lots sold', '👍 Stores want more', '👍 Great reviews', '👎 Most get returned', '👎 Returns cost money', '👎 People stop using it'].map((line) => <span key={line}>{line}</span>)}</div>
+        <div className="dod-demo-secret">🤫 Secret: <b>GOOD</b> business</div>
+        <div className="dod-demo-cards">{DEMO_ROWS.map((row) => <span key={row.category}>{row.ok ? '✅' : '❌'} {row.text}</span>)}</div>
       </div></div>;
-    case 'cards':
-      return <section className="dod-board count-3 is-demo">{DEMO_FACTS.map((fact, index) => <FactCardView key={index} fact={fact} fresh/>)}</section>;
-    case 'sharks':
-      return <div className="dod-demo-bubble">“Do people keep it, or send it back?”</div>;
+    case 'categories':
+      return <ScoreBoard room={room} peeks={[]} rows={[]} demo/>;
+    case 'peek':
+      return <>
+        <ScoreBoard room={room} peeks={peekDemo} rows={[]} demo/>
+        <div className="dod-demo-bubble">🤫 Only you see: 💰 ❌ Costs more to make than it sells for</div>
+      </>;
     case 'offers':
       return <div className="dod-demo-offers"><span>$300K 🔒</span><span>$0 🔒</span><span>$500K 🔒</span></div>;
     case 'reveal':
-      return <div className="dod-demo-reveal"><div className="dod-stamp">GOOD BUSINESS</div><p>Top bid: +1 per $100K, +2 bonus · $500K = +7</p><p className="bad">Bad business: −1 per $100K · a $0 bid +1</p></div>;
-    case 'scores':
-      return <div className="dod-demo-trophy">🏆</div>;
+      return <>
+        <ScoreBoard room={room} peeks={peekDemo} rows={DEMO_ROWS} demo/>
+        <div className="dod-demo-reveal"><div className="dod-stamp">GOOD BUSINESS</div><p>Top bid: +1 per $100K, +2 bonus</p><p className="bad">Bad business: −1 per $100K · a $0 bid +1</p></div>
+      </>;
     default:
       return null;
   }
@@ -242,7 +263,7 @@ export function TutorialOverlay({ room, captions }: { room: DealSnapshot; captio
   const index = TUTORIAL_TIMELINE.indexOf(current);
   return <div className={`dod-tutorial focus-${current.step.focus}`}>
     <div className="dod-tutorial-title"><span>{index + 1}/{TUTORIAL_TIMELINE.length}</span> {current.step.title}</div>
-    <TutorialDemo focus={current.step.focus}/>
+    <TutorialDemo room={room} focus={current.step.focus}/>
     {/* With captions off, the step title and demo still carry the essential rule. */}
     {captions && <div className="dod-captions" aria-live="polite">{current.step.line}</div>}
   </div>;
@@ -261,7 +282,7 @@ export function TvStage({ room, hostBar, extra }: { room: DealSnapshot; hostBar?
   const presenter = inRound ? playerById(room, round!.presenterId) : ['lobby', 'tutorial', 'build'].includes(room.phase) ? room.players[3] : undefined;
   const built = (id: string) => room.phase === 'build' && Boolean(room.upcoming.find((item) => item.presenterId === id)?.lockedAt);
   const showOffers = round && ['offers-reveal', 'partner', 'reveal'].includes(room.phase);
-  const focus = room.phase === 'offers' || room.phase === 'offers-reveal' ? 'sharks' : ['pitch', 'build'].includes(room.phase) ? 'presenter' : null;
+  const focus = room.phase === 'offers' || room.phase === 'offers-reveal' ? 'sharks' : ['stage', 'build'].includes(room.phase) ? 'presenter' : null;
   const tutorialFocus = room.phase === 'tutorial' ? (() => {
     const elapsed = tutorialElapsed(room, Date.now(), 0);
     return ([...TUTORIAL_TIMELINE].reverse().find((item) => elapsed >= item.start) ?? TUTORIAL_TIMELINE[0]).step.focus;
@@ -273,7 +294,7 @@ export function TvStage({ room, hostBar, extra }: { room: DealSnapshot; hostBar?
   useNow(room.phase === 'tutorial' ? 500 : 60_000);
 
   return <Stage16x9>
-    <StudioSet focus={tutorialFocus === 'sharks' || tutorialFocus === 'offers' ? 'sharks' : tutorialFocus === 'phone-dossier' ? 'presenter' : focus}/>
+    <StudioSet focus={tutorialFocus === 'peek' || tutorialFocus === 'offers' ? 'sharks' : tutorialFocus === 'phone-scorecard' ? 'presenter' : focus}/>
     {sharks.map((player, index) => {
       const offer = round?.offers[player.id];
       const tag = showOffers ? <span className={`dod-offer ${offer === 0 ? 'out' : ''} ${deal?.sharkId === player.id ? 'won' : ''}`}>{offerLabel(offer)}</span>
@@ -285,7 +306,7 @@ export function TvStage({ room, hostBar, extra }: { room: DealSnapshot; hostBar?
     })}
     {presenter && !bigPanel && <StandingPresenter player={presenter} label={inRound ? 'Presenter' : room.phase === 'build' ? (built(presenter.id) ? 'Locked in 🔒' : 'Building…') : 'Waiting to play'}/>}
     <TopBar room={room}/>
-    {room.phase !== 'tutorial' && !['break', 'final', 'forecast', 'forecast-result', 'gameover'].includes(room.phase) && <FactBoard room={room}/>}
+    <RoundBoard room={room}/>
     <div className="dod-overlays">
       {room.phase === 'lobby' && <LobbyMessage room={room}/>}
       <PhaseOverlay room={room}/>

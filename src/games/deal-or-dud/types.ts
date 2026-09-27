@@ -5,26 +5,22 @@ export const PLAYER_COUNT = 4;
 export const ROUND_COUNT = 4;
 
 export type Tone = 'clean' | 'silly' | 'crude';
-export type Complexity = 'simple' | 'standard' | 'challenge';
 export type Verdict = 'good' | 'bad';
-export type Polarity = 'favorable' | 'unfavorable';
 
-/** What kind of thing the main product is. Fact cards and modifiers declare which forms they suit. */
+/** What kind of thing the main product is. Twists and scorecard lines declare which forms they suit. */
 export type ProductForm = 'food' | 'gadget' | 'goods' | 'pet' | 'service' | 'rental' | 'digital' | 'event';
 
-/** Fixed list of business subjects. Each fact card covers one; sharks ask about subjects out loud. */
-export type SubjectId =
-  | 'sales' | 'repeat' | 'returns' | 'durability' | 'cost' | 'price' | 'stores' | 'shipping'
-  | 'reviews' | 'safety' | 'rivals' | 'team' | 'supplier' | 'sponsor' | 'ads' | 'usage' | 'season';
+/** The four fixed scorecard checks, the same every round. */
+export type CategoryId = 'works' | 'demand' | 'money' | 'trouble';
+export const CATEGORY_IDS: readonly CategoryId[] = ['works', 'demand', 'money', 'trouble'];
 
 export type TimerPreset = 'quick' | 'standard' | 'relaxed' | 'custom';
 
 export interface TimerSettings {
   /** Product builder clock (seconds). The key is `prep` so saved settings keep working. */
   prep: number;
-  /** One clock for reading the secret file and giving the opening pitch. */
-  pitch: number;
-  discussion: number;
+  /** One clock for the whole time on stage: the pitch and the sharks' questions. */
+  stage: number;
   offers: number;
   tiebreaker: number;
 }
@@ -39,7 +35,6 @@ export interface AudioSettings {
 export interface DealSettings {
   timerPreset: TimerPreset;
   timers: TimerSettings;
-  complexity: Complexity;
   tone: Tone;
   tutorial: boolean;
   captions: boolean;
@@ -50,8 +45,7 @@ export type Phase =
   | 'lobby'
   | 'tutorial'
   | 'build'
-  | 'pitch'
-  | 'discussion'
+  | 'stage'
   | 'offers'
   | 'offers-reveal'
   | 'partner'
@@ -81,34 +75,35 @@ export interface DealPlayer {
   sayAs?: string;
 }
 
-export interface FactCard {
-  id: string;
-  subject: SubjectId;
-  polarity: Polarity;
+/** One secret scorecard check: ✅ (ok) or ❌, with a short plain line. */
+export interface ScoreRow {
+  category: CategoryId;
+  ok: boolean;
   text: string;
+  /** Content line id, for avoiding repeats. */
+  lineId: string;
 }
 
-export type RevealSource = 'opening' | 'presenter' | 'final';
-
-export interface PublicFact extends FactCard {
-  source: RevealSource;
-  revealedAt: number;
+/** A shark's one peek this round. Who peeked at what is public; the row itself only goes to that shark. */
+export interface Peek {
+  sharkId: string;
+  category: CategoryId;
 }
 
-/** A presenter's picks in the product builder. Ids refer to the content pools. */
+export type BuilderColumn = 'products' | 'modifiers' | 'audiences';
+
+/** A player's picks in the three-step card builder. Ids refer to the content pools. */
 export interface BuilderPicks {
-  modifiers: string[];
-  products: string[];
-  audiences: string[];
-  mainProduct: string | null;
-  /** Product the game supplied because none was picked. */
-  suppliedProduct: string | null;
+  product: string | null;
+  modifier: string | null;
+  audience: string | null;
+  /** The four cards currently offered in each step (🔀 deals a new four). */
+  hands: Record<BuilderColumn, string[]>;
 }
 
 export interface LockedPremise {
   headline: string;
   mainProductId: string;
-  addOn: string | null;
   businessName: string;
   form: ProductForm;
 }
@@ -135,6 +130,7 @@ export interface RoundResult {
   verdict: Verdict;
   explanation: string;
   laterLine: string;
+  scorecard: ScoreRow[];
   deal: { sharkId: string; amount: DealAmount } | null;
   offers: Record<string, OfferChoice>;
   scores: RoundScore[];
@@ -148,22 +144,24 @@ export interface RoundState {
   /** Three business-name options the presenter can tap; first is the default. */
   nameOptions: string[];
   premise: LockedPremise | null;
-  /** When the presenter locked their product during the build (absent in rooms saved before the shared build). */
+  /** When the presenter locked their product during the build. */
   lockedAt?: number | null;
   /** Secret: set when the premise locks. */
   verdict: Verdict | null;
   explanation: string | null;
-  dossier: FactCard[];
-  publicFacts: PublicFact[];
+  /**
+   * Secret: the four checks, in category order. The presenter gets all four, a shark only the row it peeked at,
+   * and the TV none until the reveal.
+   */
+  scorecard: ScoreRow[];
+  peeks: Peek[];
   offers: Record<string, OfferChoice | null>;
   lockedOffers: string[];
-  /** Sharks who tapped "Ready to bid". When all three have, questions end early. */
+  /** Sharks who tapped "Ready to bid". When all three have, the stage ends early. */
   readyToBid: string[];
   tiedSharkIds: string[];
   pitchCueIds: string[];
   result: RoundResult | null;
-  /** Variant id for recent-history avoidance. */
-  profileVariantId: string | null;
 }
 
 export interface ForecastCardPublic {
@@ -205,7 +203,7 @@ export interface DealSnapshot {
   round: RoundState | null;
   /**
    * Rounds not yet played, in pitch order. Everyone builds their product at once before round 1, so during the
-   * build this holds all four; each round moves to `round` when its pitch starts. A phone only ever sees its own.
+   * build this holds all four; each round moves to `round` when it goes on stage. A phone only ever sees its own.
    */
   upcoming: RoundState[];
   history: RoundResult[];
@@ -220,15 +218,14 @@ export interface DealSnapshot {
 }
 
 export const DEFAULT_TIMERS: Record<Exclude<TimerPreset, 'custom'>, TimerSettings> = {
-  quick: { prep: 35, pitch: 60, discussion: 120, offers: 30, tiebreaker: 15 },
-  standard: { prep: 45, pitch: 90, discussion: 150, offers: 45, tiebreaker: 20 },
-  relaxed: { prep: 60, pitch: 120, discussion: 210, offers: 60, tiebreaker: 30 }
+  quick: { prep: 55, stage: 120, offers: 30, tiebreaker: 15 },
+  standard: { prep: 75, stage: 180, offers: 45, tiebreaker: 20 },
+  relaxed: { prep: 100, stage: 240, offers: 60, tiebreaker: 30 }
 };
 
 export const TIMER_LIMITS: Record<keyof TimerSettings, { min: number; max: number; step: number; label: string }> = {
-  prep: { min: 20, max: 120, step: 5, label: 'Product builder' },
-  pitch: { min: 30, max: 180, step: 5, label: 'Read the file & pitch' },
-  discussion: { min: 60, max: 300, step: 10, label: 'Live discussion' },
+  prep: { min: 20, max: 180, step: 5, label: 'Product builder' },
+  stage: { min: 60, max: 600, step: 30, label: 'On stage (pitch & questions)' },
   offers: { min: 20, max: 90, step: 5, label: 'Offer lock' },
   tiebreaker: { min: 10, max: 40, step: 5, label: 'Tiebreaker guess' }
 };
@@ -236,7 +233,6 @@ export const TIMER_LIMITS: Record<keyof TimerSettings, { min: number; max: numbe
 export const DEFAULT_SETTINGS: DealSettings = {
   timerPreset: 'standard',
   timers: { ...DEFAULT_TIMERS.standard },
-  complexity: 'standard',
   tone: 'silly',
   tutorial: true,
   captions: true,
@@ -247,10 +243,10 @@ export const DEFAULT_SETTINGS: DealSettings = {
 export const RULE_TIMINGS = {
   offersReveal: 5,
   partnerChoice: 20,
-  reveal: 15,
-  breakBetweenRounds: 12,
+  reveal: 10,
+  breakBetweenRounds: 5,
   forecastResult: 8,
-  tutorialSeconds: 56
+  tutorialSeconds: 48
 } as const;
 
 /** Every bid a shark can lock, in $K. */
@@ -261,10 +257,9 @@ export function toneAllows(setting: Tone, itemTone: Tone | undefined): boolean {
   return TONE_ORDER[itemTone ?? 'clean'] <= TONE_ORDER[setting];
 }
 
-/** Plain-language total time estimate in minutes for four rounds. */
+/** Plain-language total time estimate in minutes: one shared build, then four rounds. */
 export function estimateMinutes(timers: TimerSettings, tutorial: boolean): { low: number; high: number } {
-  const perRound = timers.prep + timers.pitch + timers.discussion + timers.offers
-    + RULE_TIMINGS.offersReveal + RULE_TIMINGS.reveal + RULE_TIMINGS.breakBetweenRounds;
-  const base = perRound * ROUND_COUNT + (tutorial ? RULE_TIMINGS.tutorialSeconds : 0) + 60 /* lobby and final scores */;
-  return { low: Math.round((base * 0.9) / 60), high: Math.round((base * 1.12) / 60) };
+  const perRound = timers.stage + timers.offers + RULE_TIMINGS.offersReveal + RULE_TIMINGS.reveal + RULE_TIMINGS.breakBetweenRounds;
+  const base = timers.prep + perRound * ROUND_COUNT + (tutorial ? RULE_TIMINGS.tutorialSeconds : 0) + 60 /* lobby and final scores */;
+  return { low: Math.round((base * 0.85) / 60), high: Math.round((base * 1.05) / 60) };
 }

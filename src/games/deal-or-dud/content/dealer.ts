@@ -1,16 +1,14 @@
-// Pure content logic: builder compatibility, headlines, names, and dossiers. Shared by server and phones.
-import type { BuilderPicks, Complexity, FactCard, ProductForm, Tone, Verdict } from '../types';
-import { toneAllows } from '../types';
+// Pure content logic: builder hands, headlines, names, and the secret scorecard. Shared by server and phones.
+import type { BuilderColumn, BuilderPicks, CategoryId, ProductForm, ScoreRow, Tone, Verdict } from '../types';
+import { CATEGORY_IDS, toneAllows } from '../types';
 import { AUDIENCES, MODIFIERS, PRODUCTS, type ModifierWord, type ProductWord } from './words';
 import { LATER_LINES, NAME_PATTERNS, PITCH_CUES, type ToneLine } from './cues';
-import { GOOD_PROFILES } from './profilesGood';
-import { BAD_PROFILES } from './profilesBad';
-import { cardText, fillTokens, type ProfileFamily, type ProfileVariant } from './profileTypes';
+import { SCORE_LINES, categoryInfo, fillTokens, type ScoreLine } from './scorecard';
 
 export type Rng = () => number;
 
-export const MAX_PER_COLUMN = 2;
-export const ALL_PROFILES: readonly ProfileFamily[] = [...GOOD_PROFILES, ...BAD_PROFILES];
+/** Cards dealt per builder step. */
+export const HAND_SIZE = 4;
 
 export function pick<T>(items: readonly T[], rng: Rng): T {
   if (!items.length) throw new Error('Nothing to pick from');
@@ -26,9 +24,9 @@ export function shuffle<T>(items: readonly T[], rng: Rng): T[] {
   return copy;
 }
 
-export const modifierById = (id: string) => MODIFIERS.find((item) => item.id === id);
-export const productById = (id: string) => PRODUCTS.find((item) => item.id === id);
-export const audienceById = (id: string) => AUDIENCES.find((item) => item.id === id);
+export const modifierById = (id: string | null | undefined) => MODIFIERS.find((item) => item.id === id);
+export const productById = (id: string | null | undefined) => PRODUCTS.find((item) => item.id === id);
+export const audienceById = (id: string | null | undefined) => AUDIENCES.find((item) => item.id === id);
 
 export function tonePool<T extends { tone?: Tone }>(items: readonly T[], tone: Tone): T[] {
   return items.filter((item) => toneAllows(tone, item.tone));
@@ -38,112 +36,100 @@ export function modifierFits(modifier: ModifierWord, product: ProductWord): bool
   return modifier.forms.includes(product.form);
 }
 
-/** Products that every picked modifier works with. */
-export function compatibleProducts(modifierIds: readonly string[], tone: Tone): ProductWord[] {
-  const modifiers = modifierIds.map(modifierById).filter((item): item is ModifierWord => Boolean(item));
-  return tonePool(PRODUCTS, tone).filter((product) => modifiers.every((modifier) => modifierFits(modifier, product)))
-    .filter((product) => profilesForForm(product.form).good.length > 0 && profilesForForm(product.form).bad.length > 0);
+/** Every card that could be dealt in a step, given the product already picked. */
+export function columnPool(column: BuilderColumn, product: ProductWord | null | undefined, tone: Tone): { id: string; form?: ProductForm }[] {
+  if (column === 'products') return tonePool(PRODUCTS, tone);
+  if (column === 'audiences') return tonePool(AUDIENCES, tone);
+  return tonePool(MODIFIERS, tone).filter((modifier) => !product || modifierFits(modifier, product));
 }
 
-/** Whether a builder option can be tapped given the current picks. Prevents unreadable headlines before they happen. */
-export function optionAllowed(column: 'modifiers' | 'products' | 'audiences', id: string, picks: BuilderPicks, tone: Tone): boolean {
-  if (picks[column].includes(id)) return true;
-  if (picks[column].length >= MAX_PER_COLUMN) return false;
-  if (column === 'audiences') return Boolean(audienceById(id)) && toneAllows(tone, audienceById(id)?.tone);
-  if (column === 'products') {
-    const product = productById(id);
-    if (!product || !toneAllows(tone, product.tone)) return false;
-    return picks.modifiers.every((modifierId) => { const modifier = modifierById(modifierId); return !modifier || modifierFits(modifier, product); });
+/**
+ * Four fresh cards for a step. Products spread across kinds (a food, a gadget, a service…) and skip ids in `avoid`
+ * (other players' cards); a reroll also skips the four on the table when there are enough left.
+ */
+export function dealHand(column: BuilderColumn, picks: BuilderPicks, tone: Tone, rng: Rng, avoid: readonly string[] = []): string[] {
+  const product = productById(picks.product);
+  const pool = shuffle(columnPool(column, product, tone), rng);
+  const current = picks.hands[column] ?? [];
+  const fresh = pool.filter((item) => !avoid.includes(item.id) && !current.includes(item.id));
+  const usable = fresh.length >= HAND_SIZE ? fresh : pool.filter((item) => !avoid.includes(item.id));
+  const source = usable.length >= HAND_SIZE ? usable : pool;
+  if (column !== 'products') return source.slice(0, HAND_SIZE).map((item) => item.id);
+  const hand: string[] = [];
+  const forms = new Set<ProductForm | undefined>();
+  for (const item of source) if (hand.length < HAND_SIZE && !forms.has(item.form)) { hand.push(item.id); forms.add(item.form); }
+  for (const item of source) if (hand.length < HAND_SIZE && !hand.includes(item.id)) hand.push(item.id);
+  return hand;
+}
+
+export function emptyBuilder(): BuilderPicks {
+  return { product: null, modifier: null, audience: null, hands: { products: [], modifiers: [], audiences: [] } };
+}
+
+export function capitalize(text: string): string { return text.charAt(0).toUpperCase() + text.slice(1); }
+
+/** "[Twist] [product] for [audience]". Missing picks are left out. */
+export function buildHeadline(picks: Pick<BuilderPicks, 'product' | 'modifier' | 'audience'>): string {
+  const product = productById(picks.product);
+  if (!product) return '';
+  const modifier = modifierById(picks.modifier);
+  const audience = audienceById(picks.audience);
+  const core = [modifier && modifierFits(modifier, product) ? modifier.text : null, product.text].filter(Boolean).join(' ');
+  return capitalize(audience ? `${core} for ${audience.text}` : core);
+}
+
+export function businessNames(picks: Pick<BuilderPicks, 'product' | 'modifier'>, tone: Tone, rng: Rng, count = 3): string[] {
+  const product = productById(picks.product);
+  if (!product) return [];
+  const modifierRoot = modifierById(picks.modifier)?.root;
+  const patterns = shuffle(tonePool(NAME_PATTERNS, tone), rng);
+  const names = new Set<string>();
+  for (const pattern of patterns) {
+    if (names.size >= count) break;
+    if (pattern.text.includes('{mod}') && !modifierRoot) continue;
+    names.add(pattern.text.replace('{root}', pick(product.roots, rng)).replace('{mod}', modifierRoot ?? ''));
   }
-  const modifier = modifierById(id);
-  if (!modifier || !toneAllows(tone, modifier.tone)) return false;
-  // A modifier must fit every picked product and still leave at least one possible product.
-  const products = picks.products.map(productById).filter((item): item is ProductWord => Boolean(item));
-  if (products.length) return products.every((product) => modifierFits(modifier, product));
-  return compatibleProducts([...picks.modifiers, id], tone).length > 0;
+  return [...names];
 }
 
-/** The product the headline is built around. */
-export function mainProductOf(picks: BuilderPicks): ProductWord | null {
-  const id = picks.mainProduct && picks.products.includes(picks.mainProduct) ? picks.mainProduct : picks.products[0] ?? picks.suppliedProduct;
-  return id ? productById(id) ?? null : null;
+/** How many checks come back ✅: GOOD gets 3 or 4, BAD 0 to 2, so a BAD business still has something to sell. */
+export function passCount(verdict: Verdict, rng: Rng): number {
+  const roll = rng();
+  if (verdict === 'good') return roll < 0.7 ? 3 : 4;
+  return roll < 0.5 ? 2 : roll < 0.85 ? 1 : 0;
 }
 
-export function supplyProduct(picks: BuilderPicks, tone: Tone, rng: Rng, avoid: readonly string[] = []): string {
-  const options = compatibleProducts(picks.modifiers, tone);
-  const fresh = options.filter((product) => !avoid.includes(product.id) && product.id !== picks.suppliedProduct);
-  return pick(fresh.length ? fresh : options, rng).id;
+export function scoreLinesFor(category: CategoryId, ok: boolean, form: ProductForm, tone: Tone): ScoreLine[] {
+  return tonePool(SCORE_LINES, tone).filter((item) => item.category === category && item.ok === ok && (!item.forms || item.forms.includes(form)));
 }
 
 function joinAnd(items: readonly string[]): string {
   return items.length <= 1 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
 }
 
-export function capitalize(text: string): string { return text.charAt(0).toUpperCase() + text.slice(1); }
-
-/** "[Modifier(s)] [main product] for [audience(s)]", with modifiers in natural adjective order. */
-export function buildHeadline(picks: BuilderPicks): string {
-  const product = mainProductOf(picks);
-  if (!product) return '';
-  const modifiers = picks.modifiers.map(modifierById).filter((item): item is ModifierWord => Boolean(item))
-    .filter((modifier) => modifierFits(modifier, product))
-    .sort((a, b) => a.rank - b.rank)
-    .map((modifier) => modifier.text);
-  const audiences = picks.audiences.map(audienceById).filter(Boolean).map((audience) => audience!.text);
-  const core = [...modifiers, product.text].join(' ');
-  return capitalize(audiences.length ? `${core} for ${joinAnd(audiences)}` : core);
+/** One sentence for the reveal, built from which checks failed. */
+export function explainScorecard(verdict: Verdict, rows: readonly ScoreRow[]): string {
+  const failed = rows.filter((row) => !row.ok).map((row) => categoryInfo(row.category).problem);
+  const passed = rows.length - failed.length;
+  if (verdict === 'good') return failed.length ? `Three of four checks passed. ${capitalize(failed[0])}, but that is fixable.` : 'All four checks passed. A real winner.';
+  if (passed === 0) return 'Zero checks passed. A total dud.';
+  if (passed === 1) return 'Only one check passed. Everything else is broken.';
+  return `${capitalize(joinAnd(failed))}. Too much to fix.`;
 }
 
-export function addOnProduct(picks: BuilderPicks): ProductWord | null {
-  const main = mainProductOf(picks);
-  const other = picks.products.find((id) => id !== main?.id);
-  return other ? productById(other) ?? null : null;
-}
+export interface Scorecard { rows: ScoreRow[]; explanation: string }
 
-export function businessNames(picks: BuilderPicks, tone: Tone, rng: Rng, count = 3): string[] {
-  const product = mainProductOf(picks);
-  if (!product) return [];
-  const modifierRoots = picks.modifiers.map((id) => modifierById(id)?.root).filter((root): root is string => Boolean(root));
-  const patterns = shuffle(tonePool(NAME_PATTERNS, tone), rng);
-  const names = new Set<string>();
-  for (const pattern of patterns) {
-    if (names.size >= count) break;
-    if (pattern.text.includes('{mod}') && !modifierRoots.length) continue;
-    const name = pattern.text.replace('{root}', pick(product.roots, rng)).replace('{mod}', modifierRoots.length ? pick(modifierRoots, rng) : '');
-    names.add(name);
-  }
-  return [...names];
-}
-
-export function profilesForForm(form: ProductForm): { good: ProfileVariant[]; bad: ProfileVariant[] } {
-  const collect = (verdict: Verdict) => ALL_PROFILES.filter((family) => family.verdict === verdict)
-    .flatMap((family) => family.variants.filter((variant) => variant.forms.includes(form)));
-  return { good: collect('good'), bad: collect('bad') };
-}
-
-export function familyOfVariant(variantId: string): ProfileFamily | undefined {
-  return ALL_PROFILES.find((family) => family.variants.some((variant) => variant.id === variantId));
-}
-
-export interface Dossier {
-  variantId: string;
-  explanation: string;
-  cards: FactCard[];
-}
-
-/** Picks a verdict-matching variant for the product, avoiding recently used ones, and renders its six cards. */
-export function dealDossier(product: ProductWord, verdict: Verdict, complexity: Complexity, rng: Rng, recentVariantIds: readonly string[]): Dossier {
-  const pool = profilesForForm(product.form)[verdict];
-  const fresh = pool.filter((variant) => !recentVariantIds.includes(variant.id));
-  const variant = pick(fresh.length ? fresh : pool, rng);
-  const family = familyOfVariant(variant.id)!;
-  const cards: FactCard[] = shuffle(variant.cards.map((card, index) => ({
-    id: `${variant.id}:${index}`,
-    subject: card[0],
-    polarity: card[1] === '+' ? 'favorable' as const : 'unfavorable' as const,
-    text: fillTokens(cardText(card, complexity), product.form, product.short)
-  })), rng);
-  return { variantId: variant.id, explanation: family.explain, cards };
+/** The secret scorecard for a product: which checks pass is random, and lines avoid recently used ones. */
+export function dealScorecard(product: ProductWord, verdict: Verdict, tone: Tone, rng: Rng, recentLineIds: readonly string[] = []): Scorecard {
+  const passing = new Set(shuffle(CATEGORY_IDS, rng).slice(0, passCount(verdict, rng)));
+  const rows = CATEGORY_IDS.map((category): ScoreRow => {
+    const ok = passing.has(category);
+    const pool = scoreLinesFor(category, ok, product.form, tone);
+    const fresh = pool.filter((item) => !recentLineIds.includes(item.id));
+    const chosen = pick(fresh.length ? fresh : pool, rng);
+    return { category, ok, text: fillTokens(chosen.text, product.form, product.short), lineId: chosen.id };
+  });
+  return { rows, explanation: explainScorecard(verdict, rows) };
 }
 
 export function laterLine(verdict: Verdict, tone: Tone, name: string, short: string, rng: Rng): string {
@@ -155,7 +141,6 @@ export function laterLine(verdict: Verdict, tone: Tone, name: string, short: str
 export function toneLine(pool: readonly ToneLine[], tone: Tone, rng: Rng): ToneLine {
   return pick(tonePool(pool, tone), rng);
 }
-
 
 export function pitchCueIds(tone: Tone, rng: Rng, count = 4): string[] {
   return shuffle(tonePool(PITCH_CUES, tone), rng).slice(0, count).map((cue) => cue.id);

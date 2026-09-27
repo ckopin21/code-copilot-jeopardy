@@ -1,5 +1,5 @@
 // Short text pools shown on phones and the TV. Tone defaults to 'clean'.
-import type { SubjectId, Tone, Verdict } from '../types';
+import type { Tone, Verdict } from '../types';
 
 export interface ToneLine { id: string; text: string; tone?: Tone }
 
@@ -8,12 +8,12 @@ export const PITCH_CUES: readonly ToneLine[] = [
   { id: 'pc-problem', text: 'Start with the problem your product solves.' },
   { id: 'pc-name', text: 'Say the business name like it is already famous.' },
   { id: 'pc-customer', text: 'Describe your happiest customer.' },
-  { id: 'pc-card', text: 'Point at your best fact card on the TV.' },
+  { id: 'pc-strength', text: 'Lead with your best ✅ check.' },
   { id: 'pc-demo', text: 'Act out how someone uses it.' },
   { id: 'pc-dream', text: 'Tell them where the company will be in five years.' },
   { id: 'pc-ask', text: 'Tell the sharks exactly what you want from them.' },
   { id: 'pc-origin', text: 'Share the (made-up) moment you invented it.' },
-  { id: 'pc-weak', text: 'Mention a small weakness to look honest.' },
+  { id: 'pc-weak', text: 'Admit one small ❌ before a shark finds it.' },
   { id: 'pc-compare', text: 'Explain why it beats what people use now.' },
   { id: 'pc-slogan', text: 'Invent a slogan on the spot.' },
   { id: 'pc-pause', text: 'Pause dramatically. Let it sink in.' },
@@ -24,43 +24,6 @@ export const PITCH_CUES: readonly ToneLine[] = [
   { id: 'pc-grandma', text: 'Claim your grandma already invested. Emotionally.', tone: 'silly' },
   { id: 'pc-smell', text: 'Describe what it smells like. In detail.', tone: 'crude' },
   { id: 'pc-burp', text: 'Explain why it will not make anyone burp. Probably.', tone: 'crude' }
-];
-
-/** Optional shark question inspiration, grouped by subject so they point at real clues. */
-export const SHARK_QUESTIONS: readonly (ToneLine & { subject?: SubjectId })[] = [
-  { id: 'sq-who', text: 'Who actually buys this?', subject: 'sales' },
-  { id: 'sq-how-many', text: 'How many have you sold?', subject: 'sales' },
-  { id: 'sq-again', text: 'Do people want a second one?', subject: 'repeat' },
-  { id: 'sq-come-back', text: 'Do customers come back?', subject: 'repeat' },
-  { id: 'sq-send-back', text: 'Do people keep it, or send it back?', subject: 'returns' },
-  { id: 'sq-refunds', text: 'Do customers ask for refunds?', subject: 'returns' },
-  { id: 'sq-break', text: 'Does it break?', subject: 'durability' },
-  { id: 'sq-last', text: 'How long does one last?', subject: 'durability' },
-  { id: 'sq-cost', text: 'What does each one cost you to make?', subject: 'cost' },
-  { id: 'sq-price', text: 'What do you charge for it?', subject: 'price' },
-  { id: 'sq-pay-more', text: 'Would people pay more for it?', subject: 'price' },
-  { id: 'sq-store', text: 'Why would a store sell it?', subject: 'stores' },
-  { id: 'sq-shelves', text: 'Is it in any stores yet?', subject: 'stores' },
-  { id: 'sq-ship', text: 'How much does shipping cost?', subject: 'shipping' },
-  { id: 'sq-reviews', text: 'What do the reviews say?', subject: 'reviews' },
-  { id: 'sq-safe', text: 'Is it safe?', subject: 'safety' },
-  { id: 'sq-rival', text: 'Who else sells something like this?', subject: 'rivals' },
-  { id: 'sq-copy', text: 'What stops someone from copying you?', subject: 'rivals' },
-  { id: 'sq-team', text: 'Who is on your team?', subject: 'team' },
-  { id: 'sq-supplier', text: 'Who makes the parts?', subject: 'supplier' },
-  { id: 'sq-celeb', text: 'Is anyone famous involved?', subject: 'sponsor' },
-  { id: 'sq-ads', text: 'How do people find out about it?', subject: 'ads' },
-  { id: 'sq-use', text: 'How often do people use it?', subject: 'usage' },
-  { id: 'sq-stop', text: 'Do people stop using it?', subject: 'usage' },
-  { id: 'sq-season', text: 'Does it sell all year?', subject: 'season' },
-  { id: 'sq-good', text: 'Is this actually a good investment?' },
-  { id: 'sq-why-you', text: 'Why should I trust you with my money?' },
-  { id: 'sq-worst', text: 'What is the worst thing a customer ever said?' },
-  { id: 'sq-sweat', text: 'Why are you sweating?', tone: 'silly' },
-  { id: 'sq-mom', text: 'Does your mom know about this?', tone: 'silly' },
-  { id: 'sq-haunted', text: 'Has anyone reported anything... unusual?', tone: 'silly' },
-  { id: 'sq-smell', text: 'Be honest. Does it smell?', tone: 'crude' },
-  { id: 'sq-toilet', text: 'Has anyone dropped one in a toilet?', tone: 'crude' }
 ];
 
 /** "What happened later" lines. {name} = business name, {short} = product short name. */

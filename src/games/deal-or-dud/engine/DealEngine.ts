@@ -4,14 +4,14 @@ import type { PlayerJoinInput } from '../../../platform/players/playerJoin';
 import { ROOM_CODE_ALPHABET, randomToken, secureEqual } from '../../../platform/rooms/tokens';
 import { mergeStoredRooms, serializeStoredRooms } from '../../../platform/rooms/roomStorageRecovery';
 import {
-  DEFAULT_SETTINGS, DEFAULT_TIMERS, GAME_ID, OFFER_CHOICES, PLAYER_COUNT, ROUND_COUNT, RULE_TIMINGS, TIMER_LIMITS,
+  CATEGORY_IDS, DEFAULT_SETTINGS, DEFAULT_TIMERS, GAME_ID, OFFER_CHOICES, PLAYER_COUNT, ROUND_COUNT, RULE_TIMINGS, TIMER_LIMITS,
   toneAllows,
-  type AudioSettings, type BuilderPicks, type ClockState, type DealPlayer, type DealSettings, type DealSnapshot, type FactCard,
-  type OfferChoice, type Phase, type PublicFact, type RevealSource, type RoundState, type TimerSettings
+  type AudioSettings, type BuilderColumn, type CategoryId, type ClockState, type DealPlayer, type DealSettings, type DealSnapshot,
+  type OfferChoice, type Phase, type RoundState, type TimerSettings
 } from '../types';
 import {
-  MAX_PER_COLUMN, addOnProduct, buildHeadline, businessNames, dealDossier, laterLine, mainProductOf, optionAllowed,
-  pick, pitchCueIds, productById, supplyProduct, tonePool, type Rng
+  buildHeadline, businessNames, dealHand, dealScorecard, emptyBuilder, laterLine, modifierById, modifierFits,
+  pick, pitchCueIds, productById, tonePool, type Rng
 } from '../content/dealer';
 import { AVATAR_PRESETS, FORECAST_CARDS } from '../content/cues';
 import { largestOffers, scoreRound, type Deal } from './scoring';
@@ -19,8 +19,8 @@ import { largestOffers, scoreRound, type Deal } from './scoring';
 const ROOM_TTL_MS = 12 * 60 * 60 * 1000;
 const STORAGE_KEYS = { primary: 'deal-or-dud-rooms', backup: 'deal-or-dud-rooms-backup', recent: 'deal-or-dud-recent' };
 const MAX_PHOTO_CHARS = 150_000;
-const LIVE_PHASES: readonly Phase[] = ['build', 'pitch', 'discussion', 'offers', 'offers-reveal', 'partner'];
-const REVEALABLE_PHASES: readonly Phase[] = ['pitch', 'discussion', 'offers'];
+const LIVE_PHASES: readonly Phase[] = ['build', 'stage', 'offers', 'offers-reveal', 'partner'];
+const COLUMNS: readonly BuilderColumn[] = ['products', 'modifiers', 'audiences'];
 
 type Room = {
   state: DealSnapshot;
@@ -31,12 +31,13 @@ type Room = {
   usedForecastIds: string[];
   usedProductIds: string[];
   usedHeadlines: string[];
-  usedVariantIds: string[];
+  /** Scorecard lines already used this game. */
+  usedLineIds: string[];
   /** Recent wrong seat codes, to slow down guessing. Not saved meaningfully; resets are harmless. */
   seatAttempts?: number[];
 };
 
-type Recent = { variants: string[]; headlines: string[] };
+type Recent = { lines: string[]; headlines: string[] };
 
 export interface DealEngineOptions {
   isRoomCodeTaken?: (code: string) => boolean;
@@ -62,7 +63,7 @@ export function clockRemaining(clock: ClockState | null, now: number): number {
 
 export class DealEngine implements RoomEngine<DealSnapshot> {
   private rooms = new Map<string, Room>();
-  private recent: Recent = { variants: [], headlines: [] };
+  private recent: Recent = { lines: [], headlines: [] };
   private readonly rng: Rng;
   private readonly now: () => number;
   private readonly isRoomCodeTaken: (code: string) => boolean;
@@ -92,16 +93,20 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
       // A server restart mid-round resumes paused so nobody loses time.
       room.state.players.forEach((player) => { player.connected = false; player.seatCode ??= this.newSeatCode(room); });
       room.state.hostConnected = false;
-      // Saved mid-game before everyone built at once: later rounds were never built, so the room goes back to its lobby.
-      const legacy = (room.state as Partial<DealSnapshot>).upcoming === undefined;
+      room.usedLineIds ??= [];
+      migrateSettings(room.state.settings);
+      // Saved mid-game by an older version (before the shared build, or with the fact-card dossier and separate pitch
+      // and questions): that game can't continue, so the room goes back to its lobby with its players.
+      const legacy = (room.state as Partial<DealSnapshot>).upcoming === undefined
+        || [room.state.round, ...(room.state.upcoming ?? [])].some((round) => round && !Array.isArray((round as Partial<RoundState>).scorecard));
       room.state.upcoming ??= [];
       if (legacy && !['lobby', 'gameover'].includes(room.state.phase)) this.resetToLobby(room, false);
       if (LIVE_PHASES.includes(room.state.phase) && !room.state.paused) this.applyPause(room, 'host');
       this.rooms.set(room.state.code, room);
     }
     try {
-      const recent = JSON.parse(this.storage.getItem(STORAGE_KEYS.recent) ?? 'null') as Recent | null;
-      if (recent && Array.isArray(recent.variants) && Array.isArray(recent.headlines)) this.recent = recent;
+      const recent = JSON.parse(this.storage.getItem(STORAGE_KEYS.recent) ?? 'null') as Partial<Recent> | null;
+      if (recent && Array.isArray(recent.headlines)) this.recent = { lines: Array.isArray(recent.lines) ? recent.lines : [], headlines: recent.headlines };
     } catch { /* recent history is optional */ }
   }
 
@@ -200,7 +205,7 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
       hostToken: randomToken(),
       presentationToken: randomToken(),
       playerTokens: {},
-      usedForecastIds: [], usedProductIds: [], usedHeadlines: [], usedVariantIds: [],
+      usedForecastIds: [], usedProductIds: [], usedHeadlines: [], usedLineIds: [],
       state: {
         game: GAME_ID, code, createdAt: now, expiresAt: now + ROOM_TTL_MS, revision: 1, serverNow: now,
         phase: 'lobby', paused: false, pausedAt: null, pauseReason: null,
@@ -381,10 +386,7 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
       case 'build':
         if (expired) { this.finishBuild(room); return true; }
         return false;
-      case 'pitch':
-        if (expired) { this.startDiscussion(room); return true; }
-        return false;
-      case 'discussion':
+      case 'stage':
         if (expired) { this.openOffers(room); return true; }
         return false;
       case 'offers':
@@ -424,7 +426,7 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
     state.round = null; state.upcoming = []; state.roundIndex = -1; state.clock = null;
     state.forecast = null; state.tutorialReturn = null;
     if (!keepScores) { state.history = []; state.winnerIds = []; state.players.forEach((player) => { player.score = 0; }); }
-    room.usedForecastIds = []; room.usedProductIds = []; room.usedHeadlines = []; room.usedVariantIds = [];
+    room.usedForecastIds = []; room.usedProductIds = []; room.usedHeadlines = []; room.usedLineIds = [];
   }
 
   updateSettings(code: string, hostToken: string, updates: Partial<DealSettings> & { timerSteps?: Partial<TimerSettings> }): DealSnapshot {
@@ -451,7 +453,6 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
           .find((name) => (Object.keys(next) as (keyof TimerSettings)[]).every((key) => DEFAULT_TIMERS[name][key] === next[key]));
         settings.timerPreset = preset ?? 'custom';
       }
-      if (updates.complexity && ['simple', 'standard', 'challenge'].includes(updates.complexity)) settings.complexity = updates.complexity;
       if (updates.tone && ['clean', 'silly', 'crude'].includes(updates.tone)) {
         settings.tone = updates.tone;
         // Keep preset avatars inside the chosen tone.
@@ -463,7 +464,7 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
         }
       }
       if (typeof updates.tutorial === 'boolean') settings.tutorial = updates.tutorial;
-    } else if (updates.timers || updates.timerPreset || updates.complexity || updates.tone || updates.tutorial !== undefined) {
+    } else if (updates.timers || updates.timerSteps || updates.timerPreset || updates.tone || updates.tutorial !== undefined) {
       throw new Error('Game settings can only change between games');
     }
     return this.commit(room);
@@ -527,12 +528,19 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
     return this.commit(room);
   }
 
-  /** Everyone builds their product at once; the four pitches then run back to back. */
+  /** Everyone builds their product at once; the four rounds then run back to back. */
   private startBuild(room: Room): void {
     const state = room.state;
     state.round = null;
     state.roundIndex = -1;
-    state.upcoming = state.players.map((player, index) => this.newRound(state, index, player.id));
+    state.upcoming = [];
+    // Deal each player's first four products in turn, so nobody starts with the same card as someone else.
+    for (const [index, player] of state.players.entries()) {
+      const round = this.newRound(state, index, player.id);
+      state.upcoming.push(round);
+      round.builder.hands.products = dealHand('products', round.builder, state.settings.tone, this.rng, this.cardsInPlay(room, round, 'products'));
+      round.builder.hands.audiences = dealHand('audiences', round.builder, state.settings.tone, this.rng, this.cardsInPlay(room, round, 'audiences'));
+    }
     state.phase = 'build';
     this.startClock(room, state.settings.timers.prep);
   }
@@ -541,24 +549,30 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
       index,
       presenterId,
       sharkIds: state.players.filter((player) => player.id !== presenterId).map((player) => player.id),
-      builder: { modifiers: [], products: [], audiences: [], mainProduct: null, suppliedProduct: null },
+      builder: emptyBuilder(),
       nameOptions: [],
       premise: null,
       lockedAt: null,
       verdict: null,
       explanation: null,
-      dossier: [],
-      publicFacts: [],
+      scorecard: [],
+      peeks: [],
       offers: {},
       lockedOffers: [],
       readyToBid: [],
       tiedSharkIds: [],
       pitchCueIds: pitchCueIds(state.settings.tone, this.rng),
-      result: null,
-      profileVariantId: null
+      result: null
     };
   }
-  /** Brings the next built product on stage: its pitch starts at once. */
+  /** Cards other players hold or picked in a step (products also skip ones already locked), so hands don't overlap. */
+  private cardsInPlay(room: Room, own: RoundState, column: BuilderColumn): string[] {
+    const others = room.state.upcoming.filter((round) => round !== own);
+    const key = column === 'products' ? 'product' : column === 'modifiers' ? 'modifier' : 'audience';
+    const held = others.flatMap((round) => [...round.builder.hands[column], round.builder[key] ?? '']).filter(Boolean);
+    return column === 'products' ? [...held, ...room.usedProductIds] : held;
+  }
+  /** Brings the next built product on stage: the pitch and questions start at once, on one clock. */
   private startRound(room: Room, index: number): void {
     const state = room.state;
     const at = state.upcoming.findIndex((item) => item.index === index);
@@ -567,7 +581,8 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
     state.roundIndex = index;
     state.round = round;
     if (!round.premise) this.lockPremise(room, round, true);
-    this.startPitch(room);
+    state.phase = 'stage';
+    this.startClock(room, state.settings.timers.stage);
   }
   /** Locks every product still open (the build clock ran out, or the host skipped), then starts round 1. */
   private finishBuild(room: Room): void {
@@ -575,75 +590,71 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
     this.startRound(room, 0);
   }
 
-  /** The player's own round-to-be during the build, or the current round for its presenter during the pitch. */
-  private ownRound(room: Room, playerId: string, phases: readonly Phase[]): RoundState {
-    this.requirePhase(room, ...phases);
-    if (room.state.phase !== 'build') return this.requirePresenter(room, playerId);
+  /** The player's own round-to-be during the build. */
+  private ownBuild(room: Room, playerId: string): RoundState {
+    this.requirePhase(room, 'build');
     const round = room.state.upcoming.find((item) => item.presenterId === playerId);
     if (!round) throw new Error('You are not building a product in this game');
     return round;
   }
   private openBuild(room: Room, playerId: string): RoundState {
-    const round = this.ownRound(room, playerId, ['build']);
+    const round = this.ownBuild(room, playerId);
     this.requireNotPaused(room);
     if (round.premise) throw new Error('Your product is already locked in');
     return round;
   }
+  private refreshNames(room: Room, round: RoundState): void {
+    round.nameOptions = businessNames(round.builder, room.state.settings.tone, this.rng);
+  }
 
-  // Builder (each player builds their own product during the build)
-  toggleBuilder(code: string, playerId: string, column: unknown, id: unknown): DealSnapshot {
+  // Builder: three quick card picks (product, twist, audience), each from a hand of four.
+  builderPick(code: string, playerId: string, column: unknown, id: unknown): DealSnapshot {
     const room = this.room(code);
     const round = this.openBuild(room, playerId);
-    if (column !== 'modifiers' && column !== 'products' && column !== 'audiences') throw new Error('Unknown column');
-    const optionId = String(id ?? '');
+    if (!COLUMNS.includes(column as BuilderColumn)) throw new Error('Unknown step');
+    const step = column as BuilderColumn;
     const picks = round.builder;
-    const list = picks[column];
-    if (list.includes(optionId)) {
-      picks[column] = list.filter((item) => item !== optionId);
-      if (column === 'products' && picks.mainProduct === optionId) picks.mainProduct = picks.products[0] ?? null;
+    const cardId = String(id ?? '');
+    if (step === 'modifiers' && !picks.product) throw new Error('Pick a product first');
+    if (!picks.hands[step].includes(cardId)) throw new Error('That card is not in your hand');
+    if (step === 'products') {
+      picks.product = cardId;
+      // Twists depend on the product: keep the current one if it still fits, and deal a hand that fits.
+      const product = productById(cardId)!;
+      const current = modifierById(picks.modifier);
+      if (current && !modifierFits(current, product)) picks.modifier = null;
+      const hand = dealHand('modifiers', { ...picks, hands: { ...picks.hands, modifiers: [] } }, room.state.settings.tone, this.rng, this.cardsInPlay(room, round, 'modifiers'));
+      picks.hands.modifiers = picks.modifier ? [picks.modifier, ...hand.filter((item) => item !== picks.modifier)].slice(0, hand.length) : hand;
+      this.refreshNames(room, round);
+    } else if (step === 'modifiers') {
+      picks.modifier = cardId;
+      this.refreshNames(room, round);
     } else {
-      if (list.length >= MAX_PER_COLUMN) throw new Error('Pick at most two from each column');
-      if (!optionAllowed(column, optionId, picks, room.state.settings.tone)) throw new Error('That does not fit with your other picks');
-      picks[column] = [...list, optionId];
-      if (column === 'products') picks.mainProduct ??= optionId;
+      picks.audience = cardId;
     }
-    if (picks.products.length) picks.suppliedProduct = null;
-    else if (picks.suppliedProduct) {
-      // Keep the supplied product only while it still fits the modifiers.
-      const supplied = productById(picks.suppliedProduct);
-      if (!supplied || !optionAllowed('products', supplied.id, { ...picks, products: [] }, room.state.settings.tone)) picks.suppliedProduct = null;
-    }
-    if (!picks.products.length && !picks.suppliedProduct) picks.suppliedProduct = supplyProduct(picks, room.state.settings.tone, this.rng, room.usedProductIds);
-    round.nameOptions = businessNames(picks, room.state.settings.tone, this.rng);
     return this.commit(room);
   }
-  setMainProduct(code: string, playerId: string, id: unknown): DealSnapshot {
+  /** 🔀 A new hand of four for one step. The current pick stays picked. */
+  builderReroll(code: string, playerId: string, column: unknown): DealSnapshot {
     const room = this.room(code);
     const round = this.openBuild(room, playerId);
-    if (!round.builder.products.includes(String(id))) throw new Error('Pick that product first');
-    round.builder.mainProduct = String(id);
-    round.nameOptions = businessNames(round.builder, room.state.settings.tone, this.rng);
-    return this.commit(room);
-  }
-  reshuffleSupplied(code: string, playerId: string): DealSnapshot {
-    const room = this.room(code);
-    const round = this.openBuild(room, playerId);
-    if (round.builder.products.length) throw new Error('You already picked a product');
-    round.builder.suppliedProduct = supplyProduct(round.builder, room.state.settings.tone, this.rng, room.usedProductIds);
-    round.nameOptions = businessNames(round.builder, room.state.settings.tone, this.rng);
+    if (!COLUMNS.includes(column as BuilderColumn)) throw new Error('Unknown step');
+    const step = column as BuilderColumn;
+    if (step === 'modifiers' && !round.builder.product) throw new Error('Pick a product first');
+    round.builder.hands[step] = dealHand(step, round.builder, room.state.settings.tone, this.rng, this.cardsInPlay(room, round, step));
     return this.commit(room);
   }
   reshuffleNames(code: string, playerId: string): DealSnapshot {
     const room = this.room(code);
-    const round = this.ownRound(room, playerId, ['build', 'pitch']);
-    const picks: BuilderPicks = round.premise ? { ...round.builder, mainProduct: round.premise.mainProductId, products: [round.premise.mainProductId], suppliedProduct: null } : round.builder;
-    if (!mainProductOf(picks)) round.builder.suppliedProduct = supplyProduct(round.builder, room.state.settings.tone, this.rng, room.usedProductIds);
-    round.nameOptions = businessNames(picks, room.state.settings.tone, this.rng);
+    const round = this.ownBuild(room, playerId);
+    if (!round.builder.product) throw new Error('Pick a product first');
+    this.refreshNames(room, round);
+    if (round.premise) round.premise.businessName = round.nameOptions[0] ?? round.premise.businessName;
     return this.commit(room);
   }
   chooseName(code: string, playerId: string, index: unknown): DealSnapshot {
     const room = this.room(code);
-    const round = this.ownRound(room, playerId, ['build', 'pitch']);
+    const round = this.ownBuild(room, playerId);
     const name = round.nameOptions[Number(index)];
     if (!name) throw new Error('Unknown name');
     // The chosen name moves to the front; the premise uses the first option.
@@ -660,81 +671,72 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
     return this.commit(room);
   }
 
+  /** Fills any step left open with a random card from its hand, so every locked product has all three parts. */
+  private fillPicks(room: Room, round: RoundState): void {
+    const tone = room.state.settings.tone;
+    const picks = round.builder;
+    const fill = (column: BuilderColumn) => {
+      if (!picks.hands[column].length) picks.hands[column] = dealHand(column, picks, tone, this.rng, this.cardsInPlay(room, round, column));
+      return pick(picks.hands[column], this.rng);
+    };
+    if (!picks.product) picks.product = fill('products');
+    const product = productById(picks.product)!;
+    const fits = (id: string | null) => Boolean(id && modifierById(id) && modifierFits(modifierById(id)!, product));
+    if (!fits(picks.modifier)) {
+      picks.hands.modifiers = picks.hands.modifiers.filter(fits);
+      picks.modifier = fill('modifiers');
+    }
+    picks.audience ??= fill('audiences');
+  }
+
   private lockPremise(room: Room, round: RoundState, automatic: boolean): void {
     const state = room.state;
     const tone = state.settings.tone;
     const picks = round.builder;
-    if (!mainProductOf(picks)) picks.suppliedProduct = supplyProduct(picks, tone, this.rng, room.usedProductIds);
+    this.fillPicks(room, round);
     let headline = buildHeadline(picks);
     if (room.usedHeadlines.includes(headline)) {
-      if (!automatic) throw new Error('That exact business was already pitched this game. Change one pick.');
-      picks.products = []; picks.mainProduct = null;
-      picks.suppliedProduct = supplyProduct(picks, tone, this.rng, room.usedProductIds);
+      if (!automatic) throw new Error('That exact business is already in this game. Change one card.');
+      picks.product = null; picks.modifier = null;
+      picks.hands.products = []; picks.hands.modifiers = [];
+      this.fillPicks(room, round);
       headline = buildHeadline(picks);
+      round.nameOptions = [];
     }
-    const product = mainProductOf(picks)!;
-    if (!round.nameOptions.length) round.nameOptions = businessNames(picks, tone, this.rng);
-    const addOn = addOnProduct(picks);
-    round.premise = { headline, mainProductId: product.id, addOn: addOn ? addOn.text : null, businessName: round.nameOptions[0] ?? product.roots[0], form: product.form };
-    // The verdict is independent of the words: a fair coin, with no per-game quota.
+    const product = productById(picks.product)!;
+    if (!round.nameOptions.length) this.refreshNames(room, round);
+    round.premise = { headline, mainProductId: product.id, businessName: round.nameOptions[0] ?? product.roots[0], form: product.form };
+    // The verdict is independent of the cards: a fair coin, with no per-game quota.
     const verdict = this.rng() < 0.5 ? 'good' : 'bad';
-    const dossier = dealDossier(product, verdict, state.settings.complexity, this.rng, [...room.usedVariantIds, ...this.recent.variants]);
+    const scorecard = dealScorecard(product, verdict, tone, this.rng, [...room.usedLineIds, ...this.recent.lines]);
     round.verdict = verdict;
-    round.explanation = dossier.explanation;
-    round.dossier = dossier.cards;
-    round.profileVariantId = dossier.variantId;
+    round.explanation = scorecard.explanation;
+    round.scorecard = scorecard.rows;
+    const lineIds = scorecard.rows.map((row) => row.lineId);
     room.usedHeadlines.push(headline);
     room.usedProductIds.push(product.id);
-    room.usedVariantIds.push(dossier.variantId);
-    this.recent.variants = [dossier.variantId, ...this.recent.variants.filter((id) => id !== dossier.variantId)].slice(0, 30);
+    room.usedLineIds.push(...lineIds);
+    this.recent.lines = [...lineIds, ...this.recent.lines.filter((id) => !lineIds.includes(id))].slice(0, 40);
     this.recent.headlines = [headline, ...this.recent.headlines].slice(0, 40);
     round.lockedAt = this.now();
   }
 
-  private publish(room: Room, card: FactCard, source: RevealSource): void {
-    const round = this.round(room);
-    if (round.publicFacts.some((fact) => fact.id === card.id)) return;
-    const fact: PublicFact = { ...card, source, revealedAt: this.now() };
-    round.publicFacts.push(fact);
-  }
-  private concealed(round: RoundState): FactCard[] {
-    return round.dossier.filter((card) => !round.publicFacts.some((fact) => fact.id === card.id));
-  }
-
-  private startPitch(room: Room): void {
-    const round = this.round(room);
-    // The three favorable cards go on the TV as the pitch starts; one clock covers reading the file and pitching.
-    for (const card of round.dossier.filter((item) => item.polarity === 'favorable')) this.publish(room, card, 'opening');
-    room.state.phase = 'pitch';
-    this.startClock(room, room.state.settings.timers.pitch);
-  }
-  endPitch(code: string, playerId: string): DealSnapshot {
+  /** A shark's one secret look at one check. Everyone learns who looked at what; only that shark sees the answer. */
+  peek(code: string, playerId: string, category: unknown): DealSnapshot {
     const room = this.room(code);
-    this.requirePhase(room, 'pitch');
+    this.requirePhase(room, 'stage');
     this.requireNotPaused(room);
-    this.requirePresenter(room, playerId);
-    this.startDiscussion(room);
-    return this.commit(room);
-  }
-  private startDiscussion(room: Room): void {
-    room.state.phase = 'discussion';
-    this.startClock(room, room.state.settings.timers.discussion);
-  }
-
-  revealCard(code: string, playerId: string, cardId: unknown): DealSnapshot {
-    const room = this.room(code);
-    this.requirePhase(room, ...REVEALABLE_PHASES);
-    const round = this.requirePresenter(room, playerId);
-    const card = round.dossier.find((item) => item.id === String(cardId));
-    if (!card) throw new Error('Unknown card');
-    this.publish(room, card, 'presenter');
+    const round = this.requireShark(room, playerId);
+    if (!CATEGORY_IDS.includes(category as CategoryId)) throw new Error('Unknown check');
+    if (round.peeks.some((item) => item.sharkId === playerId)) throw new Error('You already used your peek this round');
+    round.peeks.push({ sharkId: playerId, category: category as CategoryId });
     return this.commit(room);
   }
 
-  /** A shark says they have heard enough. Once all three have, questions end and bidding opens. Tapping again takes it back. */
+  /** A shark says they have heard enough. Once all three have, the stage ends and bidding opens. Tapping again takes it back. */
   toggleReadyToBid(code: string, playerId: string): DealSnapshot {
     const room = this.room(code);
-    this.requirePhase(room, 'discussion');
+    this.requirePhase(room, 'stage');
     this.requireNotPaused(room);
     const round = this.requireShark(room, playerId);
     round.readyToBid = round.readyToBid.includes(playerId) ? round.readyToBid.filter((id) => id !== playerId) : [...round.readyToBid, playerId];
@@ -816,13 +818,13 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
     const round = this.round(room);
     const offers = round.offers as Record<string, OfferChoice>;
     const verdict = round.verdict!;
-    for (const card of this.concealed(round)) this.publish(room, card, 'final');
     const scores = scoreRound(verdict, round.presenterId, offers, deal);
     for (const score of scores) this.player(room, score.playerId).score += score.delta;
     const product = productById(round.premise!.mainProductId)!;
     round.result = {
       verdict,
       explanation: round.explanation ?? '',
+      scorecard: structuredClone(round.scorecard),
       laterLine: laterLine(verdict, state.settings.tone, round.premise!.businessName, product.short, this.rng),
       deal,
       offers,
@@ -922,14 +924,13 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
     this.applyResume(room);
     return this.commit(room);
   }
-  /** Host skip: the tutorial, the build (locks every product as it is), the pitch, the questions, and the between-rounds waits. */
+  /** Host skip: the tutorial, the build (locks every product as it is), the stage, and the between-rounds waits. */
   private continueRoom(room: Room): DealSnapshot {
     if (room.state.paused) this.applyResume(room);
     switch (room.state.phase) {
       case 'tutorial': this.finishTutorial(room); break;
       case 'build': this.finishBuild(room); break;
-      case 'pitch': this.startDiscussion(room); break;
-      case 'discussion': this.openOffers(room); break;
+      case 'stage': this.openOffers(room); break;
       case 'reveal': this.startBreak(room); break;
       case 'break': this.nextRoundOrFinal(room); break;
       case 'final': this.afterFinal(room); break;
@@ -981,3 +982,20 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
   debugRoom(code: string): Room { return this.room(code); }
 }
 
+/**
+ * Settings saved by older versions had separate pitch and question clocks and a fact complexity. A named preset
+ * takes the new preset values; custom timers keep what still exists and get the standard stage clock.
+ */
+function migrateSettings(settings: DealSettings): void {
+  const timers = settings.timers as Partial<TimerSettings>;
+  if (typeof timers.stage !== 'number') {
+    const preset = settings.timerPreset !== 'custom' ? DEFAULT_TIMERS[settings.timerPreset] : undefined;
+    settings.timers = preset ? { ...preset } : {
+      prep: clamp(timers.prep, TIMER_LIMITS.prep.min, TIMER_LIMITS.prep.max, DEFAULT_TIMERS.standard.prep),
+      stage: DEFAULT_TIMERS.standard.stage,
+      offers: clamp(timers.offers, TIMER_LIMITS.offers.min, TIMER_LIMITS.offers.max, DEFAULT_TIMERS.standard.offers),
+      tiebreaker: clamp(timers.tiebreaker, TIMER_LIMITS.tiebreaker.min, TIMER_LIMITS.tiebreaker.max, DEFAULT_TIMERS.standard.tiebreaker)
+    };
+  }
+  delete (settings as Partial<DealSettings> & { complexity?: unknown }).complexity;
+}

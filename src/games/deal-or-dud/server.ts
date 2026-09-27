@@ -32,14 +32,12 @@ export const dealServerGame: ServerGame<DealEngine, DealSnapshot> = {
 
   playerActions: {
     'player:set-look': ({ engine, roomCode, playerId, payload }) => void engine.setLook(roomCode, playerId, payload),
-    'player:builder-toggle': ({ engine, roomCode, playerId, payload }) => void engine.toggleBuilder(roomCode, playerId, payload.column, payload.id),
-    'player:builder-main': ({ engine, roomCode, playerId, payload }) => void engine.setMainProduct(roomCode, playerId, payload.id),
-    'player:builder-reshuffle': ({ engine, roomCode, playerId }) => void engine.reshuffleSupplied(roomCode, playerId),
+    'player:builder-pick': ({ engine, roomCode, playerId, payload }) => void engine.builderPick(roomCode, playerId, payload.column, payload.id),
+    'player:builder-reroll': ({ engine, roomCode, playerId, payload }) => void engine.builderReroll(roomCode, playerId, payload.column),
     'player:builder-lock': ({ engine, roomCode, playerId }) => void engine.lockPremiseRequest(roomCode, playerId),
     'player:names-reshuffle': ({ engine, roomCode, playerId }) => void engine.reshuffleNames(roomCode, playerId),
     'player:name-choose': ({ engine, roomCode, playerId, payload }) => void engine.chooseName(roomCode, playerId, payload.index),
-    'player:end-pitch': ({ engine, roomCode, playerId }) => void engine.endPitch(roomCode, playerId),
-    'player:reveal-card': ({ engine, roomCode, playerId, payload }) => void engine.revealCard(roomCode, playerId, payload.cardId),
+    'player:peek': ({ engine, roomCode, playerId, payload }) => void engine.peek(roomCode, playerId, payload.category),
     'player:ready-to-bid': ({ engine, roomCode, playerId }) => void engine.toggleReadyToBid(roomCode, playerId),
     'player:offer': ({ engine, roomCode, playerId, payload }) => void engine.chooseOffer(roomCode, playerId, payload.choice),
     'player:offer-lock': ({ engine, roomCode, playerId, payload }) => void engine.lockOffer(roomCode, playerId, payload.choice),

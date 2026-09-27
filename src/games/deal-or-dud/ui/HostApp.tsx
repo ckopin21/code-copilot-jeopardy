@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { AudioSettings, Complexity, DealPlayer, DealSettings, DealSnapshot, Tone } from '../types';
+import type { AudioSettings, DealPlayer, DealSettings, DealSnapshot, Tone } from '../types';
 import { DEFAULT_TIMERS, PLAYER_COUNT, TIMER_LIMITS, estimateMinutes, type TimerSettings } from '../types';
 import { useHostRoom } from './net';
 import { TvStage } from './TvStage';
+import { formatClock } from './labels';
 import { dealAudio } from '../audio/dealAudio';
 import { useSoundtrack } from '../audio/useSoundtrack';
 import { narrator } from '../audio/narrator';
@@ -26,11 +27,10 @@ const TONES: { id: Tone; label: string; allows: string }[] = [
   { id: 'silly', label: 'Silly', allows: 'Adds harmless weird ideas like haunted toasters, dramatic llamas, and polite zombies. Still clean.' },
   { id: 'crude', label: 'Crude', allows: 'Adds mild bathroom humor (burps, toots, stinky socks). No sexual content, slurs, drugs, violence, or harsh swearing.' }
 ];
-const COMPLEXITIES: { id: Complexity; label: string; about: string }[] = [
-  { id: 'simple', label: 'Simple', about: 'Very short everyday facts, few numbers.' },
-  { id: 'standard', label: 'Standard', about: 'Modest tradeoffs and clues that invite questions.' },
-  { id: 'challenge', label: 'Challenge', about: 'More mixed evidence to weigh. Still short, no math needed.' }
-];
+/** "45s" for short clocks, "3:00" once it's a minute or more. */
+function timerText(seconds: number): string {
+  return seconds >= 60 ? formatClock(seconds) : `${seconds}s`;
+}
 
 export function AudioControls({ audio, captions, onAudio, onCaptions }: { audio: AudioSettings; captions?: boolean; onAudio: (audio: Partial<AudioSettings>) => void; onCaptions?: (value: boolean) => void }) {
   return <div className="dod-audio-controls">
@@ -66,16 +66,12 @@ function SettingsPage({ room, send, onClose, onStart }: { room: DealSnapshot; se
             return <div key={key} className="dod-stepper">
               <span>{limit.label}</span>
               <button aria-label={`Less ${limit.label}`} onClick={() => stepTimer(key, -limit.step)} disabled={settings.timers[key] <= limit.min}>−</button>
-              <b>{settings.timers[key]}s</b>
+              <b>{timerText(settings.timers[key])}</b>
               <button aria-label={`More ${limit.label}`} onClick={() => stepTimer(key, limit.step)} disabled={settings.timers[key] >= limit.max}>+</button>
-              <small>Standard {DEFAULT_TIMERS.standard[key]}s</small>
+              <small>Standard {timerText(DEFAULT_TIMERS.standard[key])}</small>
             </div>;
           })}
         </div>
-      </section>
-      <section>
-        <h3>Fact complexity</h3>
-        <div className="dod-options">{COMPLEXITIES.map((option) => <button key={option.id} className={settings.complexity === option.id ? 'is-on' : ''} onClick={() => update({ complexity: option.id })}><b>{option.label}</b><span>{option.about}</span></button>)}</div>
       </section>
       <section>
         <h3>Topic tone</h3>
@@ -143,13 +139,13 @@ function JoinPanel({ room, joinUrl, send, enableSound }: { room: DealSnapshot; j
 function HostBar({ room, send, soundOn, enableSound, openSettings }: { room: DealSnapshot; send: Send; soundOn: boolean; enableSound: () => void; openSettings: () => void }) {
   const [audioOpen, setAudioOpen] = useState(false);
   const [confirmEnd, setConfirmEnd] = useState(false);
-  const skippable = ['tutorial', 'build', 'pitch', 'discussion', 'reveal', 'break', 'final', 'forecast-result'].includes(room.phase);
+  const skippable = ['tutorial', 'build', 'stage', 'reveal', 'break', 'final', 'forecast-result'].includes(room.phase);
   const pausable = !['lobby', 'gameover'].includes(room.phase);
   return <nav className="dod-hostbar" aria-label="Host controls">
     {!soundOn && <button className="dod-primary" onClick={enableSound}>🔊 Turn on sound</button>}
     {room.phase === 'lobby' && <button className="dod-primary" onClick={openSettings}>Settings & start</button>}
     {pausable && (room.paused ? <button onClick={() => void send('host:resume')}>▶ Resume</button> : <button onClick={() => void send('host:pause')}>⏸ Pause</button>)}
-    {skippable && <button onClick={() => void send('host:continue')}>{room.phase === 'tutorial' ? 'Skip tutorial' : room.phase === 'build' ? 'Lock everyone in ▶▶' : room.phase === 'pitch' ? 'Skip the pitch ▶▶' : room.phase === 'discussion' ? 'Skip to bids ▶▶' : 'Skip ▶▶'}</button>}
+    {skippable && <button onClick={() => void send('host:continue')}>{room.phase === 'tutorial' ? 'Skip tutorial' : room.phase === 'build' ? 'Lock everyone in ▶▶' : room.phase === 'stage' ? 'Skip to bids ▶▶' : 'Skip ▶▶'}</button>}
     {(room.phase === 'lobby' || room.phase === 'break') && <button onClick={() => { enableSound(); void send('host:replay-tutorial'); }}>Replay tutorial</button>}
     {room.phase === 'gameover' && <button className="dod-primary" onClick={() => void send('host:new-game')}>Play again</button>}
     <button onClick={() => setAudioOpen((open) => !open)} aria-expanded={audioOpen}>🎚 Sound</button>
