@@ -65,7 +65,7 @@ Every phone screen fits the viewport without page scrolling: a header (name, sco
 
 ## Content (`src/games/deal-or-dud/content/`)
 
-- `words.ts`: the builder cards, each with an emoji: 116 products, 69 twists, 70 audiences. The deck is deliberately absurd, the kind of thing that would get you sued ("Radioactive gas station sushi for the IRS", "definitely-not-stolen raccoon butlers for your ex"), but never sexual. Business names are just as bad (`NAME_PATTERNS` in `cues.ts`: "Totally Legit Sushi LLC", "Dr. Toast (Not a Real Doctor)"). Twists list the product forms they fit (food, gadget, goods, pet, service, rental, digital, event), and a twist hand only deals ones that fit the picked product, so headlines never break.
+- `words.ts`: the builder cards, each with an emoji: 115 products, 69 twists, 70 audiences. The deck is deliberately absurd, the kind of thing that would get you sued ("Radioactive gas station sushi for the IRS", "definitely-not-stolen raccoon butlers for your ex"), but never sexual. Business names are just as bad (`NAME_PATTERNS` in `cues.ts`: "Totally Legit Sushi LLC", "Dr. Toast (Not a Real Doctor)"). Twists list the product forms they fit (food, gadget, goods, pet, service, rental, digital, event), and a twist hand only deals ones that fit the picked product, so headlines never break.
 - `dealer.ts`: hands, headlines and business names.
 - `cues.ts`: business-name patterns, avatar presets, tiebreaker cards.
 - Products and headlines never repeat within a game.
