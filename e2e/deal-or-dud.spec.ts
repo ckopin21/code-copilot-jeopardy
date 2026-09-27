@@ -44,12 +44,12 @@ test('Deal or Dud: four phones join by room key and the host starts round one', 
   await host.getByRole('button', { name: 'Confirm & start game' }).click();
 
   // Everyone builds at once before round 1: three quick card picks.
-  for (const phone of phones) await expect(phone.getByRole('heading', { name: 'Pick a product' })).toBeVisible();
+  for (const phone of phones) await expect(phone.getByRole('heading', { name: 'Pick a twist' })).toBeVisible();
   const noScroll = async (phone: Page) => expect(await phone.evaluate(() => document.documentElement.scrollHeight <= window.innerHeight + 1)).toBe(true);
   const builder = phones[1];
   await builder.locator('.dod-pick-card').first().click();
-  await expect(builder.getByRole('heading', { name: 'Add a twist' })).toBeVisible();
-  await expect(builder.locator('.dod-pick-card')).toHaveCount(4);
+  await expect(builder.getByRole('heading', { name: 'Pick a product' })).toBeVisible();
+  await expect(builder.locator('.dod-pick-card')).toHaveCount(6);
   await builder.getByRole('button', { name: '🔀 New cards' }).click();
   await builder.locator('.dod-pick-card').nth(1).click();
   await expect(builder.getByRole('heading', { name: 'Who is it for?' })).toBeVisible();
@@ -70,7 +70,7 @@ test('Deal or Dud: four phones join by room key and the host starts round one', 
   await expect(host.locator('.dod-headline h1')).toHaveText('Everyone is building a business…');
   for (const phone of [phones[0], phones[1]]) await noScroll(phone);
 
-  for (const title of ['Pick a product', 'Add a twist', 'Who is it for?']) {
+  for (const title of ['Pick a twist', 'Pick a product', 'Who is it for?']) {
     await expect(phones[0].getByRole('heading', { name: title })).toBeVisible();
     await phones[0].locator('.dod-pick-card').first().click();
   }

@@ -2,7 +2,7 @@
 // "Ready to bid" and then the secret bid.
 import { useEffect, useState, type ReactNode } from 'react';
 import type { DealPlayer, DealSnapshot, OfferChoice, PlayerLook, RoundState } from '../../types';
-import { OFFER_CHOICES, PLAYER_COUNT, REACTIONS } from '../../types';
+import { BONUS_POINTS, OFFER_CHOICES, PLAYER_COUNT, REACTIONS } from '../../types';
 import { usePlayerRoom, useClockSeconds, useNow, useServerOffset } from '../net';
 import { Avatar } from '../Avatar';
 import { Emoji } from '../Emoji';
@@ -225,6 +225,27 @@ function ForecastView({ room, me, send }: { room: DealSnapshot; me: DealPlayer; 
   </section>;
 }
 
+/** The end-of-game votes: pick a business name and a pitch (never your own), then lock both at once. */
+function VoteView({ room, me, send }: { room: DealSnapshot; me: DealPlayer; send: Send }) {
+  const votes = room.votes!;
+  const { nameVote, pitchVote } = room.settings.bonuses;
+  const [name, setName] = useState<number | null>(null);
+  const [pitch, setPitch] = useState<number | null>(null);
+  if (room.phase === 'vote-result' || votes.submitted.includes(me.id)) {
+    return <Screen><div className="dod-wait"><h2>{room.phase === 'vote-result' ? 'The votes are in!' : 'Votes locked 🔒'}</h2><p>Watch the TV.</p></div></Screen>;
+  }
+  const options = room.history.map((result, index) => ({ result, index })).filter((item) => item.result.presenterId !== me.id);
+  const who = (id: string) => playerById(room, id)?.name ?? '';
+  const ready = (!nameVote || name !== null) && (!pitchVote || pitch !== null);
+  return <Screen action={<button className="dod-primary big" disabled={!ready} onClick={() => void send('player:votes', { name, pitch })}>{ready ? 'Lock my votes' : 'Pick your favorites'}</button>}>
+    <h2>Time to vote!</h2>
+    {nameVote && <><h3>🏷️ Best business name <small>+{BONUS_POINTS.nameVote}</small></h3>
+      <div className="dod-vote-list">{options.map(({ result, index }) => <button key={index} className={name === index ? 'is-on' : ''} aria-pressed={name === index} onClick={() => setName(index)}><b>{result.businessName}</b><small>{who(result.presenterId)}</small></button>)}</div></>}
+    {pitchVote && <><h3>🎤 Pitch of the night <small>+{BONUS_POINTS.pitchVote}</small></h3>
+      <div className="dod-vote-list">{options.map(({ result, index }) => <button key={index} className={pitch === index ? 'is-on' : ''} aria-pressed={pitch === index} onClick={() => setPitch(index)}><b>{who(result.presenterId)}</b><small>{result.headline}</small></button>)}</div></>}
+  </Screen>;
+}
+
 /** "Change my name" in the lobby: a small inline form, before the game starts. */
 function NameEditor({ name, onSave }: { name: string; onSave: (name: string) => void }) {
   const [draft, setDraft] = useState<string | null>(null);
@@ -240,7 +261,7 @@ function NameEditor({ name, onSave }: { name: string; onSave: (name: string) => 
 // ---------- VIP host controls ----------
 function VipControls({ room, send }: { room: DealSnapshot; send: Send }) {
   const [open, setOpen] = useState(false);
-  const skippable = ['tutorial', 'build', 'stage', 'reveal', 'break', 'final', 'forecast-result'].includes(room.phase);
+  const skippable = ['tutorial', 'build', 'stage', 'reveal', 'break', 'vote', 'vote-result', 'final', 'forecast-result'].includes(room.phase);
   const allReady = room.players.length === PLAYER_COUNT && room.players.every((player) => player.lookSet && player.connected);
   return <div className="dod-vip">
     <button className="dod-vip-toggle" onClick={() => setOpen((value) => !value)} aria-expanded={open}>🎛</button>
@@ -323,6 +344,8 @@ export function PhoneApp({ urlRoomCode }: { urlRoomCode: string }) {
     body = <PresenterView room={room} round={round}/>;
   } else if (round && room.phase !== 'break') {
     body = <SharkView room={room} round={round} me={me} send={send}/>;
+  } else if (room.phase === 'vote' || room.phase === 'vote-result') {
+    body = <VoteView room={room} me={me} send={send}/>;
   } else if (room.phase === 'forecast' || room.phase === 'forecast-result') {
     body = <ForecastView room={room} me={me} send={send}/>;
   } else {

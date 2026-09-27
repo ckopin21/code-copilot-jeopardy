@@ -47,6 +47,12 @@ export function sanitizeDealSnapshot(snapshot: DealSnapshot, role: RoomRole, pla
       premise: own ? item.premise : null
     };
   });
+  const votes = copy.votes;
+  if (votes && copy.phase === 'vote') {
+    for (const bucket of [votes.names, votes.pitches]) {
+      for (const id of Object.keys(bucket)) if (!(role === 'player' && id === playerId)) bucket[id] = null;
+    }
+  }
   const forecast = copy.forecast;
   if (forecast && copy.phase === 'forecast') {
     forecast.answer = null;

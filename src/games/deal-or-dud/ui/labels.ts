@@ -11,6 +11,8 @@ export const PHASE_LABEL: Record<Phase, string> = {
   offers: 'Bids',
   reveal: 'The reveal',
   break: 'Scores',
+  vote: 'Vote',
+  'vote-result': 'The votes',
   final: 'Final scores',
   forecast: 'Tiebreaker',
   'forecast-result': 'Tiebreaker',

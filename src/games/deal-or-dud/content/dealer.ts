@@ -7,7 +7,11 @@ import { NAME_PATTERNS, type ToneLine } from './cues';
 export type Rng = () => number;
 
 /** Cards dealt per builder step. */
-export const HAND_SIZE = 4;
+export const HAND_SIZE = 6;
+/** Longest text a player can write for one step. */
+export const CUSTOM_MAX = 40;
+/** The emoji a written-in step shows on the product card. */
+export const CUSTOM_EMOJI = '✏️';
 
 export function pick<T>(items: readonly T[], rng: Rng): T {
   if (!items.length) throw new Error('Nothing to pick from');
@@ -35,20 +39,24 @@ export function modifierFits(modifier: ModifierWord, product: ProductWord): bool
   return modifier.forms.includes(product.form);
 }
 
-/** Every card that could be dealt in a step, given the product already picked. */
-export function columnPool(column: BuilderColumn, product: ProductWord | null | undefined, tone: Tone): { id: string; form?: ProductForm }[] {
-  if (column === 'products') return tonePool(PRODUCTS, tone);
+/**
+ * Every card that could be dealt in a step. The twist and the product filter each other: once one is picked from the
+ * cards, the other step only deals cards that fit it (a written-in step fits anything).
+ */
+export function columnPool(column: BuilderColumn, picks: Pick<BuilderPicks, 'product' | 'modifier'>, tone: Tone): { id: string; form?: ProductForm }[] {
+  const product = productById(picks.product);
+  const modifier = modifierById(picks.modifier);
+  if (column === 'products') return tonePool(PRODUCTS, tone).filter((item) => !modifier || modifierFits(modifier, item));
   if (column === 'audiences') return tonePool(AUDIENCES, tone);
-  return tonePool(MODIFIERS, tone).filter((modifier) => !product || modifierFits(modifier, product));
+  return tonePool(MODIFIERS, tone).filter((item) => !product || modifierFits(item, product));
 }
 
 /**
- * Four fresh cards for a step. Products spread across kinds (a food, a gadget, a service…) and skip ids in `avoid`
+ * Fresh cards for a step (HAND_SIZE of them). Products spread across kinds (a food, a gadget, a service…) and skip ids in `avoid`
  * (other players' cards); a reroll also skips the four on the table when there are enough left.
  */
 export function dealHand(column: BuilderColumn, picks: BuilderPicks, tone: Tone, rng: Rng, avoid: readonly string[] = []): string[] {
-  const product = productById(picks.product);
-  const pool = shuffle(columnPool(column, product, tone), rng);
+  const pool = shuffle(columnPool(column, picks, tone), rng);
   const current = picks.hands[column] ?? [];
   const fresh = pool.filter((item) => !avoid.includes(item.id) && !current.includes(item.id));
   const usable = fresh.length >= HAND_SIZE ? fresh : pool.filter((item) => !avoid.includes(item.id));
@@ -62,25 +70,49 @@ export function dealHand(column: BuilderColumn, picks: BuilderPicks, tone: Tone,
 }
 
 export function emptyBuilder(): BuilderPicks {
-  return { product: null, modifier: null, audience: null, hands: { products: [], modifiers: [], audiences: [] } };
+  return { product: null, modifier: null, audience: null, hands: { products: [], modifiers: [], audiences: [] }, custom: {} };
+}
+
+/** A player's written-in text, cleaned: one line, no extra spaces, at most CUSTOM_MAX characters. */
+export function cleanCustom(value: unknown): string {
+  return typeof value === 'string' ? value.replace(/\s+/g, ' ').trim().slice(0, CUSTOM_MAX) : '';
+}
+
+/** What a step says in the headline: the written-in text, or the picked card's text. */
+export function stepText(picks: Pick<BuilderPicks, 'product' | 'modifier' | 'audience' | 'custom'>, column: BuilderColumn): string | null {
+  const custom = picks.custom?.[column];
+  if (custom) return custom;
+  if (column === 'products') return productById(picks.product)?.text ?? null;
+  if (column === 'modifiers') return modifierById(picks.modifier)?.text ?? null;
+  return audienceById(picks.audience)?.text ?? null;
 }
 
 export function capitalize(text: string): string { return text.charAt(0).toUpperCase() + text.slice(1); }
 
-/** "[Twist] [product] for [audience]". Missing picks are left out. */
-export function buildHeadline(picks: Pick<BuilderPicks, 'product' | 'modifier' | 'audience'>): string {
+/** "[Twist] [product] for [audience]". Missing picks are left out; a card twist that doesn't fit a card product too. */
+export function buildHeadline(picks: Pick<BuilderPicks, 'product' | 'modifier' | 'audience'> & { custom?: BuilderPicks['custom'] }): string {
+  const productText = stepText(picks, 'products');
+  if (!productText) return '';
   const product = productById(picks.product);
-  if (!product) return '';
   const modifier = modifierById(picks.modifier);
-  const audience = audienceById(picks.audience);
-  const core = [modifier && modifierFits(modifier, product) ? modifier.text : null, product.text].filter(Boolean).join(' ');
-  return capitalize(audience ? `${core} for ${audience.text}` : core);
+  const twist = picks.custom?.modifiers || (modifier && (!product || picks.custom?.products || modifierFits(modifier, product)) ? modifier.text : null);
+  const audience = stepText(picks, 'audiences');
+  const core = [twist, productText].filter(Boolean).join(' ');
+  return capitalize(audience ? `${core} for ${audience}` : core);
 }
 
-export function businessNames(picks: Pick<BuilderPicks, 'product' | 'modifier'>, tone: Tone, rng: Rng, count = 3): string[] {
-  const product = productById(picks.product);
+/** Name roots from a written-in step: its longest word, capitalized ("flying hot tubs" gives "Flying"). */
+function customRoot(text: string | undefined): string | undefined {
+  const word = (text ?? '').replace(/[^\p{L}\p{N}\s-]/gu, ' ').split(/\s+/).filter(Boolean).sort((a, b) => b.length - a.length)[0];
+  return word ? capitalize(word.toLowerCase()) : undefined;
+}
+
+export function businessNames(picks: Pick<BuilderPicks, 'product' | 'modifier'> & { custom?: BuilderPicks['custom'] }, tone: Tone, rng: Rng, count = 3): string[] {
+  const card = productById(picks.product);
+  const writtenRoot = customRoot(picks.custom?.products);
+  const product = picks.custom?.products ? (writtenRoot ? { roots: [writtenRoot] } : null) : card;
   if (!product) return [];
-  const modifierRoot = modifierById(picks.modifier)?.root;
+  const modifierRoot = picks.custom?.modifiers ? customRoot(picks.custom.modifiers) : modifierById(picks.modifier)?.root;
   const patterns = shuffle(tonePool(NAME_PATTERNS, tone), rng);
   const names = new Set<string>();
   for (const pattern of patterns) {

@@ -7,7 +7,7 @@ import { useNarration } from './useNarration';
 
 const MUSIC_FOR: Record<Phase, MusicTrack> = {
   lobby: 'lobby', tutorial: 'lobby', build: 'bed', stage: 'bed',
-  offers: 'offers', reveal: null, break: 'lobby',
+  offers: 'offers', reveal: null, break: 'lobby', vote: 'bed', 'vote-result': null,
   final: null, forecast: 'offers', 'forecast-result': null, gameover: 'celebrate'
 };
 
@@ -20,6 +20,8 @@ const phaseKey = (room: DealSnapshot) => `${room.code}:${room.gameNumber}:${room
 /** The sting that opens a phase, if any. */
 function openingSting(before: DealSnapshot, room: DealSnapshot): { name: Sting; level: number } | null {
   if ((room.phase === 'tutorial' || room.phase === 'build') && before.phase === 'lobby') return { name: 'fanfare', level: 0.9 };
+  // A new pass (everyone builds again): the fanfare marks it, like the start of the game.
+  if (room.phase === 'build' && before.phase === 'break') return { name: 'fanfare', level: 0.8 };
   if (room.phase === 'stage') return { name: 'pitch', level: 0.8 };
   if (room.phase === 'final') return { name: 'fanfare', level: 0.8 };
   if (room.phase === 'gameover') return { name: 'winner', level: 1 };
@@ -73,6 +75,7 @@ export function useSoundtrack(room: DealSnapshot | null, enabled: boolean, onTut
     const round = room.round;
     if (changed) {
       if (room.phase === 'reveal') void dealAudio.sting('drumroll', 0.9);
+      if (room.phase === 'vote-result') void dealAudio.sting('good', 1);
       if (before.phase === 'tutorial') dealAudio.stopNarration();
     }
     // A shark said "I'm out!": the buzzer.

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { DealEngine } from '../../src/games/deal-or-dud/engine/DealEngine';
 import { sanitizeDealSnapshot } from '../../src/games/deal-or-dud/engine/sanitize';
-import { gameAwards, revealOrder, scoreRound, topBidders } from '../../src/games/deal-or-dud/engine/scoring';
+import { gameAwards, revealOrder, scoreRound, topBidders, voteWinners } from '../../src/games/deal-or-dud/engine/scoring';
 import { buildHeadline, modifierById, productById } from '../../src/games/deal-or-dud/content/dealer';
 import { pitchSeconds, type DealPlayer, type DealSnapshot, type RoundResult } from '../../src/games/deal-or-dud/types';
 
@@ -23,15 +23,33 @@ const JOIN = { roomCode: 'X', name: 'P', avatar: '🙂', accent: '#123456' };
 
 describe('scoring', () => {
   it('gives the presenter one point per $100K raised', () => {
-    const outcome = scoreRound('p', ['a', 'b', 'c'], { a: 500, b: 500, c: 500 });
+    const off = { noWalkout: false, ovation: false, nameVote: false, pitchVote: false };
+    const outcome = scoreRound('p', ['a', 'b', 'c'], { a: 500, b: 500, c: 500 }, [], off);
     expect(outcome.total).toBe(1500);
     expect(outcome.scores[0]).toEqual({ playerId: 'p', delta: 15, reason: 'Raised $1.5M' });
-    expect(scoreRound('p', ['a', 'b', 'c'], { a: 0, b: 0, c: 0 }).scores[0].delta).toBe(0);
-    expect(scoreRound('p', ['a', 'b', 'c'], { a: 300, b: 0, c: 100 }).scores[0].delta).toBe(4);
+    expect(scoreRound('p', ['a', 'b', 'c'], { a: 0, b: 0, c: 0 }, [], off).scores[0].delta).toBe(0);
+    expect(scoreRound('p', ['a', 'b', 'c'], { a: 300, b: 0, c: 100 }, [], off).scores[0].delta).toBe(4);
+  });
+
+  it('adds +2 when nobody walks out and +3 for a standing ovation, when they are switched on', () => {
+    const both = scoreRound('p', ['a', 'b', 'c'], { a: 300, b: 400, c: 500 });
+    expect(both.bonuses).toEqual([{ id: 'noWalkout', points: 2 }, { id: 'ovation', points: 3 }]);
+    expect(both.scores[0]).toEqual({ playerId: 'p', delta: 12 + 2 + 3, reason: 'Raised $1.2M · Nobody walked out +2 · Standing ovation +3' });
+    // One shark went out: no walkout bonus, and its $0 means no ovation either.
+    expect(scoreRound('p', ['a', 'b', 'c'], { a: 0, b: 500, c: 500 }, ['a']).bonuses).toEqual([]);
+    // A $200K bid is short of an ovation.
+    expect(scoreRound('p', ['a', 'b', 'c'], { a: 200, b: 500, c: 500 }).bonuses.map((bonus) => bonus.id)).toEqual(['noWalkout']);
+    expect(scoreRound('p', ['a', 'b', 'c'], { a: 300, b: 300, c: 300 }, [], { ...{ noWalkout: false, ovation: false, nameVote: false, pitchVote: false }, ovation: true }).bonuses.map((bonus) => bonus.id)).toEqual(['ovation']);
+  });
+
+  it('counts votes: most votes wins, ties share, nobody voting means no winner', () => {
+    expect(voteWinners({ a: 1, b: 1, c: 2, d: null })).toEqual([1]);
+    expect(voteWinners({ a: 1, b: 2, c: null, d: null })).toEqual([1, 2]);
+    expect(voteWinners({ a: null, b: null })).toEqual([]);
   });
 
   it('gives the sharks nothing, whatever they bid', () => {
-    const outcome = scoreRound('p', ['a', 'b', 'c'], { a: 100, b: 300, c: 500 });
+    const outcome = scoreRound('p', ['a', 'b', 'c'], { a: 100, b: 300, c: 500 }, [], { noWalkout: false, ovation: false, nameVote: false, pitchVote: false });
     expect(outcome.scores).toEqual([{ playerId: 'p', delta: 9, reason: 'Raised $900K' }]);
   });
 
@@ -46,7 +64,7 @@ describe('scoring', () => {
     const round = (presenterId: string, businessName: string, offers: Record<string, 0 | 100 | 200 | 300 | 400 | 500>): RoundResult => {
       const sharkIds = Object.keys(offers);
       const outcome = scoreRound(presenterId, sharkIds, offers);
-      return { presenterId, businessName, offers, ...outcome };
+      return { presenterId, businessName, headline: businessName, offers, ...outcome };
     };
     const history = [
       round('p', 'Flakely', { a: 500, b: 400, c: 300 }),
@@ -121,7 +139,8 @@ describe('DealEngine', () => {
     expect(state.phase).toBe('stage');
     expect(state.clock!.totalMs).toBe(180_000);
     expect(state.round!.premise!.headline).toBe(buildHeadline(picks));
-    expect(state.round!.premise!.emojis).toEqual([productById(picks.product)!.emoji, modifierById(picks.modifier)!.emoji, expect.any(String)]);
+    // In reading order, like the headline: twist, product, who.
+    expect(state.round!.premise!.emojis).toEqual([modifierById(picks.modifier)!.emoji, productById(picks.product)!.emoji, expect.any(String)]);
     // Pitch time: the sharks' buttons are locked.
     expect(state.round!.questionsOpen).toBe(false);
     expect(() => engine.react(code, s1, '😂')).toThrow(/Pitch time/);
@@ -148,8 +167,9 @@ describe('DealEngine', () => {
     expect(result.revealOrder).toEqual([s3, s1, s2]);
     expect(result.dealSharkIds).toEqual([s2]);
     const score = (id: string) => state.players.find((player) => player.id === id)!.score;
-    // Only the presenter scores.
-    expect([score(presenter), score(s1), score(s2), score(s3)]).toEqual([9, 0, 0, 0]);
+    // Only the presenter scores: $900K raised, and nobody walked out (+2).
+    expect([score(presenter), score(s1), score(s2), score(s3)]).toEqual([11, 0, 0, 0]);
+    expect(result.bonuses).toEqual([{ id: 'noWalkout', points: 2 }]);
     expect(state.history).toHaveLength(1);
   });
 
@@ -317,34 +337,53 @@ describe('DealEngine', () => {
     expect(reveal.round!.result!.total).toBe(700);
   });
 
-  it('deals the builder in three steps of four cards, with twists that fit the product', () => {
+  it('deals the builder in reading order, six cards a step, with twists and products that fit each other', () => {
     engine.startGame(code, host);
     const me = ids[1];
     const mine = () => snap().upcoming[1].builder;
-    expect(mine().hands.products).toHaveLength(4);
-    expect(mine().hands.audiences).toHaveLength(4);
-    expect(mine().hands.modifiers).toEqual([]);
-    expect(() => engine.builderPick(code, me, 'modifiers', 'luxury')).toThrow(/product first/);
+    for (const column of ['modifiers', 'products', 'audiences'] as const) expect(mine().hands[column]).toHaveLength(6);
     expect(() => engine.builderPick(code, me, 'products', 'not-a-card')).toThrow(/not in your hand/);
+    // The twist comes first; the product cards are then only ones it fits.
+    const twist = mine().hands.modifiers.find((id) => modifierById(id)!.forms.length < 8) ?? mine().hands.modifiers[0];
+    engine.builderPick(code, me, 'modifiers', twist);
+    expect(mine().modifier).toBe(twist);
+    expect(mine().hands.products.every((id) => modifierById(twist)!.forms.includes(productById(id)!.form))).toBe(true);
     const product = mine().hands.products[2];
     engine.builderPick(code, me, 'products', product);
     expect(mine().product).toBe(product);
-    expect(mine().hands.modifiers).toHaveLength(4);
-    expect(mine().hands.modifiers.every((id) => modifierById(id)!.forms.includes(productById(product)!.form))).toBe(true);
     expect(snap().upcoming[1].nameOptions.length).toBeGreaterThan(0);
-    // 🔀 deals four new cards and keeps the pick.
+    // 🔀 deals new cards and keeps the pick.
     const before = mine().hands.products;
     engine.builderReroll(code, me, 'products');
-    expect(mine().hands.products).toHaveLength(4);
+    expect(mine().hands.products).toHaveLength(6);
     expect(mine().hands.products.some((id) => before.includes(id))).toBe(false);
     expect(mine().product).toBe(product);
-    engine.builderPick(code, me, 'modifiers', mine().hands.modifiers[1]);
     engine.builderPick(code, me, 'audiences', mine().hands.audiences[3]);
     // Another player's hands never share a product with this one.
     const others = snap().upcoming.filter((round) => round.presenterId !== me).flatMap((round) => round.builder.hands.products);
     expect(others.some((id) => mine().hands.products.includes(id) || id === product)).toBe(false);
     engine.lockPremiseRequest(code, me);
     expect(snap().upcoming[1].premise!.headline).toBe(buildHeadline(mine()));
+  });
+
+  it('lets a player write their own twist, product or audience', () => {
+    engine.startGame(code, host);
+    const me = ids[2];
+    const mine = () => snap().upcoming[2].builder;
+    engine.builderPick(code, me, 'products', mine().hands.products[0]);
+    engine.builderCustom(code, me, 'products', '   flying   hot tubs  ');
+    expect(mine().custom).toEqual({ products: 'flying hot tubs' });
+    expect(mine().product).toBeNull();
+    engine.builderCustom(code, me, 'audiences', 'x'.repeat(60));
+    expect(mine().custom!.audiences).toHaveLength(40);
+    engine.builderCustom(code, me, 'audiences', '');
+    expect(mine().custom!.audiences).toBeUndefined();
+    engine.lockPremiseRequest(code, me);
+    const premise = snap().upcoming[2].premise!;
+    expect(premise.headline).toMatch(/flying hot tubs for /);
+    // Twist and audience were left open, so the lock filled them with cards; the written product shows a pencil.
+    expect(premise.emojis[1]).toBe('✏️');
+    expect(sanitizeDealSnapshot(snap(), 'player', ids[0]).upcoming[2].builder.custom).toEqual({});
   });
 
   it('pauses when the presenter disconnects and shifts every deadline on resume', () => {
@@ -472,19 +511,68 @@ describe('DealEngine', () => {
       engine.continue(code, host);
       if (round < 7) { expect(snap().phase).toBe('break'); engine.continue(code, host); }
     }
-    expect(snap().phase).toBe('final');
+    // The end-of-game votes come before the final scores.
+    expect(snap().phase).toBe('vote');
     expect(presenters).toEqual([...ids, ...ids]);
     expect(new Set(headlines).size).toBe(8);
     expect(snap().history).toHaveLength(8);
-    expect(snap().players.every((player) => player.score === 6)).toBe(true);
+    // $300K raised and nobody out, twice each: (3 + 2) x 2.
+    expect(snap().players.every((player) => player.score === 10)).toBe(true);
+  });
+
+  it('ends with secret votes for the best name (+3) and the pitch of the night (+5), never your own', () => {
+    engine.startGame(code, host);
+    buildAll();
+    for (let round = 0; round < 4; round += 1) {
+      engine.continue(code, host);
+      engine.continue(code, host);
+      for (const id of snap().round!.sharkIds) engine.lockOffer(code, id, 0);
+      engine.continue(code, host);
+      if (round < 3) engine.continue(code, host);
+    }
+    expect(snap().phase).toBe('vote');
+    const before = snap().players.map((player) => player.score);
+    // Round i was pitched by ids[i].
+    expect(() => engine.submitVotes(code, ids[0], 0, 1)).toThrow(/your own/);
+    expect(() => engine.submitVotes(code, ids[0], 9, 1)).toThrow(/Pick one/);
+    engine.submitVotes(code, ids[0], 2, 1);
+    expect(() => engine.submitVotes(code, ids[0], 2, 1)).toThrow(/are in/);
+    // Nobody else sees a vote before the count.
+    expect(sanitizeDealSnapshot(snap(), 'player', ids[1]).votes!.names[ids[0]]).toBeNull();
+    expect(sanitizeDealSnapshot(snap(), 'player', ids[0]).votes!.names[ids[0]]).toBe(2);
+    engine.submitVotes(code, ids[1], 2, 0);
+    engine.submitVotes(code, ids[2], 3, 1);
+    engine.submitVotes(code, ids[3], 2, 1);
+    const state = snap();
+    expect(state.phase).toBe('vote-result');
+    expect(state.votes!.nameWinners).toEqual([2]);
+    expect(state.votes!.pitchWinners).toEqual([1]);
+    const after = state.players.map((player) => player.score);
+    expect(after.map((score, index) => score - before[index])).toEqual([0, 5, 3, 0]);
+    engine.continue(code, host);
+    expect(['final']).toContain(snap().phase);
+  });
+
+  it('skips the votes when both are switched off', () => {
+    engine.updateSettings(code, host, { bonuses: { noWalkout: true, ovation: true, nameVote: false, pitchVote: false } });
+    engine.startGame(code, host);
+    buildAll();
+    for (let round = 0; round < 4; round += 1) {
+      engine.continue(code, host);
+      engine.continue(code, host);
+      for (const id of snap().round!.sharkIds) engine.lockOffer(code, id, 0);
+      engine.continue(code, host);
+      if (round < 3) engine.continue(code, host);
+    }
+    expect(snap().phase).toBe('final');
   });
 
   it('never repeats a product or headline within a game', () => {
     engine.startGame(code, host);
     const headlines: string[] = [];
     const hands = engine.debugRoom(code).state.upcoming.flatMap((round) => round.builder.hands.products);
-    // Everyone starts with four different products.
-    expect(new Set(hands).size).toBe(16);
+    // Everyone starts with six different products.
+    expect(new Set(hands).size).toBe(24);
     buildAll();
     for (let round = 0; round < 4; round += 1) {
       headlines.push(snap().round!.premise!.headline);

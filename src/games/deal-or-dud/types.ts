@@ -38,6 +38,22 @@ export interface AudioSettings {
   muted: boolean;
 }
 
+export interface BonusSettings {
+  /** +2 when no shark says "I'm out" during your pitch. */
+  noWalkout: boolean;
+  /** +3 when all three sharks bid $300K or more. */
+  ovation: boolean;
+  /** A vote at the end: best business name, +3. */
+  nameVote: boolean;
+  /** A vote at the end: pitch of the night, +5. */
+  pitchVote: boolean;
+}
+
+export const BONUS_POINTS = { noWalkout: 2, ovation: 3, nameVote: 3, pitchVote: 5 } as const;
+/** The smallest bid from every shark that counts as a standing ovation, in $K. */
+export const OVATION_MIN_BID = 300;
+export const DEFAULT_BONUSES: BonusSettings = { noWalkout: true, ovation: true, nameVote: true, pitchVote: true };
+
 export interface DealSettings {
   timerPreset: TimerPreset;
   timers: TimerSettings;
@@ -46,6 +62,8 @@ export interface DealSettings {
   tone: Tone;
   tutorial: boolean;
   captions: boolean;
+  /** Extra ways for a presenter to score, each switchable in the settings. */
+  bonuses: BonusSettings;
   audio: AudioSettings;
 }
 
@@ -58,6 +76,8 @@ export type Phase =
   | 'reveal'
   | 'break'
   | 'final'
+  | 'vote'
+  | 'vote-result'
   | 'forecast'
   | 'forecast-result'
   | 'gameover';
@@ -102,8 +122,10 @@ export interface BuilderPicks {
   product: string | null;
   modifier: string | null;
   audience: string | null;
-  /** The four cards currently offered in each step (🔀 deals a new four). */
+  /** The cards currently offered in each step (🔀 deals new ones). */
   hands: Record<BuilderColumn, string[]>;
+  /** A step the player wrote themselves ("✏️ Write your own"), instead of a card. Its card pick is then null. */
+  custom?: Partial<Record<BuilderColumn, string>>;
 }
 
 export interface LockedPremise {
@@ -135,6 +157,9 @@ export interface RoundScore {
 export interface RoundResult {
   presenterId: string;
   businessName: string;
+  headline: string;
+  /** Presenter bonuses this round, already included in their score line. */
+  bonuses: { id: 'noWalkout' | 'ovation'; points: number }[];
   /** Every shark's bid; "I'm out" and unlocked bids are $0. */
   offers: Record<string, OfferChoice>;
   /** Sharks in the order the reveal flips them: lowest bid first. */
@@ -178,6 +203,19 @@ export interface ForecastCardPublic {
   question: string;
 }
 
+/**
+ * The end-of-game votes. Nominees are rounds, by their index in `history`: a round's business name, or its pitch. Nobody
+ * votes for their own. Votes stay secret until the result.
+ */
+export interface VoteState {
+  names: Record<string, number | null>;
+  pitches: Record<string, number | null>;
+  submitted: string[];
+  /** Winning rounds (ties share), filled in when the votes are counted. */
+  nameWinners: number[];
+  pitchWinners: number[];
+}
+
 export interface ForecastState {
   attempt: 1 | 2;
   playerIds: string[];
@@ -216,6 +254,7 @@ export interface DealSnapshot {
   history: RoundResult[];
   clock: ClockState | null;
   forecast: ForecastState | null;
+  votes: VoteState | null;
   winnerIds: string[];
   tutorialRun: number;
   /** Phase to return to after a replayed tutorial. */
@@ -253,6 +292,7 @@ export const DEFAULT_SETTINGS: DealSettings = {
   pitches: 1,
   tone: GAME_TONE,
   tutorial: true,
+  bonuses: { ...DEFAULT_BONUSES },
   captions: true,
   audio: { music: 55, effects: 75, narration: 90, muted: false }
 };
@@ -260,6 +300,8 @@ export const DEFAULT_SETTINGS: DealSettings = {
 /** Fixed rule timings (seconds) that are not host settings. */
 export const RULE_TIMINGS = {
   forecastResult: 8,
+  vote: 45,
+  voteResult: 10,
   tutorialSeconds: 40
 } as const;
 
@@ -282,6 +324,6 @@ export function totalRounds(settings: Pick<DealSettings, 'pitches'>): number {
 /** Plain-language total time estimate in minutes: per pass, one shared build and four rounds. */
 export function estimateMinutes(timers: TimerSettings, tutorial: boolean, pitches = 1): { low: number; high: number } {
   const perRound = timers.stage + timers.offers + timers.reveal + timers.scores;
-  const base = (timers.prep + perRound * ROUND_COUNT) * pitches + (tutorial ? RULE_TIMINGS.tutorialSeconds : 0) + 60 /* lobby and final scores */;
+  const base = (timers.prep + perRound * ROUND_COUNT) * pitches + (tutorial ? RULE_TIMINGS.tutorialSeconds : 0) + 60 /* lobby and final scores */ + RULE_TIMINGS.vote;
   return { low: Math.round((base * 0.85) / 60), high: Math.round((base * 1.05) / 60) };
 }

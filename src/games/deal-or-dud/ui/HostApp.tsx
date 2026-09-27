@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
-import type { AudioSettings, DealPlayer, DealSettings, DealSnapshot } from '../types';
-import { DEFAULT_TIMERS, OTHER_TIMERS, PLAYER_COUNT, STAGE_PRESETS, TIMER_LIMITS, estimateMinutes, totalRounds, type TimerSettings } from '../types';
+import type { AudioSettings, BonusSettings, DealPlayer, DealSettings, DealSnapshot } from '../types';
+import { BONUS_POINTS, DEFAULT_TIMERS, OTHER_TIMERS, PLAYER_COUNT, STAGE_PRESETS, TIMER_LIMITS, estimateMinutes, totalRounds, type TimerSettings } from '../types';
 import { useHostRoom } from './net';
 import { TvStage } from './TvStage';
 import { JoinCard } from './JoinCard';
@@ -57,6 +57,13 @@ function TimersPage({ settings, send, stepTimer, onClose }: { settings: DealSett
   </div>;
 }
 
+const BONUS_OPTIONS: { id: keyof BonusSettings; title: string; text: string }[] = [
+  { id: 'noWalkout', title: 'Nobody walked out', text: 'when no shark says "I\'m out"' },
+  { id: 'ovation', title: 'Standing ovation', text: 'when all three sharks bid $300K or more' },
+  { id: 'nameVote', title: 'Best business name', text: 'voted by everyone at the end' },
+  { id: 'pitchVote', title: 'Pitch of the night', text: 'voted by everyone at the end' }
+];
+
 function SettingsPage({ room, send, onClose, onStart }: { room: DealSnapshot; send: Send; onClose: () => void; onStart: () => void }) {
   const settings = room.settings;
   const update = (updates: Partial<DealSettings>) => void send('host:update-settings', { updates });
@@ -99,6 +106,15 @@ function SettingsPage({ room, send, onClose, onStart }: { room: DealSnapshot; se
       <section className="dod-more-timers">
         <p>Other timers (building, bids, the reveal, scores, tiebreaker) have their own page.</p>
         <button className="dod-ghost" onClick={() => setMoreTimers(true)}>More timers…</button>
+      </section>
+      <section>
+        <h3>Bonus points <small>For the presenter, on top of 1 point per $100K raised</small></h3>
+        <div className="dod-bonus-grid">
+          {BONUS_OPTIONS.map((option) => <label key={option.id} className="dod-check">
+            <input type="checkbox" checked={settings.bonuses[option.id]} onChange={(event) => update({ bonuses: { ...settings.bonuses, [option.id]: event.target.checked } })}/>
+            <span><b>{option.title} +{BONUS_POINTS[option.id]}</b> {option.text}</span>
+          </label>)}
+        </div>
       </section>
       <section className="dod-two">
         <div>
@@ -157,7 +173,7 @@ function JoinPanel({ room, joinUrl, send, enableSound }: { room: DealSnapshot; j
 function HostBar({ room, send, soundOn, enableSound, openSettings }: { room: DealSnapshot; send: Send; soundOn: boolean; enableSound: () => void; openSettings: () => void }) {
   const [audioOpen, setAudioOpen] = useState(false);
   const [confirmEnd, setConfirmEnd] = useState(false);
-  const skippable = ['tutorial', 'build', 'stage', 'reveal', 'break', 'final', 'forecast-result'].includes(room.phase);
+  const skippable = ['tutorial', 'build', 'stage', 'reveal', 'break', 'vote', 'vote-result', 'final', 'forecast-result'].includes(room.phase);
   const pausable = !['lobby', 'gameover'].includes(room.phase);
   return <nav className="dod-hostbar" aria-label="Host controls">
     {!soundOn && <button className="dod-primary" onClick={enableSound}>🔊 Turn on sound</button>}

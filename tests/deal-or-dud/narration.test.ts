@@ -209,6 +209,26 @@ describe('narration plan', () => {
     expect(LIVE_LINES.bothIn('Ava', 'Ben').text).toBe('Ava and Ben both want in!');
   });
 
+  it('makes a moment of each new pass before everyone builds again', () => {
+    engine.updateSettings(code, host, { pitches: 3 });
+    engine.startGame(code, host);
+    const passes: string[][] = [];
+    for (let pass = 0; pass < 3; pass += 1) {
+      for (const id of ids) engine.lockPremiseRequest(code, id);
+      for (let round = 0; round < 4; round += 1) {
+        engine.continue(code, host);
+        engine.continue(code, host);
+        for (const id of engine.snapshot(code).round!.sharkIds) engine.lockOffer(code, id, 0);
+        engine.continue(code, host);
+        if (pass === 2 && round === 3) break;
+        const before = tv();
+        engine.continue(code, host);
+        if (round === 3) passes.push(spoken(planNarration(before, tv())));
+      }
+    }
+    expect(passes).toEqual([['next-pass'], ['last-pass']]);
+  });
+
   it('says nothing while paused and nothing on an unchanged phase outside the lobby', () => {
     engine.startGame(code, host);
     const before = tv();

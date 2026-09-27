@@ -580,3 +580,36 @@ html:has(.dod-app), body:has(.dod-app) { margin: 0; background: #05091a; }
 .dod-app .dod-slot:not(.is-filled) { color: #9a8a6a; font-weight: 700; }
 .dod-app .dod-slot.is-active { background: #ffc24a; color: #2a1600; box-shadow: 0 0 0 2px #d18a12; }
 .dod-app .dod-step-where { text-align: center; margin-top: -6px; }
+
+/* Bonus points: chips at the reveal, switches in the settings, and the end-of-game votes. */
+.dod-app .dod-bonus-chips { margin: 0; display: flex; flex-wrap: wrap; gap: 10px; animation: dod-fade-up 0.4s 0.45s both; }
+.dod-app .dod-bonus-chips span { background: #ffc24a; color: #2a1600; font-weight: 900; font-size: 24px; padding: 4px 14px; border-radius: 999px; }
+.dod-app .dod-bonus-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 30px; }
+.dod-app .dod-bonus-grid span { color: var(--dod-muted); }
+.dod-app .dod-bonus-grid b { color: var(--dod-text); margin-right: 6px; }
+.dod-app .dod-votes { position: absolute; left: 50%; top: 190px; transform: translateX(-50%); width: 1500px; background: #0b1530f4; border-radius: 24px; padding: 26px 40px; border: 3px solid var(--dod-amber); box-shadow: 0 20px 60px #000c; text-align: center; }
+.dod-app .dod-votes h2 { font-family: var(--dod-display); font-size: 52px; margin: 0 0 6px; }
+.dod-app .dod-votes .dod-sub { font-size: 26px; color: var(--dod-muted); margin: 0 0 14px; }
+.dod-app .dod-vote-columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 30px; text-align: left; }
+.dod-app .dod-vote-columns h3 { font-size: 30px; margin: 0 0 10px; }
+.dod-app .dod-vote-columns ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.dod-app .dod-vote-columns li { display: flex; align-items: baseline; gap: 12px; background: #ffffff10; border-radius: 12px; padding: 8px 16px; font-size: 24px; }
+.dod-app .dod-vote-columns li small { color: var(--dod-muted); font-size: 19px; flex: 1; }
+.dod-app .dod-vote-columns li.is-winner { background: #ffc24a26; border: 2px solid var(--dod-gold); font-size: 30px; animation: dod-slam-in 0.5s both; }
+.dod-app .dod-vote-columns li strong { font-family: var(--dod-display); color: #4be38a; margin-left: auto; }
+.dod-app .dod-vote-list { display: grid; gap: 6px; flex: none; }
+.dod-app .dod-vote-list button { display: grid; text-align: left; gap: 2px; background: #ffffff12; color: white; border: 2px solid #ffffff30; border-radius: 12px; padding: 8px 12px; }
+.dod-app .dod-vote-list button small { color: var(--dod-muted); font-size: 13px; }
+.dod-app .dod-vote-list button.is-on { border-color: var(--dod-gold); background: #ffc24a26; }
+
+/* Phone builder: six cards per step, and "Write your own". */
+.dod-app .dod-hand { grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+.dod-app .dod-pick-card { min-height: 96px; padding: 8px 5px; gap: 4px; }
+.dod-app .dod-pick-emoji { font-size: 32px; }
+.dod-app .dod-pick-card b { font-size: 13.5px; line-height: 1.15; }
+.dod-app .dod-hand-tools { flex-wrap: wrap; }
+.dod-app .dod-hand-tools .dod-ghost { padding: 8px 6px; font-size: 14px; }
+.dod-app .dod-hand-tools .dod-ghost.is-on { border-color: var(--dod-gold); color: var(--dod-gold); }
+.dod-app .dod-write-own { display: grid; gap: 10px; flex: none; }
+.dod-app .dod-write-own label { display: grid; gap: 6px; font-weight: 800; }
+.dod-app .dod-write-own input { font: inherit; font-size: 20px; padding: 12px; border-radius: 12px; border: 2px solid var(--dod-gold); background: var(--dod-cream); color: var(--dod-ink); }

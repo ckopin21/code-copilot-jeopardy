@@ -90,7 +90,12 @@ function phasePlan(before: DealSnapshot, room: DealSnapshot): NarrationPlan | nu
   const round = room.round;
   switch (room.phase) {
     case 'build': {
-      // Everyone builds at once before round 1.
+      // Everyone builds at once before each pass. After the first, the hosts make a moment of it before the new build.
+      const pass = Math.floor((room.roundIndex + 1) / 4);
+      if (pass > 0) {
+        const last = pass >= (room.settings.pitches ?? 1) - 1;
+        return { items: [{ fixed: last ? 'last-pass' : 'next-pass' }], interrupt: true, delayMs: 2_500 };
+      }
       const items: Utterance[] = [];
       if (before.phase === 'lobby') items.push({ fixed: 'welcome' });
       items.push({ fixed: 'build' });
@@ -107,6 +112,8 @@ function phasePlan(before: DealSnapshot, room: DealSnapshot): NarrationPlan | nu
       return { items, interrupt: true, delayMs: before.phase === 'stage' ? 0 : 300 };
     }
     case 'break': return { items: [breakLine(room)], interrupt: true, delayMs: 600 };
+    case 'vote': return { items: [{ fixed: 'vote' }], interrupt: true, delayMs: 600 };
+    case 'vote-result': return { items: [{ fixed: 'votes-in' }], interrupt: true, delayMs: 400 };
     case 'final': return { items: [{ fixed: 'final' }], interrupt: true };
     case 'forecast': return { items: [{ fixed: 'tiebreaker' }], interrupt: true };
     case 'gameover': {

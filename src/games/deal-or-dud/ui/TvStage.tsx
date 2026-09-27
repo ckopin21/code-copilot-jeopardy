@@ -1,8 +1,8 @@
 // The shared TV view. Host and Presentation both render this; neither ever receives secrets.
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { DealPlayer, DealSnapshot, OfferChoice, RoundState } from '../types';
-import { estimateMinutes, totalRounds } from '../types';
-import { gameAwards, moneyLabel } from '../engine/scoring';
+import { BONUS_POINTS, estimateMinutes, totalRounds } from '../types';
+import { BONUS_LABELS, gameAwards, moneyLabel } from '../engine/scoring';
 import { ProductCard } from './ProductCard';
 import { StudioSet, CHAIR_SPOTS, PRESENTER_SPOT } from './StudioSet';
 import { Avatar } from './Avatar';
@@ -96,7 +96,7 @@ function TopBar({ room, hostBar }: { room: DealSnapshot; hostBar?: ReactNode }) 
         <h1 key={premise.headline} className={premise.headline.length > 58 ? 'is-long' : premise.headline.length > 44 ? 'is-mid' : ''}>{premise.headline}</h1>
       </> : <>
         <div className="dod-business-name">Deal or Dud</div>
-        <h1>{room.phase === 'lobby' ? 'The studio is open' : room.phase === 'build' ? 'Everyone is building a business…' : PHASE_LABEL[room.phase]}</h1>
+        <h1>{room.phase === 'lobby' ? 'The studio is open' : room.phase === 'build' ? (room.roundIndex >= 3 ? `New products! Pitch ${Math.floor((room.roundIndex + 1) / 4) + 1} of ${room.settings.pitches}` : 'Everyone is building a business…') : PHASE_LABEL[room.phase]}</h1>
       </>}
     </div>
     <div className="dod-phase-box">
@@ -131,7 +131,8 @@ function PhaseOverlay({ room }: { room: DealSnapshot }) {
   const round = room.round;
   if (room.phase === 'build') {
     const locked = room.upcoming.filter((item) => item.lockedAt).length;
-    return <Banner>Everyone: build a business on your phone. You each pitch it once. <span className="dod-banner-count">Locked in {locked}/{room.players.length}</span></Banner>;
+    const pass = Math.floor((room.roundIndex + 1) / 4) + 1;
+    return <Banner tone={pass > 1 ? 'alert' : 'info'}>{pass > 1 ? `Pitch ${pass} of ${room.settings.pitches}! Everyone builds a brand new business.` : 'Everyone: build a business on your phone. You each pitch it once.'} <span className="dod-banner-count">Locked in {locked}/{room.players.length}</span></Banner>;
   }
   if (!round) return null;
   return <>
@@ -198,6 +199,7 @@ function RevealPanel({ room }: { room: DealSnapshot }) {
     {totalShown && <>
       <p className="dod-total">{result.total ? `${moneyLabel(result.total)} raised!` : 'Not a single dollar!'}</p>
       <p className="dod-deal-line">{result.dealSharkIds.length > 0 && <Emoji char="🤝"/>} {dealLine(room, result.dealSharkIds)}</p>
+      {result.bonuses.length > 0 && <p className="dod-bonus-chips">{result.bonuses.map((bonus) => <span key={bonus.id}><Emoji char={bonus.id === 'ovation' ? '👏' : '🙌'}/> {BONUS_LABELS[bonus.id]} +{bonus.points}</span>)}</p>}
       <ul className="dod-deltas">{result.scores.filter((score) => score.delta !== 0 || score.playerId === result.presenterId).map((score) => {
         const player = playerById(room, score.playerId);
         return <li key={score.playerId} className={score.delta > 0 ? 'up' : score.delta < 0 ? 'down' : ''}>
@@ -235,6 +237,30 @@ function ForecastPanel({ room }: { room: DealSnapshot }) {
       <ul>{forecast.playerIds.map((id) => <li key={id}>{playerById(room, id)?.name}: {forecast.guesses[id] == null ? 'no guess' : forecast.guesses[id]!.toLocaleString()}</li>)}</ul>
       <p>{winner ? `${winner.name} wins${forecast.randomDraw ? ' by random draw' : ''}!` : 'Still tied! One more card…'}</p>
     </div>}
+  </section>;
+}
+
+/** The end-of-game votes: the nominees while phones vote, then the winners. */
+function VotePanel({ room }: { room: DealSnapshot }) {
+  const votes = room.votes;
+  if (!votes) return null;
+  const { nameVote, pitchVote } = room.settings.bonuses;
+  const counted = room.phase === 'vote-result';
+  const who = (index: number) => playerById(room, room.history[index]?.presenterId)?.name ?? '';
+  const list = (winners: number[], label: (index: number) => ReactNode) => <ul>{room.history.map((result, index) => {
+    const won = winners.includes(index);
+    if (counted && !won) return null;
+    return <li key={index} className={won ? 'is-winner' : ''}>{label(index)}{won && <strong>+{result && winners === votes.nameWinners ? BONUS_POINTS.nameVote : BONUS_POINTS.pitchVote}</strong>}</li>;
+  })}</ul>;
+  return <section className="dod-votes">
+    <h2>{counted ? 'The votes are in!' : 'Time to vote!'}</h2>
+    {!counted && <p className="dod-sub">Vote on your phones. You can't vote for your own. <span className="dod-banner-count">Voted {votes.submitted.length}/{room.players.length}</span></p>}
+    <div className="dod-vote-columns">
+      {nameVote && <div><h3><Emoji char="🏷️"/> Best business name</h3>
+        {counted && !votes.nameWinners.length ? <p>No votes.</p> : list(votes.nameWinners, (index) => <><b>{room.history[index].businessName}</b> <small>{who(index)}</small></>)}</div>}
+      {pitchVote && <div><h3><Emoji char="🎤"/> Pitch of the night</h3>
+        {counted && !votes.pitchWinners.length ? <p>No votes.</p> : list(votes.pitchWinners, (index) => <><b>{who(index)}</b> <small>{room.history[index].headline}</small></>)}</div>}
+    </div>
   </section>;
 }
 
@@ -341,7 +367,7 @@ export function TvStage({ room, hostBar, extra }: { room: DealSnapshot; hostBar?
     const elapsed = clockElapsed(room, Date.now(), 0);
     return ([...TUTORIAL_TIMELINE].reverse().find((item) => elapsed >= item.start) ?? TUTORIAL_TIMELINE[0]).step.focus;
   })() : null;
-  const bigPanel = ['reveal', 'break', 'final', 'forecast', 'forecast-result', 'gameover'].includes(room.phase);
+  const bigPanel = ['reveal', 'break', 'vote', 'vote-result', 'final', 'forecast', 'forecast-result', 'gameover'].includes(room.phase);
 
   // Re-render every second while the tutorial runs so the highlight follows the narration.
   useNow(room.phase === 'tutorial' ? 500 : 60_000);
@@ -369,6 +395,7 @@ export function TvStage({ room, hostBar, extra }: { room: DealSnapshot; hostBar?
       {round && room.phase === 'stage' && <OutSting room={room} round={round}/>}
       {room.phase === 'reveal' && <RevealPanel room={room}/>}
       {room.phase === 'break' && <Standings room={room} title={`After round ${room.roundIndex + 1}`}/>}
+      {(room.phase === 'vote' || room.phase === 'vote-result') && <VotePanel room={room}/>}
       {room.phase === 'final' && <Standings room={room} title={room.winnerIds.length ? 'Final scores' : 'Final scores — it\'s a tie!'}/>}
       {(room.phase === 'forecast' || room.phase === 'forecast-result') && <ForecastPanel room={room}/>}
       {room.phase === 'gameover' && <GameOver room={room}/>}

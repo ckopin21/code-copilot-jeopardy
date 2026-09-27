@@ -25,6 +25,12 @@ export const FIXED_LINES = {
   'hot-seat': ['Our next entrepreneur is in the hot seat!'],
   build: ['Everybody, build a business on your phone!', 'Time to build something ridiculous. Everyone, grab your phones!'],
   'build-10': ['Ten seconds! Lock in that product.'],
+  'next-pass': [
+    "That's everyone! But the tank isn't closed yet. Time to build something even worse!",
+    'Give it up for those pitches! Now, everybody, build a brand new business.',
+    'The sharks are still hungry. Grab your phones and invent a new product!'
+  ],
+  'last-pass': ["Last time around! Build your final masterpiece, and make it count."],
   pitch: ['Please welcome our next entrepreneur!'],
   'pitch-go': ['The floor is yours. Sell it!', 'Your pitch starts now!'],
   'questions-open': ['Questions open!', 'Sharks, questions are open!'],
@@ -58,6 +64,8 @@ export const FIXED_LINES = {
   scores: ["Let's check the scoreboard."],
   'neck-and-neck': ["It's neck and neck at the top!"],
   final: ["That's the game! Here are the final scores."],
+  vote: ['Time to vote! Grab your phones.', 'Before the final scores, it is time to vote!'],
+  'votes-in': ['The votes are in!'],
   tiebreaker: ['We have a tie for first! Time for a tiebreaker.'],
   'tiebreaker-10': ['Ten seconds! Lock in your guess.'],
   'winner-is': ['And the winner of Deal or Dud is...'],
