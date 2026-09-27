@@ -2,18 +2,35 @@
 // Phones never play music, so four phones cannot double the soundtrack.
 import type { AudioSettings } from '../types';
 
-export type MusicTrack = 'lobby' | 'bed' | 'offers' | null;
+export type MusicTrack = 'lobby' | 'bed' | 'offers' | 'celebrate' | null;
 export type Sting = 'fanfare' | 'pitch' | 'good' | 'bad' | 'winner' | 'lock' | 'reveal-card' | 'tick';
 
 const BASE = '/deal-or-dud/audio/';
-const MUSIC_FILES: Record<Exclude<MusicTrack, null>, string> = { lobby: 'lobby-loop.wav', bed: 'discussion-bed.wav', offers: 'offer-pulse.wav' };
+/**
+ * Music loops. MP3 smears the first and last milliseconds of a file, so each file carries half a second of wrapped
+ * audio on both sides and plays between `loopStart` and `loopEnd` (seconds). A decoder that keeps or drops the
+ * encoder's priming samples only shifts both points into identical audio, so the loop stays seamless in every browser.
+ * Made by tools/deal-or-dud-music/integrate_pixabay.sh; the loop lengths below are its printed sample counts / 44100.
+ */
+interface MusicLoop { file: string; loopStart: number; loopEnd: number }
+const LOOP_PAD = 0.5;
+const loopOf = (file: string, samples: number): MusicLoop => ({ file, loopStart: LOOP_PAD, loopEnd: LOOP_PAD + samples / 44_100 });
+const MUSIC_FILES: Record<Exclude<MusicTrack, null>, MusicLoop> = {
+  lobby: loopOf('lobby-loop.mp3', 5_204_091),
+  bed: loopOf('discussion-bed.mp3', 3_364_529),
+  offers: loopOf('offer-pulse.mp3', 952_560),
+  celebrate: loopOf('winner-loop.mp3', 1_991_613)
+};
 const STING_FILES: Record<Sting, string> = {
   fanfare: 'fanfare.mp3', pitch: 'pitch-intro.mp3', good: 'reveal-good.mp3', bad: 'reveal-bad.mp3',
   winner: 'winner.mp3', lock: 'lock.mp3', 'reveal-card': 'card.mp3', tick: 'tick.mp3'
 };
 /** Per-track level so the discussion bed sits under conversation and the offer pulse is only slightly more present. */
-const MUSIC_LEVEL: Record<Exclude<MusicTrack, null>, number> = { lobby: 0.55, bed: 0.22, offers: 0.3 };
+const MUSIC_LEVEL: Record<Exclude<MusicTrack, null>, number> = { lobby: 0.55, bed: 0.22, offers: 0.3, celebrate: 0.5 };
 const DUCKED = 0.3;
+/** The long musical stings play while the hosts talk ("Round two!", the welcome, the winner), so they dip under speech too. */
+const DUCKED_STINGS: ReadonlySet<Sting> = new Set(['fanfare', 'pitch', 'winner']);
+const STING_DUCKED = 0.5;
 
 class DealAudio {
   private context: AudioContext | null = null;
@@ -21,6 +38,7 @@ class DealAudio {
   private musicBus: GainNode | null = null;
   private duckBus: GainNode | null = null;
   private effectsBus: GainNode | null = null;
+  private stingDuckBus: GainNode | null = null;
   private narrationBus: GainNode | null = null;
   private buffers = new Map<string, Promise<AudioBuffer | null>>();
   private currentTrack: MusicTrack = null;
@@ -42,16 +60,18 @@ class DealAudio {
         this.musicBus = this.context.createGain();
         this.duckBus = this.context.createGain();
         this.effectsBus = this.context.createGain();
+        this.stingDuckBus = this.context.createGain();
         this.narrationBus = this.context.createGain();
         this.musicBus.connect(this.duckBus).connect(this.master);
         this.effectsBus.connect(this.master);
+        this.stingDuckBus.connect(this.effectsBus);
         this.narrationBus.connect(this.master);
         this.applySettings(this.settings);
       }
       if (this.context.state === 'suspended') await this.context.resume();
       this.unlocked = this.context.state === 'running';
       this.emit();
-      if (this.unlocked) for (const file of [...Object.values(MUSIC_FILES), ...Object.values(STING_FILES)]) void this.load(file);
+      if (this.unlocked) for (const file of [...Object.values(MUSIC_FILES).map((loop) => loop.file), ...Object.values(STING_FILES)]) void this.load(file);
       return this.unlocked;
     } catch {
       return false;
@@ -107,29 +127,34 @@ class DealAudio {
       window.setTimeout(() => { try { old.source.stop(); } catch { /* already stopped */ } }, 3_000);
     }
     if (!track) return;
-    const buffer = await this.load(MUSIC_FILES[track]);
+    const loop = MUSIC_FILES[track];
+    const buffer = await this.load(loop.file);
     if (!buffer || this.currentTrack !== track) return;
     const source = context.createBufferSource();
     source.buffer = buffer;
     source.loop = true;
+    source.loopStart = loop.loopStart;
+    source.loopEnd = Math.min(loop.loopEnd, buffer.duration);
     const gain = context.createGain();
     gain.gain.value = 0;
     gain.gain.setTargetAtTime(MUSIC_LEVEL[track], context.currentTime, 0.8);
     source.connect(gain).connect(this.musicBus!);
-    source.start();
+    source.start(0, loop.loopStart);
     this.currentSource = { source, gain };
   }
 
-  async sting(name: Sting, level = 1): Promise<void> {
-    if (!this.context) return;
+  /** Plays a one-shot. Resolves with its length in seconds once it starts, or 0 if it cannot play. */
+  async sting(name: Sting, level = 1): Promise<number> {
+    if (!this.context) return 0;
     const buffer = await this.load(STING_FILES[name]);
-    if (!buffer) return;
+    if (!buffer) return 0;
     const source = this.context.createBufferSource();
     source.buffer = buffer;
     const gain = this.context.createGain();
     gain.gain.value = level;
-    source.connect(gain).connect(this.effectsBus!);
+    source.connect(gain).connect(DUCKED_STINGS.has(name) ? this.stingDuckBus! : this.effectsBus!);
     source.start();
+    return buffer.duration;
   }
 
   /** Plays a narration file and ducks the music under it. Resolves when it ends (or at once if it cannot play). */
@@ -141,7 +166,7 @@ class DealAudio {
     const source = this.context.createBufferSource();
     source.buffer = buffer;
     source.connect(this.narrationBus!);
-    this.duckBus!.gain.setTargetAtTime(DUCKED, this.context.currentTime, 0.15);
+    this.duck();
     source.onended = () => { if (this.narration === source) { this.narration = null; this.unduck(); } };
     source.start();
     this.narration = source;
@@ -156,7 +181,7 @@ class DealAudio {
     const source = this.context.createBufferSource();
     source.buffer = buffer;
     source.connect(this.narrationBus!);
-    this.duckBus!.gain.setTargetAtTime(DUCKED, this.context.currentTime, 0.15);
+    this.duck();
     this.narration = source;
     return new Promise((resolve) => {
       source.onended = () => {
@@ -170,8 +195,15 @@ class DealAudio {
     if (this.narration) { try { this.narration.stop(); } catch { /* ended */ } this.narration = null; }
     this.unduck();
   }
+  private duck(): void {
+    const at = this.context!.currentTime;
+    this.duckBus!.gain.setTargetAtTime(DUCKED, at, 0.15);
+    this.stingDuckBus!.gain.setTargetAtTime(STING_DUCKED, at, 0.15);
+  }
   private unduck(): void {
-    if (this.context && this.duckBus) this.duckBus.gain.setTargetAtTime(1, this.context.currentTime, 0.4);
+    if (!this.context || !this.duckBus) return;
+    this.duckBus.gain.setTargetAtTime(1, this.context.currentTime, 0.4);
+    this.stingDuckBus!.gain.setTargetAtTime(1, this.context.currentTime, 0.4);
   }
   async durationOf(file: string): Promise<number> {
     if (!this.context) return 0;
