@@ -553,3 +553,16 @@ html:has(.dod-app), body:has(.dod-app) { margin: 0; background: #05091a; }
 .dod-app .dod-demo-offers span { position: absolute; transform: translateX(-50%); white-space: nowrap; font-size: 36px; }
 /* The reveal: top right, above the presenter. */
 .dod-app .dod-tutorial .dod-demo-reveal { left: 1220px; top: 70px; width: 640px; font-size: 28px; }
+
+/* Settings: stage clock presets "or" a custom length, with the other timers on their own row below. */
+.dod-app .dod-clock-choice { display: flex; align-items: flex-start; gap: 22px; margin-bottom: 8px; }
+.dod-app .dod-clock-choice > div { display: grid; gap: 6px; }
+.dod-app .dod-clock-choice > div > small { font-size: 16px; color: var(--dod-muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
+.dod-app .dod-clock-choice .dod-segment { margin-bottom: 0; }
+.dod-app .dod-clock-choice .dod-stepper { width: 240px; padding: 6px 10px; }
+.dod-app .dod-clock-choice .dod-stepper > span { display: none; }
+.dod-app .dod-clock-choice .dod-segment button { min-height: 58px; }
+.dod-app .dod-settings .dod-hint { font-size: 17px; margin: 0; }
+.dod-app .dod-or { align-self: flex-start; margin-top: 44px; font-size: 20px; font-weight: 800; color: var(--dod-muted); text-transform: uppercase; }
+.dod-app .dod-more-timers { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.dod-app .dod-more-timers p { margin: 0; color: var(--dod-muted); }

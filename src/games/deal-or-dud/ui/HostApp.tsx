@@ -80,12 +80,25 @@ function SettingsPage({ room, send, onClose, onStart }: { room: DealSnapshot; se
         <p className="dod-hint">Each extra pitch starts with a fresh build: everyone makes a new product.</p>
       </section>
       <section>
-        <h3>On stage clock <small>Pitch and questions</small></h3>
-        <div className="dod-segment">
-          {(Object.keys(STAGE_PRESETS) as (keyof typeof STAGE_PRESETS)[]).map((preset) => <button key={preset} className={settings.timerPreset === preset ? 'is-on' : ''} onClick={() => update({ timerPreset: preset })}>{preset[0].toUpperCase() + preset.slice(1)} {timerText(STAGE_PRESETS[preset])}</button>)}
-          <TimerStepper settings={settings} timer="stage" stepTimer={stepTimer}/>
-          <button className="dod-ghost" onClick={() => setMoreTimers(true)}>More timers…</button>
+        <h3>On stage clock <small>How long each presenter is on stage (pitch time, then questions)</small></h3>
+        {/* Presets and the custom clock set the same thing, so they sit side by side with an "or"; the other timers are a separate page. */}
+        <div className="dod-clock-choice">
+          <div>
+            <small>Pick a length</small>
+            <div className="dod-segment" role="group" aria-label="Stage clock presets">
+              {(Object.keys(STAGE_PRESETS) as (keyof typeof STAGE_PRESETS)[]).map((preset) => <button key={preset} className={settings.timerPreset === preset ? 'is-on' : ''} aria-pressed={settings.timerPreset === preset} onClick={() => update({ timerPreset: preset })}>{preset[0].toUpperCase() + preset.slice(1)} {timerText(STAGE_PRESETS[preset])}</button>)}
+            </div>
+          </div>
+          <span className="dod-or">or</span>
+          <div>
+            <small>Set your own{settings.timerPreset === 'custom' ? ' (in use)' : ''}</small>
+            <TimerStepper settings={settings} timer="stage" stepTimer={stepTimer}/>
+          </div>
         </div>
+      </section>
+      <section className="dod-more-timers">
+        <p>Other timers (building, bids, the reveal, scores, tiebreaker) have their own page.</p>
+        <button className="dod-ghost" onClick={() => setMoreTimers(true)}>More timers…</button>
       </section>
       <section className="dod-two">
         <div>
