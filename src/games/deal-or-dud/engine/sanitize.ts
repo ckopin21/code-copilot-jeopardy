@@ -22,6 +22,7 @@ export function sanitizeDealSnapshot(snapshot: DealSnapshot, role: RoomRole, pla
       round.builder = emptyBuilder();
       if (!PREMISE_PUBLIC.includes(copy.phase)) {
         round.nameOptions = [];
+        round.typedName = null;
         round.premise = null;
       }
     }
@@ -42,6 +43,7 @@ export function sanitizeDealSnapshot(snapshot: DealSnapshot, role: RoomRole, pla
       ...item,
       builder: own ? item.builder : emptyBuilder(),
       nameOptions: own ? item.nameOptions : [],
+      typedName: own ? item.typedName ?? null : null,
       premise: own ? item.premise : null
     };
   });

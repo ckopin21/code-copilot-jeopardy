@@ -3,8 +3,8 @@ import { resolve } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { DealEngine } from '../../src/games/deal-or-dud/engine/DealEngine';
 import { sanitizeDealSnapshot } from '../../src/games/deal-or-dud/engine/sanitize';
-import { FIXED_LINES, HOST_VOICES, JOIN_GREETINGS, LIVE_LINES, MAX_LIVE_TEXT, fixedLineFile, raisedLine, speakable, type FixedLineId } from '../../src/games/deal-or-dud/audio/narrationLines';
-import { dueWarning, lobbyPrefetch, planNarration, revealTotalPlan, spokenName, type NarrationPlan, type Utterance } from '../../src/games/deal-or-dud/audio/narrationPlan';
+import { FIXED_LINES, HOST_VOICES, JOIN_GREETINGS, LIVE_LINES, MAX_LIVE_TEXT, PITCH_INTROS, fixedLineFile, raisedLine, speakable, type FixedLineId } from '../../src/games/deal-or-dud/audio/narrationLines';
+import { dueWarning, lobbyPrefetch, pitchLine, planNarration, revealTotalPlan, spokenName, type NarrationPlan, type Utterance } from '../../src/games/deal-or-dud/audio/narrationPlan';
 import { voiceRoute } from '../../src/games/deal-or-dud/voiceRoute';
 import { linesToPrepare, prepareVoices } from '../../src/games/deal-or-dud/voicePrep';
 import type { DealSnapshot } from '../../src/games/deal-or-dud/types';
@@ -46,10 +46,13 @@ describe('narration lines', () => {
     expect(speakable("Mc'Donald-Smith & Co.")).toBe("Mc'Donald-Smith & Co.");
   });
 
-  it('keeps a long pitch line under the live limit', () => {
-    const line = LIVE_LINES.pitch('Bartholomew Jr.', 'The Extremely Serious Company Of Snacks', 'Haunted self-heating waterproof luxury socks for divorced dads, pirates and llamas');
-    expect(line.text.length).toBeLessThanOrEqual(MAX_LIVE_TEXT);
-    expect(line.text).toMatch(/^Please welcome Bartholomew Jr\., founder of The Extremely Serious Company Of Snacks! Haunted .+ llamas\.$/);
+  it('introduces the presenter by name only, with a different line each round', () => {
+    const lines = PITCH_INTROS.map((_, variant) => LIVE_LINES.pitch('Bartholomew Jr.', variant).text);
+    expect(new Set(lines).size).toBe(PITCH_INTROS.length);
+    for (const text of lines) {
+      expect(text).toContain('Bartholomew Jr.');
+      expect(text.length).toBeLessThanOrEqual(MAX_LIVE_TEXT);
+    }
   });
 });
 
@@ -90,7 +93,12 @@ describe('narration plan', () => {
     const plan = planNarration(before, after)!;
     expect(plan.interrupt).toBe(true);
     expect(plan.delayMs).toBeGreaterThan(0);
-    expect(spoken(plan)).toEqual(['round-1', `Please welcome Ava, founder of ${premise.businessName}! ${premise.headline}.`, 'pitch-go']);
+    const intro = spoken(plan)[1];
+    expect(spoken(plan)).toEqual(['round-1', intro, 'pitch-go']);
+    // Just the presenter: never the product or the company.
+    expect(intro).toContain('Ava');
+    expect(intro).not.toContain(premise.businessName);
+    expect(intro.toLowerCase()).not.toContain(premise.headline.toLowerCase());
   });
 
   it('prepares every pitch intro on the server as products lock, next round first', async () => {
@@ -100,7 +108,11 @@ describe('narration plan', () => {
     engine.lockPremiseRequest(code, ids[1]);
     const full = engine.snapshot(code);
     const lines = linesToPrepare(full).map((line) => line.text);
-    expect(lines).toEqual([1, 2].map((index) => `Please welcome ${full.players[index].name}, founder of ${full.upcoming[index].premise!.businessName.replace(/[.!?]+$/, '')}! ${full.upcoming[index].premise!.headline}.`));
+    expect(lines).toEqual([1, 2].map((index) => pitchLine(full, full.upcoming[index])!.text));
+    // Rounds 2 and 3 get different intros, each naming its presenter.
+    expect(lines[0]).toContain(full.players[1].name);
+    expect(lines[1]).toContain(full.players[2].name);
+    expect(lines[0].replace(full.players[1].name, '')).not.toBe(lines[1].replace(full.players[2].name, ''));
     // The TV says exactly the line the server prepared, so it plays from the narrator's cache.
     engine.lockPremiseRequest(code, ids[0]);
     engine.lockPremiseRequest(code, ids[3]);
@@ -111,7 +123,7 @@ describe('narration plan', () => {
     // On stage: "X and Y both want in!" for each pair of this round's sharks, then the next pitch intros.
     expect(asked.slice(0, 3).map((url) => url.replace(/^.*text=/, ''))).toEqual(['Ben and Cy both want in!', 'Ben and Di both want in!', 'Cy and Di both want in!']);
     expect(asked).toHaveLength(6);
-    expect(asked[3]).toContain(`${full.players[1].name}, founder of`);
+    expect(asked[3]).toContain(full.players[1].name);
   });
 
   it('uses the host pronunciation and falls back when a name cannot be spoken', () => {
@@ -136,7 +148,7 @@ describe('narration plan', () => {
     const before = tv();
     buildAll();
     const item = planNarration(before, tv())!.items[1];
-    expect(item).toEqual({ live: expect.objectContaining({ text: expect.stringMatching(/^Please welcome Ay-vuh, founder of/), caption: expect.stringMatching(/^Please welcome Ava, founder of/) }) });
+    expect(item).toEqual({ live: expect.objectContaining({ text: expect.stringContaining('Ay-vuh'), caption: expect.stringContaining('Ava') }) });
   });
 
   it('refuses pronunciations from anyone but the host', () => {

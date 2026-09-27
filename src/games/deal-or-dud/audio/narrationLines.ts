@@ -87,11 +87,6 @@ export function speakable(value: string): string {
   return value.normalize('NFKC').replace(/[^\p{L}\p{N}\s'’.,!?&()-]/gu, ' ').replace(/\s+/g, ' ').trim();
 }
 
-function sentence(value: string): string {
-  const text = value.trim();
-  return /[.!?]$/.test(text) ? text : `${text}.`;
-}
-
 /** Lobby greetings. Each seat gets a different one (see `greetingVariant`), so four players hear four lines. */
 export const JOIN_GREETINGS: readonly ((name: string) => string)[] = [
   (name) => `${name} is in the building!`,
@@ -104,6 +99,23 @@ export const JOIN_GREETINGS: readonly ((name: string) => string)[] = [
   (name) => `Everybody say hello to ${name}!`
 ];
 
+/**
+ * Stage intros: just the presenter, never the product or company (the pitch reveals those). Each round gets a
+ * different one (see `introVariant`).
+ */
+export const PITCH_INTROS: readonly ((name: string) => string)[] = [
+  (name) => `Please welcome our next entrepreneur, ${name}!`,
+  (name) => `Sharks, get ready. Here comes ${name}!`,
+  (name) => `Next up in the tank, it's ${name}!`,
+  (name) => `Hold on to your wallets. It's ${name}!`,
+  (name) => `Give it up for ${name}!`,
+  (name) => `Our next brave founder is ${name}!`,
+  (name) => `Step right up, ${name}!`,
+  (name) => `Here comes trouble. Welcome, ${name}!`,
+  (name) => `Sharks, meet your next victim. It's ${name}!`,
+  (name) => `Big dreams, bigger ideas. Welcome, ${name}!`
+];
+
 /** Live lines. A null name means the line cannot be built, so the caller plays the fallback. */
 export const LIVE_LINES = {
   joined: (name: string, variant = 0): LiveLine => {
@@ -112,10 +124,10 @@ export const LIVE_LINES = {
   },
   /** Only the host's ▶ pronunciation test uses this now. */
   hotSeat: (name: string): LiveLine => ({ text: `${name}, you're in the hot seat!`, voice: 'adam', fallback: 'hot-seat' }),
-  pitch: (name: string, business: string, headline: string): LiveLine => ({
-    text: `Please welcome ${name}, founder of ${business.trim().replace(/[.!?]+$/, '')}! ${sentence(headline)}`,
-    voice: 'adam', fallback: 'pitch'
-  }),
+  pitch: (name: string, variant = 0): LiveLine => {
+    const index = ((variant % PITCH_INTROS.length) + PITCH_INTROS.length) % PITCH_INTROS.length;
+    return { text: PITCH_INTROS[index](name), voice: index % 2 ? 'george' : 'adam', fallback: 'pitch' };
+  },
   out: (name: string): LiveLine => ({ text: `${name} is out!`, voice: 'george', fallback: 'out' }),
   dealIn: (name: string): LiveLine => ({ text: `${name} is in!`, voice: 'adam', fallback: 'deal-in' }),
   bothIn: (first: string, second: string): LiveLine => ({ text: `${first} and ${second} both want in!`, voice: 'adam', fallback: 'both-in' }),

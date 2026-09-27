@@ -151,8 +151,10 @@ export interface RoundState {
   presenterId: string;
   sharkIds: string[];
   builder: BuilderPicks;
-  /** Three business-name options the presenter can tap; first is the default. */
+  /** Generated business names: the first is the placeholder and the name used when the player types none. */
   nameOptions: string[];
+  /** The business name the player typed (free text). Empty or missing means the first generated name. */
+  typedName?: string | null;
   premise: LockedPremise | null;
   /** When the presenter locked their product during the build. */
   lockedAt?: number | null;

@@ -1,17 +1,30 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { BuilderColumn, BuilderPicks, DealSnapshot, RoundState } from '../../types';
-import { audienceById, buildHeadline, modifierById, productById } from '../../content/dealer';
+import { audienceById, modifierById, productById } from '../../content/dealer';
 import { useClockSeconds } from '../net';
 import { Emoji } from '../Emoji';
 
 type Send = (event: string, payload?: Record<string, unknown>) => Promise<boolean>;
 type Step = BuilderColumn | 'name';
 
-const STEPS: { id: BuilderColumn; label: string; title: string }[] = [
-  { id: 'products', label: 'Product', title: 'Pick a product' },
-  { id: 'modifiers', label: 'Twist', title: 'Add a twist' },
-  { id: 'audiences', label: 'For', title: 'Who is it for?' }
+const STEPS: { id: BuilderColumn; label: string; title: string; where: string }[] = [
+  { id: 'products', label: 'Product', title: 'Pick a product', where: 'the thing you sell' },
+  { id: 'modifiers', label: 'Twist', title: 'Add a twist', where: 'goes in front of the product' },
+  { id: 'audiences', label: 'For', title: 'Who is it for?', where: 'goes at the end, after "for"' }
 ];
+
+/**
+ * The business as a sentence with a slot for each pick, in reading order: "[twist] [product] for [who]". Empty slots
+ * show what goes there, and the slot the player is picking right now is highlighted, so it's clear where a card lands.
+ */
+function HeadlineSlots({ picks, step }: { picks: BuilderPicks; step: Step }) {
+  const product = productById(picks.product);
+  const modifier = modifierById(picks.modifier);
+  const audience = audienceById(picks.audience);
+  const slot = (column: BuilderColumn, text: string | undefined, placeholder: string) =>
+    <span className={`dod-slot ${step === column ? 'is-active' : ''} ${text ? 'is-filled' : ''}`}>{text ?? placeholder}</span>;
+  return <b className="dod-slots">{slot('modifiers', modifier?.text, '[twist]')} {slot('products', product?.text, '[product]')} for {slot('audiences', audience?.text, '[who]')}</b>;
+}
 
 function card(column: BuilderColumn, id: string | null): { emoji: string; text: string } | null {
   const item = column === 'products' ? productById(id) : column === 'modifiers' ? modifierById(id) : audienceById(id);
@@ -25,13 +38,37 @@ function firstOpenStep(picks: BuilderPicks): Step {
   return STEPS.find((step) => !picked(picks, step.id))?.id ?? 'name';
 }
 
-/** The business-name chips: tap one to use it, 🔀 for three new ones. Works before and after locking. */
+/**
+ * The business name: type anything. The generated name shows as the placeholder and is used if the box is left empty;
+ * 🎲 drops in a generated idea. Sent as you type (and when the box loses focus, so a quick "Lock it in" keeps it).
+ */
 export function NameChoice({ round, send }: { round: RoundState; send: Send }) {
-  if (!round.nameOptions.length) return null;
+  const [draft, setDraft] = useState(round.typedName ?? '');
+  const sent = useRef(round.typedName ?? '');
+  const idea = useRef(0);
+  const flush = (value: string) => {
+    if (value.trim() === sent.current.trim()) return;
+    sent.current = value;
+    void send('player:business-name', { name: value });
+  };
+  // Only a change to the text restarts the wait; the builder re-renders every clock tick.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { const id = window.setTimeout(() => flush(draft), 400); return () => window.clearTimeout(id); }, [draft]);
+  const suggest = () => {
+    const options = round.nameOptions.filter((name) => name !== draft);
+    if (idea.current >= options.length) { idea.current = 0; void send('player:names-reshuffle'); }
+    const next = options[idea.current++ % Math.max(1, options.length)];
+    if (next) { setDraft(next); flush(next); }
+  };
   return <div className="dod-name-choice">
     <small>Business name</small>
-    <div className="dod-chips">{round.nameOptions.map((name, index) => <button key={name} className={index === 0 ? 'is-on' : ''} aria-pressed={index === 0} onClick={() => void send('player:name-choose', { index })}>{name}</button>)}
-      <button className="dod-link" aria-label="Other names" onClick={() => void send('player:names-reshuffle')}>🔀</button></div>
+    <div className="dod-name-field">
+      <input value={draft} maxLength={32} placeholder={round.nameOptions[0] ?? 'Name your business'} aria-label="Business name"
+        onChange={(event) => setDraft(event.target.value)} onBlur={() => flush(draft)} autoComplete="off" enterKeyHint="done"
+        onKeyDown={(event) => { if (event.key === 'Enter') (event.target as HTMLInputElement).blur(); }}/>
+      <button type="button" className="dod-ghost" aria-label="Give me a name idea" onClick={suggest}>🎲</button>
+    </div>
+    {!draft.trim() && round.nameOptions[0] && <p className="dod-hint">Leave it empty to use “{round.nameOptions[0]}”.</p>}
   </div>;
 }
 
@@ -53,7 +90,6 @@ export function Builder({ room, round, send }: { room: DealSnapshot; round: Roun
   const picks = round.builder;
   const [step, setStep] = useState<Step>(() => firstOpenStep(picks));
   const lockSeconds = useClockSeconds(room);
-  const headline = buildHeadline(picks);
   const at = STEPS.findIndex((item) => item.id === step);
   const current = STEPS[at];
   const choose = (column: BuilderColumn, id: string) => {
@@ -71,9 +107,10 @@ export function Builder({ room, round, send }: { room: DealSnapshot; round: Roun
         </button></li>;
       })}
     </ol>
-    <div className="dod-headline-preview"><small>Your business</small><b>{headline || 'Pick three cards to build it'}</b></div>
+    <div className="dod-headline-preview"><small>Your business</small><HeadlineSlots picks={picks} step={step}/></div>
     {current ? <>
       <h2 className="dod-step-title">{current.title}</h2>
+      <p className="dod-hint dod-step-where">{current.where}</p>
       <div className="dod-hand" role="group" aria-label={current.title}>
         {picks.hands[current.id].map((id) => {
           const item = card(current.id, id);

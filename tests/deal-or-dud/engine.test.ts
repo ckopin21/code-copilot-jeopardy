@@ -388,10 +388,16 @@ describe('DealEngine', () => {
     expect(() => engine.lockPremiseRequest(code, 'nobody')).toThrow();
     engine.lockPremiseRequest(code, b);
     expect(() => engine.builderPick(code, b, 'products', bHand[0])).toThrow(/already locked/);
-    // The name can still change after locking.
+    // The name is typed, and can still change after locking; an empty name goes back to the generated one.
     const names = snap().upcoming[1].nameOptions;
-    engine.chooseName(code, b, 2);
-    expect(snap().upcoming[1].premise!.businessName).toBe(names[2]);
+    engine.setBusinessName(code, b, '  Moat   Crimes LLC  ');
+    expect(snap().upcoming[1].premise!.businessName).toBe('Moat Crimes LLC');
+    engine.setBusinessName(code, b, 'x'.repeat(50));
+    expect(snap().upcoming[1].premise!.businessName).toHaveLength(32);
+    engine.setBusinessName(code, b, '');
+    expect(snap().upcoming[1].premise!.businessName).toBe(names[0]);
+    engine.setBusinessName(code, b, 'Moat Crimes LLC');
+    expect(sanitizeDealSnapshot(snap(), 'player', a).upcoming[1].typedName).toBeNull();
     // A phone sees only its own product before its pitch; the TV only who has locked.
     const full = snap();
     const bView = sanitizeDealSnapshot(full, 'player', b);

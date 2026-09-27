@@ -53,14 +53,18 @@ export function roundLine(room: DealSnapshot): FixedLineId {
   return index >= totalRounds(room.settings) - 1 ? 'round-final' : ROUND_LINES[Math.min(index, ROUND_LINES.length - 1)];
 }
 
+/** Which stage intro a round gets: the round number, shifted by the room key so each game starts somewhere new. */
+export function introVariant(room: DealSnapshot, round: RoundState): number {
+  return round.index + [...room.code].reduce((sum, char) => sum + char.charCodeAt(0), 0);
+}
+
 /**
- * "Please welcome Ava, founder of Flakely! Breakfast cereal." The TV says it when the stage opens; the server
- * builds the same line from the full state as soon as the product locks and renders it ahead (voicePrep.ts).
+ * "Hold on to your wallets. It's Ava!" Just the presenter: the product and company are theirs to reveal. The TV says it
+ * when the stage opens; the server builds the same line as soon as the product locks and renders it ahead (voicePrep.ts).
  */
 export function pitchLine(room: DealSnapshot, round: RoundState): LiveLine | null {
-  const premise = round.premise;
-  if (!premise) return null;
-  return nameLine(room, round.presenterId, (name) => LIVE_LINES.pitch(name, speakable(premise.businessName) || 'a brand new company', speakable(premise.headline)));
+  if (!round.premise) return null;
+  return nameLine(room, round.presenterId, (name) => LIVE_LINES.pitch(name, introVariant(room, round)));
 }
 
 /** Unique leader by score, or null on a tie at the top. */

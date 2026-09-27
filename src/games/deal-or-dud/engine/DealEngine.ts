@@ -549,6 +549,7 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
       sharkIds: state.players.filter((player) => player.id !== presenterId).map((player) => player.id),
       builder: emptyBuilder(),
       nameOptions: [],
+      typedName: null,
       premise: null,
       lockedAt: null,
       questionsOpen: false,
@@ -644,17 +645,16 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
     const round = this.ownBuild(room, playerId);
     if (!round.builder.product) throw new Error('Pick a product first');
     this.refreshNames(room, round);
-    if (round.premise) round.premise.businessName = round.nameOptions[0] ?? round.premise.businessName;
+    if (round.premise && !round.typedName) round.premise.businessName = round.nameOptions[0] ?? round.premise.businessName;
     return this.commit(room);
   }
-  chooseName(code: string, playerId: string, index: unknown): DealSnapshot {
+  /** The player types their own business name (it can still change after locking, until the build ends). Empty goes back to the generated one. */
+  setBusinessName(code: string, playerId: string, value: unknown): DealSnapshot {
     const room = this.room(code);
     const round = this.ownBuild(room, playerId);
-    const name = round.nameOptions[Number(index)];
-    if (!name) throw new Error('Unknown name');
-    // The chosen name moves to the front; the premise uses the first option.
-    round.nameOptions = [name, ...round.nameOptions.filter((item) => item !== name)];
-    if (round.premise) round.premise.businessName = name;
+    const name = typeof value === 'string' ? value.replace(/\s+/g, ' ').trim().slice(0, 32) : '';
+    round.typedName = name || null;
+    if (round.premise) round.premise.businessName = name || (round.nameOptions[0] ?? round.premise.businessName);
     return this.commit(room);
   }
   lockPremiseRequest(code: string, playerId: string): DealSnapshot {
@@ -699,7 +699,7 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
     const product = productById(picks.product)!;
     if (!round.nameOptions.length) this.refreshNames(room, round);
     const emojis = [product.emoji, modifierById(picks.modifier)?.emoji, audienceById(picks.audience)?.emoji].filter((item): item is string => Boolean(item));
-    round.premise = { headline, mainProductId: product.id, businessName: round.nameOptions[0] ?? product.roots[0], form: product.form, emojis };
+    round.premise = { headline, mainProductId: product.id, businessName: round.typedName || (round.nameOptions[0] ?? product.roots[0]), form: product.form, emojis };
     room.usedHeadlines.push(headline);
     room.usedProductIds.push(product.id);
     this.recent.headlines = [headline, ...this.recent.headlines].slice(0, 40);

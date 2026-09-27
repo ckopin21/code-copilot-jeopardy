@@ -566,3 +566,17 @@ html:has(.dod-app), body:has(.dod-app) { margin: 0; background: #05091a; }
 .dod-app .dod-or { align-self: flex-start; margin-top: 44px; font-size: 20px; font-weight: 800; color: var(--dod-muted); text-transform: uppercase; }
 .dod-app .dod-more-timers { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .dod-app .dod-more-timers p { margin: 0; color: var(--dod-muted); }
+
+/* Phone: the business name is typed, with a 🎲 for a generated idea. */
+.dod-app .dod-name-field { display: flex; gap: 8px; }
+.dod-app .dod-name-field input { flex: 1; min-width: 0; font: inherit; font-size: 18px; font-weight: 700; padding: 10px 12px; border-radius: 12px; border: 2px solid var(--dod-gold); background: var(--dod-cream); color: var(--dod-ink); }
+.dod-app .dod-name-field input::placeholder { color: #8a7a5c; font-weight: 600; }
+.dod-app .dod-name-field .dod-ghost { flex: none; padding: 8px 14px; font-size: 20px; }
+
+/* Phone builder: the business as a sentence with slots, the one being picked highlighted. */
+.dod-app .dod-slots::first-letter { text-transform: uppercase; }
+.dod-app .dod-slot { border-radius: 6px; }
+.dod-app .dod-slot:not(.is-filled), .dod-app .dod-slot.is-active { padding: 0 3px; }
+.dod-app .dod-slot:not(.is-filled) { color: #9a8a6a; font-weight: 700; }
+.dod-app .dod-slot.is-active { background: #ffc24a; color: #2a1600; box-shadow: 0 0 0 2px #d18a12; }
+.dod-app .dod-step-where { text-align: center; margin-top: -6px; }
