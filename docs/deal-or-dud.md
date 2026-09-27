@@ -97,7 +97,7 @@ The tests can't check whether a line reads naturally with every product it fits.
 
 ## Audio (`public/deal-or-dud/audio/`)
 
-- **Music and stings** are synthesized by `scripts/deal-or-dud/render-music.ts` (no samples). Loops are WAV so they loop without gaps; stings are MP3.
+- **Music and stings** come from ACE-Step 1.5 drafts on the Windows PC (`C:\Users\caleb\code\tools\ace-step\deal_music.py` makes them, style captions only, aiming for the feel of a TV investor show without copying any melody). `tools\ace-step\integrate_deal_music.sh` turns the chosen takes into the game files: loops are 28–30 s WAV (32 kHz) whose tail crossfades into the head so they repeat cleanly, stings are trimmed MP3s with a fade, and everything is loudness-matched (loops −16 LUFS, stings about −15). The current picks are provisional: lobby-2, bed-1, offers-1, pitch-2, good-1, bad-1, winner-1, theme-1 (the fanfare). Swap one with e.g. `LOBBY=lobby-1 bash integrate_deal_music.sh`. The earlier synthesized set is backed up in `tools\deal-or-dud-audio-backup\music-v1\`, and `scripts/deal-or-dud/render-music.ts` can still make it (it overwrites the same files).
   - Loops: lobby, stage bed (`discussion-bed.wav`), offer pulse.
   - Stings: fanfare, pitch intro, GOOD/BAD reveals, winner.
 - **Sound effects** `lock.mp3` (poker chips), `card.mp3` (card placed) and `tick.mp3` come from Kenney's CC0 packs (kenney.nl: Casino Audio, Interface Sounds). The tick counts down the last 5 seconds of the build, bid, partner and tiebreaker clocks.
@@ -123,10 +123,6 @@ Two host voices, `adam` and `george`, take turns. They are cloned by Chatterbox 
 - **Undo:** delete `~/.blue-stage/narrator` (and the Hugging Face cache folder for `ResembleAI/chatterbox`).
 
 To regenerate (ffmpeg on the Windows PC: `C:\Users\caleb\Downloads\ffmpeg-8.0-full_build\ffmpeg-8.0-full_build\bin\ffmpeg.exe`; ffprobe must sit next to it):
-
-```bash
-FFMPEG=<path to ffmpeg.exe> npx tsx scripts/deal-or-dud/render-music.ts
-```
 
 With the narrator service running (`--only=tutorial|lines|suspect` does one part, `suspect` being clips whose length doesn't fit their text; `--match=<regex>` limits to matching output paths):
 
