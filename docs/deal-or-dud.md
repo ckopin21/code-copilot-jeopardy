@@ -9,7 +9,7 @@ Start it from the game picker at `/`, or go straight to `/?game=deal-or-dud&mode
 | Screen | Where | Shows |
 | --- | --- | --- |
 | Host (TV) | `?game=deal-or-dud&mode=host` | Studio set, the four scorecard tiles (who peeked at what; the answers only at the reveal), clock, offers, reveal, scores. Host controls, settings, and the soundtrack. |
-| Presentation | Host's display link | The same TV view for a second screen. Plays sound by default, like the Host tab. |
+| Presentation | Host's display link | The same TV view for a second screen, including the lobby's join card (QR code, room key, link, who is in). Plays sound by default, like the Host tab. |
 | Every phone, at the start | `?mode=player` | Three quick card picks (product, twist, audience) and the business name, then "Locked in" (the name can still change) until everyone is done. |
 | Presenter phone | `?mode=player` | Secret verdict and the full scorecard (✅/❌ and a line for each check, plus who peeked where), a pitch idea, partner choice. |
 | Shark phone | `?mode=player` | The one peek (tap a check, tap again), its answer, things to ask, "I'm ready to bid", then bid and lock. |
@@ -67,7 +67,7 @@ Every phone screen fits the viewport without page scrolling: a header (name, sco
 - The game needs exactly four players. Removing a player mid-game returns the room to the lobby. In the lobby, the Host screen shows a Remove button (with a confirm) next to any offline player, so an abandoned seat never blocks the start.
 - **Seat codes.** Every player gets a 4-digit seat code, shown under their name on their phone with the room key. Entering the room key and seat code on any phone ("Already playing? Get your seat back") takes the seat back and signs the old phone out. Ten wrong codes in a minute pause further tries. Only the owner's phone ever receives its code.
 - A phone that reopens the join link or types the room key at `/` returns to its saved seat automatically. It forgets the seat only if the server says the seat or room is gone, not on a network error.
-- The Back button on a seated phone asks "Leave the game?" first. Leaving keeps the seat.
+- **Leaving.** The Leave button in the phone header (or the Back button) asks "Leave the game?": **Leave for now** keeps the seat for coming back with the seat code; **Leave for good** (`player:leave`) frees the seat, passes host controls to the next player, and mid-game sends everyone back to the lobby (the game needs four).
 - A room key typed into the trivia join screen that belongs to another game opens that game instead, and the trivia menu has an "All games" button back to the picker.
 - One browser tab keeps one connection across games, so joining or reconnecting to a seat replaces any seat that tab held in another game instead of being refused.
 - Settings are locked once a game starts, except audio and captions.
@@ -110,7 +110,7 @@ The tests can't check whether a line reads naturally with every product it fits.
 Two host voices, `adam` and `george`, take turns. They are cloned by Chatterbox (MIT, runs on the PC's GPU) from reference clips made with Kokoro-82M.
 
 - **Fixed lines** (phase calls, time warnings, verdicts) are in `src/games/deal-or-dud/audio/narrationLines.ts` and recorded to `voice/<line>-<variant>-<voice>.mp3`. The tutorial script is `tutorialScript.ts`; its clips are `tut-*.mp3`, and `narrationDurations.ts` is generated with them.
-- **Live lines** say player and business names ("Ava is in the building!", "Round two! Please welcome Ben, founder of …", "Ben just struck gold!"). Each round opens with the round call, the founder intro, then "Sharks, you each get one peek." The TV asks `/api/deal-or-dud/voice`, which forwards to the narrator service on the same computer (`DEAL_VOICE_URL`, default `http://127.0.0.1:5123`).
+- **Live lines** say player and business names (a lobby greeting such as "Ava is in the building!" or "Make some noise for Ava!", "Round two! Please welcome Ben, founder of …", "Ben just struck gold!"). The lobby has eight greetings (`JOIN_GREETINGS`); each seat gets a different one, starting at a point set by the room key, and the two voices alternate. Each round opens with the round call, the founder intro, then "Sharks, you each get one peek." The TV asks `/api/deal-or-dud/voice`, which forwards to the narrator service on the same computer (`DEAL_VOICE_URL`, default `http://127.0.0.1:5123`).
 - **Rendered ahead** by the server (`voicePrep.ts`, from `onStateChange`): each player's name lines while the lobby fills, and every pitch intro as soon as its product locks during the build. Only the narrator's cache is filled, so a product stays secret until its pitch. This is what keeps a slower computer (a MacBook Air) on time: by round 2 the intros play instantly.
 - **Without the narrator service** (or if a line takes over 4 seconds) the TV plays a fixed fallback line instead ("Our next entrepreneur is in the hot seat!"), so the game never waits on it.
 - **What is said when** is decided in `audio/narrationPlan.ts` (pure, tested in `tests/deal-or-dud/narration.test.ts`) and played by `audio/narrator.ts`, one line at a time. A new phase cuts off the previous line. Stage warnings play at 60 s (on clocks of 2:00 or more), 30 s (55 s or more) and 10 s, and are dropped if they cannot start within 2.5 s.

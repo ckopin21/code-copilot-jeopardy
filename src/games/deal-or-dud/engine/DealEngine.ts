@@ -306,7 +306,15 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
     this.setPlayerConnected(code, playerId, false);
   }
   removePlayer(code: string, hostToken: string, playerId: string): void {
-    const room = this.hostRoom(code, hostToken);
+    this.dropSeat(this.hostRoom(code, hostToken), playerId);
+  }
+  /** A player leaves for good from their phone. Mid-game that sends everyone back to the lobby, like a host removal. */
+  leaveGame(code: string, playerId: string): void {
+    const room = this.room(code);
+    if (!room.state.players.some((player) => player.id === playerId)) return;
+    this.dropSeat(room, playerId);
+  }
+  private dropSeat(room: Room, playerId: string): void {
     room.state.players = room.state.players.filter((player) => player.id !== playerId);
     delete room.playerTokens[playerId];
     if (room.state.vipId === playerId) room.state.vipId = room.state.players[0]?.id ?? null;

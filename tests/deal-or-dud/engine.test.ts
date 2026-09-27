@@ -554,6 +554,28 @@ describe('DealEngine', () => {
     expect(snap().phase).toBe('build');
   });
 
+  it('lets a player leave for good from their phone, passing host controls on', () => {
+    expect(snap().vipId).toBe(ids[0]);
+    engine.leaveGame(code, ids[0]);
+    expect(snap().players.map((player) => player.id)).toEqual(ids.slice(1));
+    expect(snap().vipId).toBe(ids[1]);
+    const fresh = engine.joinPlayer(code, { ...JOIN, roomCode: code, name: 'Eve' });
+    engine.setLook(code, fresh.playerId, { presetId: 'cool-fox' });
+    engine.startGame(code, host);
+    expect(snap().phase).toBe('build');
+  });
+
+  it('sends everyone back to the lobby when a player leaves mid-game', () => {
+    engine.startGame(code, host);
+    buildAll();
+    expect(snap().phase).toBe('stage');
+    engine.leaveGame(code, ids[3]);
+    expect(snap().phase).toBe('lobby');
+    expect(snap().players).toHaveLength(3);
+    // Leaving twice (a retried request) is harmless.
+    expect(() => engine.leaveGame(code, ids[3])).not.toThrow();
+  });
+
   it('slows down seat code guessing', () => {
     const wrong = snap().players.some((player) => player.seatCode === '9999') ? '9998' : '9999';
     for (let i = 0; i < 10; i++) expect(() => engine.joinPlayer(code, { ...JOIN, roomCode: code, name: 'X', seatCode: wrong })).toThrow(/does not match/);

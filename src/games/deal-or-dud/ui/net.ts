@@ -147,6 +147,7 @@ export function usePlayerRoom(urlRoomCode: string) {
   });
   const [error, setError] = useState('');
   const [removed, setRemoved] = useState(false);
+  const [left, setLeft] = useState(false);
 
   const [reconnectError, setReconnectError] = useState('');
   const [reconnectTry, setReconnectTry] = useState(0);
@@ -181,6 +182,7 @@ export function usePlayerRoom(urlRoomCode: string) {
     writePlayerCredentials(result);
     setCredentials(result);
     setRemoved(false);
+    setLeft(false);
     return result;
   }, []);
 
@@ -193,8 +195,14 @@ export function usePlayerRoom(urlRoomCode: string) {
   }, [credentials]);
 
   const leave = useCallback(() => { writePlayerCredentials(null); setCredentials(null); setRoom(null); }, [setRoom]);
+  /** Gives up the seat for good (the server frees it), then shows the join screen. */
+  const leaveForGood = useCallback(async () => {
+    if (!(await send('player:leave'))) return;
+    leave();
+    setLeft(true);
+  }, [send, leave]);
 
-  return { room, credentials, join, send, error, setError, removed, leave, reconnectError, retryReconnect };
+  return { room, credentials, join, send, error, setError, removed, left, leave, leaveForGood, reconnectError, retryReconnect };
 }
 
 /** Which game a room code belongs to, for the shared join-by-code screen. */

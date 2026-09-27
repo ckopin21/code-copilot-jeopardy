@@ -28,13 +28,14 @@ function Clock({ room }: { room: DealSnapshot }) {
   return <span className={`dod-phone-clock ${seconds <= 10 ? 'is-low' : ''}`}>{room.paused ? '⏸ ' : ''}{formatClock(seconds)}</span>;
 }
 
-function Header({ room, me, send }: { room: DealSnapshot; me: DealPlayer; send: Send }) {
+function Header({ room, me, send, onLeave }: { room: DealSnapshot; me: DealPlayer; send: Send; onLeave: () => void }) {
   const role = room.round ? (room.round.presenterId === me.id ? 'Presenter' : 'Shark') : null;
   return <header className="dod-phone-header">
     <Avatar look={me.look} size={40}/>
     <div><b>{me.name}</b><small>{role ? `${role} · ` : ''}{me.score} pts</small>
       {me.seatCode && <small className="dod-seat-code">Room {room.code} · Seat {me.seatCode}</small>}</div>
     {room.vipId === me.id && <VipControls room={room} send={send}/>}
+    <button className="dod-leave-open" onClick={onLeave} aria-label="Leave the game">Leave</button>
     <div className="dod-phone-phase"><small>{PHASE_LABEL[room.phase]}</small><Clock room={room}/></div>
   </header>;
 }
@@ -253,7 +254,7 @@ function VipControls({ room, send }: { room: DealSnapshot; send: Send }) {
 
 // ---------- app ----------
 export function PhoneApp({ urlRoomCode }: { urlRoomCode: string }) {
-  const { room, credentials, join, send, error, setError, removed, leave, reconnectError, retryReconnect } = usePlayerRoom(urlRoomCode);
+  const { room, credentials, join, send, error, setError, removed, left, leave, leaveForGood, reconnectError, retryReconnect } = usePlayerRoom(urlRoomCode);
   const [joinError, setJoinError] = useState('');
   const [changingLook, setChangingLook] = useState(false);
   const [leaving, setLeaving] = useState(false);
@@ -289,7 +290,7 @@ export function PhoneApp({ urlRoomCode }: { urlRoomCode: string }) {
     catch (caught) { setJoinError(caught instanceof Error ? caught.message : 'Could not get your seat back'); }
   };
 
-  if (!credentials) return <JoinScreen initialCode={urlRoomCode} join={doJoin} rejoin={doRejoin} busyError={removed ? 'You were removed from the game.' : joinError}/>;
+  if (!credentials) return <JoinScreen initialCode={urlRoomCode} join={doJoin} rejoin={doRejoin} busyError={removed ? 'You were removed from the game.' : left ? 'You left the game. Join again any time.' : joinError}/>;
   if (!room) return <main className="dod-app dod-phone dod-loading">
     <p>{reconnectError ? `Can't reach your seat yet: ${reconnectError}` : 'Connecting to the studio…'}</p>
     {reconnectError && <button className="dod-primary" onClick={retryReconnect}>Try again</button>}
@@ -325,16 +326,18 @@ export function PhoneApp({ urlRoomCode }: { urlRoomCode: string }) {
   }
 
   return <main className={`dod-app dod-phone ${round?.presenterId === me.id ? 'is-presenter' : ''}`}>
-    <Header room={room} me={me} send={send}/>
+    <Header room={room} me={me} send={send} onLeave={() => setLeaving(true)}/>
     {room.paused && <div className="dod-banner-phone">⏸ Paused{room.pauseReason === 'presenter-offline' ? ' — waiting for the presenter' : ''}</div>}
     <div className="dod-phone-body">{body}</div>
     {error && <div className="dod-toast" role="alert" onClick={() => setError('')}>{error}</div>}
     {leaving && <div className="dod-leave" role="dialog" aria-label="Leave the game?">
       <div>
         <h2>Leave the game?</h2>
-        <p>Your seat stays saved. To come back, open the join link again, or enter room <b>{room.code}</b> with seat code <b>{me.seatCode}</b>.</p>
+        <p><b>Leave for now</b> keeps your seat: come back with the join link, or room <b>{room.code}</b> and seat code <b>{me.seatCode}</b>.</p>
+        <p><b>Leave for good</b> gives your seat to someone else.{room.phase !== 'lobby' && ' The game needs four players, so everyone goes back to the lobby and this game ends.'}</p>
         <button className="dod-primary big" onClick={() => setLeaving(false)}>Stay in the game</button>
         <button className="dod-ghost" onClick={() => { setLeaving(false); navigateInApp(pickerUrl()); }}>Leave for now</button>
+        <button className="dod-ghost is-danger" onClick={() => { setLeaving(false); void leaveForGood(); }}>Leave for good</button>
       </div>
     </div>}
   </main>;

@@ -43,6 +43,7 @@ export const dealServerGame: ServerGame<DealEngine, DealSnapshot> = {
     'player:offer-lock': ({ engine, roomCode, playerId, payload }) => void engine.lockOffer(roomCode, playerId, payload.choice),
     'player:partner': ({ engine, roomCode, playerId, payload }) => void engine.choosePartner(roomCode, playerId, payload.sharkId),
     'player:forecast': ({ engine, roomCode, playerId, payload }) => void engine.submitForecast(roomCode, playerId, payload.value),
-    'player:vip': ({ engine, roomCode, playerId, payload }) => void engine.vipAction(roomCode, playerId, payload.action, payload)
+    'player:vip': ({ engine, roomCode, playerId, payload }) => void engine.vipAction(roomCode, playerId, payload.action, payload),
+    'player:leave': ({ engine, roomCode, playerId }) => void engine.leaveGame(roomCode, playerId)
   }
 };
