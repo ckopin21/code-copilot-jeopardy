@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import type { AudioSettings, DealPlayer, DealSettings, DealSnapshot, Tone } from '../types';
 import { DEFAULT_TIMERS, PLAYER_COUNT, TIMER_LIMITS, estimateMinutes, type TimerSettings } from '../types';
 import { useHostRoom } from './net';
 import { TvStage } from './TvStage';
+import { JoinCard } from './JoinCard';
 import { formatClock } from './labels';
 import { useSoundtrack } from '../audio/useSoundtrack';
 import { useAutoSound } from '../audio/useAutoSound';
@@ -12,15 +13,6 @@ import { toggleFullscreen } from '../../../platform/ui/fullscreen';
 import { navigateInApp, pickerUrl } from '../../../platform/session/resetInstance';
 
 type Send = (event: string, payload?: Record<string, unknown>) => Promise<void>;
-
-function useQr(value: string | undefined): string | null {
-  const [dataUrl, setDataUrl] = useState<string | null>(null);
-  useEffect(() => {
-    if (!value) return;
-    fetch(`/api/qr?value=${encodeURIComponent(value)}`).then((response) => response.json()).then((data: { dataUrl?: string }) => setDataUrl(data.dataUrl ?? null)).catch(() => setDataUrl(null));
-  }, [value]);
-  return dataUrl;
-}
 
 const TONES: { id: Tone; label: string; allows: string }[] = [
   { id: 'clean', label: 'Clean', allows: 'Wholesome products, audiences, jokes, and avatars. Nothing gross, creepy, or awkward. Fine for a strict classroom.' },
@@ -118,13 +110,8 @@ function SayAs({ player, send, enableSound }: { player: DealPlayer; send: Send; 
 }
 
 function JoinPanel({ room, joinUrl, send, enableSound }: { room: DealSnapshot; joinUrl: string; send: Send; enableSound: () => Promise<boolean> }) {
-  const qr = useQr(joinUrl);
   const [confirmId, setConfirmId] = useState<string | null>(null);
-  return <aside className="dod-join">
-    <h2>Join on your phone</h2>
-    {qr ? <img src={qr} alt="QR code to join"/> : <div className="dod-qr-placeholder"/>}
-    <p className="dod-room-key">Room key <b>{room.code}</b></p>
-    <p className="dod-url">{joinUrl.replace(/^https?:\/\//, '')}</p>
+  return <JoinCard room={room} joinUrl={joinUrl}>
     <ul>{room.players.map((player) => <li key={player.id} className={player.lookSet ? 'ready' : ''}>
       {player.name}{player.lookSet ? ' ✓' : ' (choosing avatar…)'}{player.connected ? '' : ' · offline'}
       <SayAs player={player} send={send} enableSound={enableSound}/>
@@ -133,7 +120,7 @@ function JoinPanel({ room, joinUrl, send, enableSound }: { room: DealSnapshot; j
         ? <><button className="dod-remove is-confirm" onClick={() => { setConfirmId(null); void send('host:remove-player', { playerId: player.id }); }}>Remove {player.name}</button><button className="dod-remove" onClick={() => setConfirmId(null)}>Keep</button></>
         : <button className="dod-remove" onClick={() => setConfirmId(player.id)}>Remove</button>)}
     </li>)}</ul>
-  </aside>;
+  </JoinCard>;
 }
 
 function HostBar({ room, send, soundOn, enableSound, openSettings }: { room: DealSnapshot; send: Send; soundOn: boolean; enableSound: () => void; openSettings: () => void }) {
