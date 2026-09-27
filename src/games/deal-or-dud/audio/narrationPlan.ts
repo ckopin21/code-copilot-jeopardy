@@ -1,7 +1,7 @@
 // Decides what the hosts say when the game changes. Pure functions of two snapshots, so tests can cover them;
 // narrator.ts does the playing.
 import type { DealSnapshot, Phase, RoundState } from '../types';
-import { LIVE_LINES, PER_PLAYER_LINES, speakable, type FixedLineId, type LiveLine } from './narrationLines';
+import { LIVE_LINES, PER_PLAYER_LINES, raisedLine, speakable, type FixedLineId, type LiveLine } from './narrationLines';
 
 export type Utterance = { fixed: FixedLineId } | { live: LiveLine };
 
@@ -77,7 +77,6 @@ function breakLine(room: DealSnapshot): Utterance {
 
 function phasePlan(before: DealSnapshot, room: DealSnapshot): NarrationPlan | null {
   const round = room.round;
-  const presenterId = round?.presenterId;
   switch (room.phase) {
     case 'build': {
       // Everyone builds at once before round 1.
@@ -87,24 +86,15 @@ function phasePlan(before: DealSnapshot, room: DealSnapshot): NarrationPlan | nu
       return { items, interrupt: true };
     }
     case 'stage': {
-      // Each round opens on stage: "Round two! Please welcome Ben, founder of… Sharks, you each get one peek."
+      // Each round opens on stage: "Round two! Please welcome Ben, founder of… The floor is yours!"
       const opener: FixedLineId = ROUND_LINES[Math.min(Math.max(room.roundIndex, 0), ROUND_LINES.length - 1)];
-      return { items: [{ fixed: opener }, say(round ? pitchLine(room, round) : null, 'pitch'), { fixed: 'peeks' }], interrupt: true, delayMs: 2_200 };
+      return { items: [{ fixed: opener }, say(round ? pitchLine(room, round) : null, 'pitch'), { fixed: 'pitch-go' }], interrupt: true, delayMs: 2_200 };
     }
     case 'offers': return { items: [{ fixed: 'bids' }], interrupt: true };
-    case 'offers-reveal': {
-      const anyOffer = Object.values(round?.offers ?? {}).some((offer) => (offer ?? 0) > 0);
-      return { items: [{ fixed: anyOffer ? 'offers-reveal' : 'no-offers' }], interrupt: true };
-    }
-    case 'partner': return { items: [named(room, presenterId, LIVE_LINES.pickPartner, 'tie')], interrupt: true };
     case 'reveal': {
-      const result = round?.result;
-      if (!result) return null;
-      const good = result.verdict === 'good';
-      const outcome: Utterance = result.deal
-        ? named(room, result.deal.sharkId, good ? LIVE_LINES.dealGood : LIVE_LINES.dealBad, good ? 'deal-good' : 'deal-bad')
-        : { fixed: good ? 'missed-good' : 'dodged-bad' };
-      return { items: [{ fixed: good ? 'verdict-good' : 'verdict-bad' }, outcome], interrupt: true, delayMs: 1_500 };
+      // The total comes later, when the last bid has flipped (revealTotalPlan).
+      const items: Utterance[] = before.phase === 'stage' ? [{ fixed: 'all-out' }] : [{ fixed: 'offers-reveal' }];
+      return { items, interrupt: true, delayMs: before.phase === 'stage' ? 0 : 300 };
     }
     case 'break': return { items: [breakLine(room)], interrupt: true, delayMs: 600 };
     case 'final': return { items: [{ fixed: 'final' }], interrupt: true };
@@ -117,10 +107,43 @@ function phasePlan(before: DealSnapshot, room: DealSnapshot): NarrationPlan | nu
   }
 }
 
+/** On stage: "Questions open!" when pitch time ends, and "Ben is out!" for each shark who bails. */
+function stagePlan(before: DealSnapshot, room: DealSnapshot): NarrationPlan | null {
+  const round = room.round;
+  const old = before.round;
+  if (!round || !old || old.index !== round.index) return null;
+  const items: Utterance[] = [];
+  if (round.questionsOpen && !old.questionsOpen) items.push({ fixed: 'questions-open' });
+  for (const item of round.out) {
+    if (!old.out.some((earlier) => earlier.sharkId === item.sharkId)) items.push(named(room, item.sharkId, LIVE_LINES.out, 'out'));
+  }
+  return items.length ? { items, interrupt: round.questionsOpen && !old.questionsOpen, staleMs: 5_000 } : null;
+}
+
+/**
+ * The end of the reveal: "Nine hundred thousand dollars raised! Ava is in!" (or "Not a single offer!"). Spoken when
+ * the last bid flips, so useNarration calls it on a timer rather than on a snapshot change.
+ */
+export function revealTotalPlan(room: DealSnapshot): NarrationPlan | null {
+  const result = room.round?.result;
+  if (room.phase !== 'reveal' || !result) return null;
+  const raised = raisedLine(result.total);
+  if (!raised) return { items: [{ fixed: 'no-offers' }], interrupt: true, staleMs: 3_000 };
+  const items: Utterance[] = [{ fixed: raised }];
+  const [first, second] = result.dealSharkIds;
+  if (result.dealSharkIds.length === 1) items.push(named(room, first, LIVE_LINES.dealIn, 'deal-in'));
+  else if (result.dealSharkIds.length === 2) {
+    const names = [spokenName(room, first), spokenName(room, second)];
+    items.push(names[0] && names[1] ? { live: LIVE_LINES.bothIn(names[0], names[1]) } : { fixed: 'both-in' });
+  } else items.push({ fixed: 'all-in' });
+  return { items, interrupt: true, staleMs: 3_000 };
+}
+
 /** What to say for a snapshot change, or null for silence. */
 export function planNarration(before: DealSnapshot, room: DealSnapshot): NarrationPlan | null {
   if (before.code !== room.code || room.paused) return null;
   if (before.phase !== room.phase) return phasePlan(before, room);
+  if (room.phase === 'stage') return stagePlan(before, room);
   if (room.phase === 'lobby') {
     // A player appears in the lobby once their avatar is picked.
     const arrived = room.players.filter((player) => player.lookSet && !before.players.some((old) => old.id === player.id && old.lookSet));

@@ -4,23 +4,24 @@ import type { PlayerJoinInput } from '../../../platform/players/playerJoin';
 import { ROOM_CODE_ALPHABET, randomToken, secureEqual } from '../../../platform/rooms/tokens';
 import { mergeStoredRooms, serializeStoredRooms } from '../../../platform/rooms/roomStorageRecovery';
 import {
-  CATEGORY_IDS, DEFAULT_SETTINGS, DEFAULT_TIMERS, GAME_ID, GAME_TONE, STAGE_PRESETS, OFFER_CHOICES, PLAYER_COUNT, ROUND_COUNT, RULE_TIMINGS, TIMER_LIMITS,
-  toneAllows,
-  type AudioSettings, type BuilderColumn, type CategoryId, type ClockState, type DealPlayer, type DealSettings, type DealSnapshot,
-  type OfferChoice, type Phase, type RoundState, type TimerSettings
+  DEFAULT_SETTINGS, DEFAULT_TIMERS, GAME_ID, GAME_TONE, STAGE_PRESETS, OFFER_CHOICES, PLAYER_COUNT, REACTIONS, REACTION_GAP_MS,
+  ROUND_COUNT, RULE_TIMINGS, TIMER_LIMITS, pitchSeconds, toneAllows,
+  type AudioSettings, type BuilderColumn, type ClockState, type DealPlayer, type DealSettings, type DealSnapshot,
+  type OfferChoice, type Phase, type ReactionEmoji, type RoundState, type TimerSettings
 } from '../types';
 import {
-  buildHeadline, businessNames, dealHand, dealScorecard, emptyBuilder, laterLine, modifierById, modifierFits,
-  pick, pitchCueIds, productById, tonePool, type Rng
+  audienceById, buildHeadline, businessNames, dealHand, emptyBuilder, modifierById, modifierFits, pick, productById, tonePool, type Rng
 } from '../content/dealer';
 import { AVATAR_PRESETS, FORECAST_CARDS } from '../content/cues';
-import { largestOffers, scoreRound, type Deal } from './scoring';
+import { scoreRound } from './scoring';
 
 const ROOM_TTL_MS = 12 * 60 * 60 * 1000;
 const STORAGE_KEYS = { primary: 'deal-or-dud-rooms', backup: 'deal-or-dud-rooms-backup', recent: 'deal-or-dud-recent' };
 const MAX_PHOTO_CHARS = 150_000;
-const LIVE_PHASES: readonly Phase[] = ['build', 'stage', 'offers', 'offers-reveal', 'partner'];
+const LIVE_PHASES: readonly Phase[] = ['build', 'stage', 'offers'];
 const COLUMNS: readonly BuilderColumn[] = ['products', 'modifiers', 'audiences'];
+/** Reactions kept on the snapshot; older ones have long floated off the TV. */
+const MAX_REACTIONS = 12;
 
 type Room = {
   state: DealSnapshot;
@@ -31,13 +32,11 @@ type Room = {
   usedForecastIds: string[];
   usedProductIds: string[];
   usedHeadlines: string[];
-  /** Scorecard lines already used this game. */
-  usedLineIds: string[];
   /** Recent wrong seat codes, to slow down guessing. Not saved meaningfully; resets are harmless. */
   seatAttempts?: number[];
 };
 
-type Recent = { lines: string[]; headlines: string[] };
+type Recent = { headlines: string[] };
 
 export interface DealEngineOptions {
   isRoomCodeTaken?: (code: string) => boolean;
@@ -63,7 +62,7 @@ export function clockRemaining(clock: ClockState | null, now: number): number {
 
 export class DealEngine implements RoomEngine<DealSnapshot> {
   private rooms = new Map<string, Room>();
-  private recent: Recent = { lines: [], headlines: [] };
+  private recent: Recent = { headlines: [] };
   private readonly rng: Rng;
   private readonly now: () => number;
   private readonly isRoomCodeTaken: (code: string) => boolean;
@@ -93,20 +92,21 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
       // A server restart mid-round resumes paused so nobody loses time.
       room.state.players.forEach((player) => { player.connected = false; player.seatCode ??= this.newSeatCode(room); });
       room.state.hostConnected = false;
-      room.usedLineIds ??= [];
       migrateSettings(room.state.settings);
-      // Saved mid-game by an older version (before the shared build, or with the fact-card dossier and separate pitch
-      // and questions): that game can't continue, so the room goes back to its lobby with its players.
+      // Saved mid-game by an older version (before the shared build, or with the scorecard, peeks and partner phase):
+      // that game can't continue, so the room goes back to its lobby with its players. A finished old game too, since
+      // its results have no bids to show.
       const legacy = (room.state as Partial<DealSnapshot>).upcoming === undefined
-        || [room.state.round, ...(room.state.upcoming ?? [])].some((round) => round && !Array.isArray((round as Partial<RoundState>).scorecard));
+        || [room.state.round, ...(room.state.upcoming ?? [])].some((round) => round && !Array.isArray((round as Partial<RoundState>).out))
+        || room.state.history.some((result) => typeof result.total !== 'number');
       room.state.upcoming ??= [];
-      if (legacy && !['lobby', 'gameover'].includes(room.state.phase)) this.resetToLobby(room, false);
+      if (legacy && room.state.phase !== 'lobby') this.resetToLobby(room, false);
       if (LIVE_PHASES.includes(room.state.phase) && !room.state.paused) this.applyPause(room, 'host');
       this.rooms.set(room.state.code, room);
     }
     try {
       const recent = JSON.parse(this.storage.getItem(STORAGE_KEYS.recent) ?? 'null') as Partial<Recent> | null;
-      if (recent && Array.isArray(recent.headlines)) this.recent = { lines: Array.isArray(recent.lines) ? recent.lines : [], headlines: recent.headlines };
+      if (recent && Array.isArray(recent.headlines)) this.recent = { headlines: recent.headlines };
     } catch { /* recent history is optional */ }
   }
 
@@ -158,11 +158,6 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
   private requirePhase(room: Room, ...phases: Phase[]): void {
     if (!phases.includes(room.state.phase)) throw new Error('That is not available right now');
   }
-  private requirePresenter(room: Room, playerId: string): RoundState {
-    const round = this.round(room);
-    if (round.presenterId !== playerId) throw new Error('Only the presenter can do that');
-    return round;
-  }
   private requireShark(room: Room, playerId: string): RoundState {
     const round = this.round(room);
     if (!round.sharkIds.includes(playerId)) throw new Error('Only sharks can do that');
@@ -205,7 +200,7 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
       hostToken: randomToken(),
       presentationToken: randomToken(),
       playerTokens: {},
-      usedForecastIds: [], usedProductIds: [], usedHeadlines: [], usedLineIds: [],
+      usedForecastIds: [], usedProductIds: [], usedHeadlines: [],
       state: {
         game: GAME_ID, code, createdAt: now, expiresAt: now + ROOM_TTL_MS, revision: 1, serverNow: now,
         phase: 'lobby', paused: false, pausedAt: null, pauseReason: null,
@@ -397,15 +392,14 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
         return false;
       case 'stage':
         if (expired) { this.openOffers(room); return true; }
+        // Pitch time is the start of the stage clock, so a pause holds it too.
+        if (round && !round.questionsOpen && state.clock && state.clock.totalMs - clockRemaining(state.clock, now) >= pitchSeconds(state.clock.totalMs / 1000) * 1000) {
+          round.questionsOpen = true;
+          return true;
+        }
         return false;
       case 'offers':
         if (expired) { this.closeOffers(room); return true; }
-        return false;
-      case 'offers-reveal':
-        if (expired) { this.settleOffers(room); return true; }
-        return false;
-      case 'partner':
-        if (expired && round) { this.makeDeal(room, pick(round.tiedSharkIds, this.rng)); return true; }
         return false;
       case 'reveal':
         if (expired) { this.startBreak(room); return true; }
@@ -435,7 +429,7 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
     state.round = null; state.upcoming = []; state.roundIndex = -1; state.clock = null;
     state.forecast = null; state.tutorialReturn = null;
     if (!keepScores) { state.history = []; state.winnerIds = []; state.players.forEach((player) => { player.score = 0; }); }
-    room.usedForecastIds = []; room.usedProductIds = []; room.usedHeadlines = []; room.usedLineIds = [];
+    room.usedForecastIds = []; room.usedProductIds = []; room.usedHeadlines = [];
   }
 
   updateSettings(code: string, hostToken: string, updates: Partial<DealSettings> & { timerSteps?: Partial<TimerSettings> }): DealSnapshot {
@@ -553,15 +547,12 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
       nameOptions: [],
       premise: null,
       lockedAt: null,
-      verdict: null,
-      explanation: null,
-      scorecard: [],
-      peeks: [],
+      questionsOpen: false,
+      reactions: [],
+      out: [],
       offers: {},
       lockedOffers: [],
       readyToBid: [],
-      tiedSharkIds: [],
-      pitchCueIds: pitchCueIds(state.settings.tone, this.rng),
       result: null
     };
   }
@@ -572,7 +563,7 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
     const held = others.flatMap((round) => [...round.builder.hands[column], round.builder[key] ?? '']).filter(Boolean);
     return column === 'products' ? [...held, ...room.usedProductIds] : held;
   }
-  /** Brings the next built product on stage: the pitch and questions start at once, on one clock. */
+  /** Brings the next built product on stage. One clock: pitch time first, then questions. */
   private startRound(room: Room, index: number): void {
     const state = room.state;
     const at = state.upcoming.findIndex((item) => item.index === index);
@@ -690,8 +681,6 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
   }
 
   private lockPremise(room: Room, round: RoundState, automatic: boolean): void {
-    const state = room.state;
-    const tone = state.settings.tone;
     const picks = round.builder;
     this.fillPicks(room, round);
     let headline = buildHeadline(picks);
@@ -705,51 +694,80 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
     }
     const product = productById(picks.product)!;
     if (!round.nameOptions.length) this.refreshNames(room, round);
-    round.premise = { headline, mainProductId: product.id, businessName: round.nameOptions[0] ?? product.roots[0], form: product.form };
-    // The verdict is independent of the cards: a fair coin, with no per-game quota.
-    const verdict = this.rng() < 0.5 ? 'good' : 'bad';
-    const scorecard = dealScorecard(product, verdict, tone, this.rng, [...room.usedLineIds, ...this.recent.lines]);
-    round.verdict = verdict;
-    round.explanation = scorecard.explanation;
-    round.scorecard = scorecard.rows;
-    const lineIds = scorecard.rows.map((row) => row.lineId);
+    const emojis = [product.emoji, modifierById(picks.modifier)?.emoji, audienceById(picks.audience)?.emoji].filter((item): item is string => Boolean(item));
+    round.premise = { headline, mainProductId: product.id, businessName: round.nameOptions[0] ?? product.roots[0], form: product.form, emojis };
     room.usedHeadlines.push(headline);
     room.usedProductIds.push(product.id);
-    room.usedLineIds.push(...lineIds);
-    this.recent.lines = [...lineIds, ...this.recent.lines.filter((id) => !lineIds.includes(id))].slice(0, 40);
     this.recent.headlines = [headline, ...this.recent.headlines].slice(0, 40);
     round.lockedAt = this.now();
   }
 
-  /** A shark's one secret look at one check. Everyone learns who looked at what; only that shark sees the answer. */
-  peek(code: string, playerId: string, category: unknown): DealSnapshot {
-    const room = this.room(code);
+  /** The sharks' stage buttons only work once questions open: during pitch time the presenter has the floor. */
+  private questionsRound(room: Room, playerId: string): RoundState {
     this.requirePhase(room, 'stage');
     this.requireNotPaused(room);
     const round = this.requireShark(room, playerId);
-    if (!CATEGORY_IDS.includes(category as CategoryId)) throw new Error('Unknown check');
-    if (round.peeks.some((item) => item.sharkId === playerId)) throw new Error('You already used your peek this round');
-    round.peeks.push({ sharkId: playerId, category: category as CategoryId });
+    if (!round.questionsOpen) throw new Error('Pitch time! Your buttons unlock when questions open.');
+    return round;
+  }
+  private isOut(round: RoundState, sharkId: string): boolean {
+    return round.out.some((item) => item.sharkId === sharkId);
+  }
+  private sharksIn(round: RoundState): string[] {
+    return round.sharkIds.filter((id) => !this.isOut(round, id));
+  }
+
+  /** 😂 🔥 🤔 💀 float up on the TV. They score nothing; a shark tapping too fast just gets dropped. */
+  react(code: string, playerId: string, emoji: unknown): DealSnapshot {
+    const room = this.room(code);
+    const round = this.questionsRound(room, playerId);
+    if (!REACTIONS.includes(emoji as ReactionEmoji)) throw new Error('Unknown reaction');
+    const now = this.now();
+    const last = [...round.reactions].reverse().find((item) => item.sharkId === playerId);
+    if (last && now - last.at < REACTION_GAP_MS) return this.snapshot(code);
+    const id = (round.reactions[round.reactions.length - 1]?.id ?? 0) + 1;
+    round.reactions = [...round.reactions, { id, sharkId: playerId, emoji: emoji as ReactionEmoji, at: now }].slice(-MAX_REACTIONS);
     return this.commit(room);
   }
 
-  /** A shark says they have heard enough. Once all three have, the stage ends and bidding opens. Tapping again takes it back. */
+  /** "I'm out!": the shark's bid locks at $0. When all three are out, there is nothing to bid on, so the reveal comes next. */
+  goOut(code: string, playerId: string): DealSnapshot {
+    const room = this.room(code);
+    const round = this.questionsRound(room, playerId);
+    if (this.isOut(round, playerId)) return this.snapshot(code);
+    round.out.push({ sharkId: playerId, at: this.now() });
+    round.readyToBid = round.readyToBid.filter((id) => id !== playerId);
+    const still = this.sharksIn(round);
+    if (!still.length) this.allOut(room);
+    else if (still.every((id) => round.readyToBid.includes(id))) this.openOffers(room);
+    return this.commit(room);
+  }
+
+  /** A shark says they have heard enough. Once every shark still in has, the stage ends and bidding opens. Tapping again takes it back. */
   toggleReadyToBid(code: string, playerId: string): DealSnapshot {
     const room = this.room(code);
-    this.requirePhase(room, 'stage');
-    this.requireNotPaused(room);
-    const round = this.requireShark(room, playerId);
+    const round = this.questionsRound(room, playerId);
+    if (this.isOut(round, playerId)) throw new Error('You are out this round');
     round.readyToBid = round.readyToBid.includes(playerId) ? round.readyToBid.filter((id) => id !== playerId) : [...round.readyToBid, playerId];
-    if (round.sharkIds.every((id) => round.readyToBid.includes(id))) this.openOffers(room);
+    if (this.sharksIn(round).every((id) => round.readyToBid.includes(id))) this.openOffers(room);
     return this.commit(room);
   }
   // Offers
   private openOffers(room: Room): void {
     const round = this.round(room);
+    // Out sharks are already locked at $0.
+    const out = round.sharkIds.filter((id) => this.isOut(round, id));
+    if (out.length === round.sharkIds.length) { this.allOut(room); return; }
     room.state.phase = 'offers';
-    round.offers = Object.fromEntries(round.sharkIds.map((id) => [id, null]));
-    round.lockedOffers = [];
+    round.offers = Object.fromEntries(round.sharkIds.map((id) => [id, out.includes(id) ? 0 : null]));
+    round.lockedOffers = out;
     this.startClock(room, room.state.settings.timers.offers);
+  }
+  private allOut(room: Room): void {
+    const round = this.round(room);
+    round.offers = Object.fromEntries(round.sharkIds.map((id) => [id, 0]));
+    round.lockedOffers = [...round.sharkIds];
+    this.finishRound(room);
   }
   chooseOffer(code: string, playerId: string, choice: unknown): DealSnapshot {
     const room = this.room(code);
@@ -785,50 +803,31 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
       if (!round.lockedOffers.includes(id)) round.offers[id] = 0;
     }
     round.lockedOffers = [...round.sharkIds];
-    room.state.phase = 'offers-reveal';
-    this.startClock(room, RULE_TIMINGS.offersReveal);
-  }
-  private settleOffers(room: Room): void {
-    const round = this.round(room);
-    const { amount, sharkIds } = largestOffers(round.offers as Record<string, OfferChoice>);
-    if (amount === null) { this.finishRound(room, null); return; }
-    if (sharkIds.length === 1) { this.finishRound(room, { sharkId: sharkIds[0], amount }); return; }
-    round.tiedSharkIds = sharkIds;
-    room.state.phase = 'partner';
-    this.startClock(room, RULE_TIMINGS.partnerChoice);
-  }
-  choosePartner(code: string, playerId: string, sharkId: unknown): DealSnapshot {
-    const room = this.room(code);
-    this.requirePhase(room, 'partner');
-    this.requireNotPaused(room);
-    const round = this.requirePresenter(room, playerId);
-    if (!round.tiedSharkIds.includes(String(sharkId))) throw new Error('Choose one of the tied sharks');
-    this.makeDeal(room, String(sharkId));
-    return this.commit(room);
-  }
-  private makeDeal(room: Room, sharkId: string): void {
-    const round = this.round(room);
-    const amount = round.offers[sharkId];
-    if (!amount) throw new Error('That shark did not make an offer');
-    this.finishRound(room, { sharkId, amount });
+    this.finishRound(room);
   }
 
-  private finishRound(room: Room, deal: Deal): void {
+  /** Ends pitch time early (a host skip). The stage clock keeps running for the questions. */
+  private openQuestions(room: Room): void {
+    this.round(room).questionsOpen = true;
+  }
+
+  /** Scores the round and starts the reveal: the bids flip lowest to highest, then the total. */
+  private finishRound(room: Room): void {
     const state = room.state;
     const round = this.round(room);
-    const offers = round.offers as Record<string, OfferChoice>;
-    const verdict = round.verdict!;
-    const scores = scoreRound(verdict, round.presenterId, offers, deal);
-    for (const score of scores) this.player(room, score.playerId).score += score.delta;
-    const product = productById(round.premise!.mainProductId)!;
+    const offers = Object.fromEntries(round.sharkIds.map((id) => [id, round.offers[id] ?? 0])) as Record<string, OfferChoice>;
+    const outcome = scoreRound(round.presenterId, round.sharkIds, offers);
+    for (const score of outcome.scores) this.player(room, score.playerId).score += score.delta;
+    round.offers = offers;
     round.result = {
-      verdict,
-      explanation: round.explanation ?? '',
-      scorecard: structuredClone(round.scorecard),
-      laterLine: laterLine(verdict, state.settings.tone, round.premise!.businessName, product.short, this.rng),
-      deal,
+      presenterId: round.presenterId,
+      businessName: round.premise?.businessName ?? '',
       offers,
-      scores
+      revealOrder: outcome.revealOrder,
+      total: outcome.total,
+      dealSharkIds: outcome.dealSharkIds,
+      readRoom: outcome.readRoom,
+      scores: outcome.scores
     };
     state.history.push(structuredClone(round.result));
     state.phase = 'reveal';
@@ -924,13 +923,19 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
     this.applyResume(room);
     return this.commit(room);
   }
-  /** Host skip: the tutorial, the build (locks every product as it is), the stage, and the between-rounds waits. */
+  /**
+   * Host skip: the tutorial, the build (locks every product as it is), the stage (pitch time first opens questions,
+   * then a second skip opens the bids), and the between-rounds waits.
+   */
   private continueRoom(room: Room): DealSnapshot {
     if (room.state.paused) this.applyResume(room);
     switch (room.state.phase) {
       case 'tutorial': this.finishTutorial(room); break;
       case 'build': this.finishBuild(room); break;
-      case 'stage': this.openOffers(room); break;
+      case 'stage':
+        if (this.round(room).questionsOpen) this.openOffers(room);
+        else this.openQuestions(room);
+        break;
       case 'reveal': this.startBreak(room); break;
       case 'break': this.nextRoundOrFinal(room); break;
       case 'final': this.afterFinal(room); break;

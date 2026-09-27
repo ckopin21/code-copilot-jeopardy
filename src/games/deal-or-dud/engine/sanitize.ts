@@ -2,15 +2,13 @@ import type { RoomRole } from '../../../platform/rooms/types';
 import type { DealSnapshot, Phase } from '../types';
 import { emptyBuilder } from '../content/dealer';
 
-const OFFERS_PUBLIC: readonly Phase[] = ['offers-reveal', 'partner', 'reveal'];
-const PREMISE_PUBLIC: readonly Phase[] = ['stage', 'offers', 'offers-reveal', 'partner', 'reveal', 'break'];
-const SCORECARD_PUBLIC: readonly Phase[] = ['reveal', 'break'];
+const OFFERS_PUBLIC: readonly Phase[] = ['reveal', 'break'];
+const PREMISE_PUBLIC: readonly Phase[] = ['stage', 'offers', 'reveal', 'break'];
 
 /**
- * The privacy boundary. Before the reveal, only the presenter's phone gets the verdict and the full scorecard.
- * A shark's phone gets just the one row it peeked at; everyone sees who peeked at which check, never the answer.
- * The TV (host and presentation) gets no rows at all, other sharks' bids stay hidden until everyone locks, and a
- * seat code only ever goes to its own phone.
+ * The privacy boundary. Bids stay secret until the reveal (a phone sees only its own; who has locked and who is out
+ * are public), a product stays on its builder's phone until it goes on stage, and a seat code only ever goes to its
+ * own phone.
  */
 export function sanitizeDealSnapshot(snapshot: DealSnapshot, role: RoomRole, playerId?: string): DealSnapshot {
   const copy: DealSnapshot = structuredClone(snapshot);
@@ -20,38 +18,31 @@ export function sanitizeDealSnapshot(snapshot: DealSnapshot, role: RoomRole, pla
   const round = copy.round;
   if (round) {
     const presenter = role === 'player' && playerId === round.presenterId;
-    const revealed = SCORECARD_PUBLIC.includes(copy.phase);
-    if (!presenter && !revealed) {
-      round.verdict = null;
-      round.explanation = null;
-      const peeked = round.peeks.filter((item) => role === 'player' && item.sharkId === playerId).map((item) => item.category);
-      round.scorecard = round.scorecard.filter((row) => peeked.includes(row.category));
-    }
     if (!presenter) {
       round.builder = emptyBuilder();
       if (!PREMISE_PUBLIC.includes(copy.phase)) {
         round.nameOptions = [];
         round.premise = null;
       }
-      round.pitchCueIds = [];
     }
     if (!OFFERS_PUBLIC.includes(copy.phase)) {
+      const out = new Set(round.out.map((item) => item.sharkId));
       for (const id of Object.keys(round.offers)) {
-        if (!(role === 'player' && id === playerId)) round.offers[id] = null;
+        // "I'm out" was said out loud, so its $0 is no secret.
+        if (!(role === 'player' && id === playerId) && !out.has(id)) round.offers[id] = null;
       }
+      round.result = null;
     }
-    if (!revealed) round.result = null;
   }
-  // Built but not yet on stage: a phone sees only its own product, and nobody sees the verdict or scorecard until
-  // that round starts. Everyone else (the TV included) learns only who has locked in.
+  // Built but not yet on stage: a phone sees only its own product. Everyone else (the TV included) learns only who
+  // has locked in.
   copy.upcoming = (copy.upcoming ?? []).map((item) => {
     const own = role === 'player' && item.presenterId === playerId;
     return {
       ...item,
       builder: own ? item.builder : emptyBuilder(),
       nameOptions: own ? item.nameOptions : [],
-      premise: own ? item.premise : null,
-      verdict: null, explanation: null, scorecard: [], peeks: [], pitchCueIds: []
+      premise: own ? item.premise : null
     };
   });
   const forecast = copy.forecast;

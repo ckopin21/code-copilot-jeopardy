@@ -1,26 +1,21 @@
-// Phone controller. The presenter's phone shows their secret verdict and scorecard; a shark's phone is its one peek, talking points and the offer control.
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import type { CategoryId, DealPlayer, DealSnapshot, OfferChoice, Peek, PlayerLook, RoundState, ScoreRow } from '../../types';
-import { OFFER_CHOICES, PLAYER_COUNT } from '../../types';
-import { usePlayerRoom, useClockSeconds } from '../net';
+// Phone controller. The presenter's phone shows their product and the clock; a shark's phone has reactions, "I'm out",
+// "Ready to bid" and then the secret bid.
+import { useEffect, useState, type ReactNode } from 'react';
+import type { DealPlayer, DealSnapshot, OfferChoice, PlayerLook, RoundState } from '../../types';
+import { OFFER_CHOICES, PLAYER_COUNT, REACTIONS } from '../../types';
+import { usePlayerRoom, useClockSeconds, useNow, useServerOffset } from '../net';
 import { Avatar } from '../Avatar';
 import { Emoji } from '../Emoji';
 import { AvatarPicker, recallLook, rememberLook } from './AvatarPicker';
 import { BuildLocked, Builder } from './Builder';
-import { PHASE_LABEL, formatClock, offerLabel, playerById, signed, standings } from '../labels';
-import { PITCH_CUES } from '../../content/cues';
-import { CATEGORIES, CATEGORY_QUESTIONS, categoryInfo, type CategoryInfo } from '../../content/scorecard';
-import { shuffle, tonePool } from '../../content/dealer';
+import { BID_LABELS, PHASE_LABEL, clockElapsed, formatClock, offerLabel, pitchSecondsLeft, playerById, revealSchedule, signed, skipLabel, standings } from '../labels';
+import { ProductCard } from '../ProductCard';
+import { gameAwards, moneyLabel } from '../../engine/scoring';
 import { AudioControls } from '../HostApp';
 import { GAME_ID } from '../../types';
 import { navigateInApp, pickerUrl } from '../../../../platform/session/resetInstance';
 
 type Send = (event: string, payload?: Record<string, unknown>) => Promise<boolean>;
-
-function seededRandom(start: number): () => number {
-  let value = Math.max(1, Math.floor(start) % 2147483647);
-  return () => { value = (value * 16807) % 2147483647; return value / 2147483647; };
-}
 
 function Clock({ room }: { room: DealSnapshot }) {
   const seconds = useClockSeconds(room);
@@ -29,10 +24,16 @@ function Clock({ room }: { room: DealSnapshot }) {
 }
 
 function Header({ room, me, send, onLeave }: { room: DealSnapshot; me: DealPlayer; send: Send; onLeave: () => void }) {
+  const now = useNow(room.phase === 'reveal' ? 250 : 60_000);
+  const offset = useServerOffset(room);
+  // During the reveal the new points wait until the TV shows the total.
+  const result = room.phase === 'reveal' ? room.round?.result : null;
+  const early = Boolean(result && room.clock && clockElapsed(room, now, offset) < revealSchedule(room.clock.totalMs).total);
+  const score = early ? me.score - (result!.scores.find((item) => item.playerId === me.id)?.delta ?? 0) : me.score;
   const role = room.round ? (room.round.presenterId === me.id ? 'Presenter' : 'Shark') : null;
   return <header className="dod-phone-header">
     <Avatar look={me.look} size={40}/>
-    <div><b>{me.name}</b><small>{role ? `${role} · ` : ''}{me.score} pts</small>
+    <div><b>{me.name}</b><small>{role ? `${role} · ` : ''}{score} pts</small>
       {me.seatCode && <small className="dod-seat-code">Room {room.code} · Seat {me.seatCode}</small>}</div>
     {room.vipId === me.id && <VipControls room={room} send={send}/>}
     <button className="dod-leave-open" onClick={onLeave} aria-label="Leave the game">Leave</button>
@@ -101,125 +102,103 @@ function Screen({ children, action }: { children: ReactNode; action?: ReactNode 
   return <section className="dod-screen"><div className="dod-screen-main">{children}</div>{action && <div className="dod-screen-action">{action}</div>}</section>;
 }
 
-// ---------- scorecard ----------
-/** One check as a phone row: icon and question, then ✅/❌ and the line once it's known, plus who peeked. */
-function CheckRow({ room, category, row, peeks }: { room: DealSnapshot; category: CategoryInfo; row?: ScoreRow; peeks: Peek[] }) {
-  const peekers = peeks.filter((item) => item.category === category.id).map((item) => playerById(room, item.sharkId)?.name).filter(Boolean);
-  return <div className={`dod-check-row ${row ? (row.ok ? 'is-ok' : 'is-bad') : ''}`}>
-    <span className="dod-check-icon" aria-hidden="true"><Emoji char={category.icon}/></span>
-    <div>
-      <small>{category.label}{peekers.length > 0 && <em> · 👀 {peekers.join(', ')}</em>}</small>
-      {row && <b>{row.ok ? '✅' : '❌'} {row.text}</b>}
-    </div>
-  </div>;
-}
-
 // ---------- presenter ----------
-function PresenterScorecard({ room, round }: { room: DealSnapshot; round: RoundState }) {
-  const [cue, setCue] = useState(0);
-  const cues = round.pitchCueIds.map((id) => PITCH_CUES.find((item) => item.id === id)).filter(Boolean) as { id: string; text: string }[];
-  return <>
-    <div className={`dod-verdict verdict-${round.verdict}`}><b>{round.verdict === 'good' ? 'GOOD business' : 'BAD business'} <small>secret</small></b><span>{round.explanation}</span></div>
-    <div className="dod-checks">{CATEGORIES.map((category) => <CheckRow key={category.id} room={room} category={category} row={round.scorecard.find((row) => row.category === category.id)} peeks={round.peeks}/>)}</div>
-    <p className="dod-rule">Only you see this. Pitch it, and talk your way around the ❌s. Sharks can peek at one check each.</p>
-    {cues.length > 0 && <button className="dod-idea" onClick={() => setCue((value) => value + 1)}>💡 {cues[cue % cues.length].text} <small>tap for another</small></button>}
-  </>;
-}
-
-function PresenterView({ room, round, send }: { room: DealSnapshot; round: RoundState; send: Send }) {
-  switch (room.phase) {
-    case 'partner': return <Screen><h2>It's a tie! Pick your partner</h2>
-      <p>Both bid {offerLabel(round.offers[round.tiedSharkIds[0]])}.</p>
-      {round.tiedSharkIds.map((id) => { const shark = playerById(room, id)!; return <button key={id} className="dod-primary big" onClick={() => void send('player:partner', { sharkId: id })}><Avatar look={shark.look} size={40}/> {shark.name}</button>; })}
-    </Screen>;
-    default: return <Screen action={room.phase === 'stage' ? <p className="dod-hint">Sharks ready to bid: {round.readyToBid.length}/3</p>
-      : room.phase === 'offers' ? <p className="dod-hint">Sharks are bidding. Keep selling!</p> : undefined}>
-      <PresenterScorecard room={room} round={round}/>
-    </Screen>;
-  }
-}
-
-// ---------- shark ----------
-/** The shark's one line from the scorecard, once it has peeked. */
-function MyPeek({ round, me }: { round: RoundState; me: DealPlayer }) {
-  const peek = round.peeks.find((item) => item.sharkId === me.id);
-  const row = peek && round.scorecard.find((item) => item.category === peek.category);
-  if (!peek || !row) return null;
-  const category = categoryInfo(peek.category);
-  return <div className={`dod-my-peek ${row.ok ? 'is-ok' : 'is-bad'}`} aria-live="polite">
-    <small>🤫 Only you see this · {category.icon} {category.label}</small>
-    <b>{row.ok ? '✅' : '❌'} {row.text}</b>
-  </div>;
-}
-
-function OfferPanel({ round, me, send }: { round: RoundState; me: DealPlayer; send: Send }) {
-  const locked = round.lockedOffers.includes(me.id);
-  const [choice, setChoice] = useState<OfferChoice | null>(null);
-  if (locked) return <Screen><div className="dod-wait"><h2>Locked 🔒</h2><p className="dod-big">{offerLabel(round.offers[me.id])}</p><p>Waiting for the other sharks…</p></div></Screen>;
-  return <Screen action={<button className="dod-primary big" disabled={choice === null} onClick={() => void send('player:offer-lock', { choice })}>{choice === null ? 'Pick a bid' : `Lock in ${offerLabel(choice)} (final)`}</button>}>
-    <h2>Your bid</h2>
-    <MyPeek round={round} me={me}/>
-    <p className="dod-hint">Top bid wins. GOOD: +1 per $100K, +2 bonus. BAD: −1 per $100K. $0 on a BAD one: +1. No bid by the buzzer = $0.</p>
-    <div className="dod-offer-grid">{OFFER_CHOICES.map((option) => <button key={option} className={`${choice === option ? 'is-on' : ''} ${option === 0 ? 'out' : ''}`} aria-pressed={choice === option} onClick={() => setChoice(option)}>{offerLabel(option)}</button>)}</div>
+/** The presenter's phone: their product and a big clock (pitch time first, then the stage clock). */
+function PresenterView({ room, round }: { room: DealSnapshot; round: RoundState }) {
+  const seconds = useClockSeconds(room);
+  const pitch = pitchSecondsLeft(room, seconds);
+  const label = room.phase === 'offers' ? 'Sharks are bidding' : pitch !== null ? 'Pitch time' : 'Questions';
+  const hint = room.phase === 'offers' ? 'Secret bids are coming in. Fingers crossed!'
+    : pitch !== null ? 'You have the floor. Sell it!' : 'Questions open! Answer the sharks.';
+  return <Screen>
+    {round.premise && <ProductCard premise={round.premise}/>}
+    <div className={`dod-big-clock ${pitch !== null ? 'is-pitch' : ''}`}><small>{label}</small><b>{formatClock(pitch ?? seconds)}</b></div>
+    <p className="dod-hint dod-center">{hint}</p>
   </Screen>;
 }
 
-/** On stage: one peek at one check (tap, then tap again to confirm), the answer, and optional things to ask. */
+// ---------- shark ----------
+function OfferPanel({ round, me, send }: { round: RoundState; me: DealPlayer; send: Send }) {
+  const locked = round.lockedOffers.includes(me.id);
+  const out = round.out.some((item) => item.sharkId === me.id);
+  const [choice, setChoice] = useState<OfferChoice | null>(null);
+  if (out) return <Screen><div className="dod-wait"><h2>You're out 🚪</h2><p className="dod-big">$0</p><p>Your bid is locked. Watch the others sweat.</p></div></Screen>;
+  if (locked) {
+    const offer = round.offers[me.id];
+    return <Screen><div className="dod-wait"><h2>Locked 🔒</h2><p className="dod-big">{offerLabel(offer)}</p>{offer != null && <p><Emoji char={BID_LABELS[offer].emoji}/> {BID_LABELS[offer].text}</p>}<p>Waiting for the other sharks…</p></div></Screen>;
+  }
+  return <Screen action={<button className="dod-primary big" disabled={choice === null} onClick={() => void send('player:offer-lock', { choice })}>{choice === null ? 'Pick a bid' : `Lock in ${offerLabel(choice)}`}</button>}>
+    <h2>Your secret bid</h2>
+    <p className="dod-hint">The presenter scores 1 per $100K raised. You score by bidding close to the other two sharks. No bid by the buzzer = $0.</p>
+    <div className="dod-offer-grid">{OFFER_CHOICES.map((option) => <button key={option} className={`${choice === option ? 'is-on' : ''} ${option === 0 ? 'out' : ''}`} aria-pressed={choice === option} onClick={() => setChoice(option)}>
+      <span>{offerLabel(option)}</span><small><Emoji char={BID_LABELS[option].emoji}/> {BID_LABELS[option].text}</small>
+    </button>)}</div>
+  </Screen>;
+}
+
+/**
+ * On stage. During pitch time a shark just listens (no buttons: the presenter has the floor). Then: reactions for the
+ * TV, "I'm out!" (tap twice), and "Ready to bid".
+ */
 function SharkStage({ room, round, me, send }: { room: DealSnapshot; round: RoundState; me: DealPlayer; send: Send }) {
-  const [pending, setPending] = useState<CategoryId | null>(null);
-  const [seed, setSeed] = useState(1);
-  const mine = round.peeks.find((item) => item.sharkId === me.id);
-  const ideas = useMemo(() => shuffle(tonePool(CATEGORY_QUESTIONS, room.settings.tone), seededRandom(seed * 9301 + round.index * 49297)).slice(0, 2), [seed, round.index, room.settings.tone]);
+  const seconds = useClockSeconds(room);
+  const pitch = pitchSecondsLeft(room, seconds);
+  const [confirmOut, setConfirmOut] = useState(false);
+  const out = round.out.some((item) => item.sharkId === me.id);
+  const stillIn = round.sharkIds.filter((id) => !round.out.some((item) => item.sharkId === id));
   const ready = round.readyToBid.includes(me.id);
-  const tap = (category: CategoryId) => {
-    if (mine) return;
-    if (pending !== category) { setPending(category); return; }
-    setPending(null);
-    void send('player:peek', { category });
-  };
-  return <Screen action={<button className={`big ${ready ? 'dod-ghost' : 'dod-primary'}`} onClick={() => void send('player:ready-to-bid')}>{ready ? `Ready ✓ (${round.readyToBid.length}/3) · tap to undo` : `I'm ready to bid (${round.readyToBid.length}/3)`}</button>}>
-    {round.premise && <div className="dod-premise"><small>{round.premise.businessName}</small><b>{round.premise.headline}</b></div>}
-    <h3>{mine ? 'Your peek' : 'Your one peek: pick a check'}</h3>
-    <div className="dod-peek-grid" role="group" aria-label="Peek at one check">
-      {CATEGORIES.map((category) => {
-        const peekers = round.peeks.filter((item) => item.category === category.id).map((item) => item.sharkId === me.id ? 'you' : playerById(room, item.sharkId)?.name);
-        const own = mine?.category === category.id;
-        return <button key={category.id} className={`dod-peek ${pending === category.id ? 'is-pending' : ''} ${own ? 'is-mine' : ''}`} disabled={Boolean(mine) && !own} aria-pressed={own} onClick={() => tap(category.id)}>
-          <span aria-hidden="true"><Emoji char={category.icon}/></span><b>{category.label}</b>
-          <small>{pending === category.id ? 'Tap again to peek 👀' : peekers.length ? `👀 ${peekers.join(', ')}` : mine ? '' : 'Tap to peek'}</small>
-        </button>;
-      })}
+  const readyCount = `${round.readyToBid.length}/${stillIn.length}`;
+  useEffect(() => { if (!confirmOut) return; const id = window.setTimeout(() => setConfirmOut(false), 4000); return () => window.clearTimeout(id); }, [confirmOut]);
+  if (pitch !== null) return <Screen>
+    {round.premise && <ProductCard premise={round.premise} className="is-small"/>}
+    <div className="dod-listen"><span aria-hidden="true"><Emoji char="🎤"/></span><h2>Pitch time. Just listen!</h2><p>Questions open in <b>{formatClock(pitch)}</b></p></div>
+  </Screen>;
+  return <Screen action={out ? undefined : <button className={`big ${ready ? 'dod-ghost' : 'dod-primary'}`} onClick={() => void send('player:ready-to-bid')}>{ready ? `Ready ✓ (${readyCount}) · tap to undo` : `Ready to bid (${readyCount})`}</button>}>
+    {round.premise && <ProductCard premise={round.premise} className="is-small"/>}
+    <h3>{out ? "You're out. React all you like!" : 'Questions open! Ask away.'}</h3>
+    <div className="dod-reactions" role="group" aria-label="React on the TV">
+      {REACTIONS.map((emoji) => <button key={emoji} aria-label={`React ${emoji}`} onClick={() => void send('player:react', { emoji })}><Emoji char={emoji}/></button>)}
     </div>
-    <MyPeek round={round} me={me}/>
-    <div className="dod-ideas"><small>Things to ask</small>{ideas.map((idea) => <span key={idea.id}><Emoji char={categoryInfo(idea.category).icon}/> {idea.text}</span>)}<button className="dod-link" onClick={() => setSeed((value) => value + 1)}>🔀 Other ideas</button></div>
+    {out ? <p className="dod-out-note">🚪 Your bid is locked at $0.</p>
+      : <button className={`dod-out-button ${confirmOut ? 'is-confirm' : ''}`} onClick={() => { if (!confirmOut) { setConfirmOut(true); return; } setConfirmOut(false); void send('player:out'); }}>
+        {confirmOut ? 'Tap again: I\'m out! ($0)' : 'I\'m out!'}
+      </button>}
   </Screen>;
 }
 
 function SharkView({ room, round, me, send }: { room: DealSnapshot; round: RoundState; me: DealPlayer; send: Send }) {
-  const presenter = playerById(room, round.presenterId);
-  switch (room.phase) {
-    case 'offers': return <OfferPanel round={round} me={me} send={send}/>;
-    case 'offers-reveal': case 'partner': return <Screen><div className="dod-wait"><h2>Bids</h2><ul className="dod-offer-list">{round.sharkIds.map((id) => <li key={id}>{playerById(room, id)?.name}: <b>{offerLabel(round.offers[id])}</b></li>)}</ul>{room.phase === 'partner' && <p>{presenter?.name} is picking a partner…</p>}</div></Screen>;
-    default: return <SharkStage room={room} round={round} me={me} send={send}/>;
-  }
+  return room.phase === 'offers' ? <OfferPanel round={round} me={me} send={send}/> : <SharkStage room={room} round={round} me={me} send={send}/>;
 }
 
 // ---------- results ----------
+/** The phone keeps the total secret until the TV flips the last bid, so nobody's screen spoils the reveal. */
 function RevealView({ room, round, me }: { room: DealSnapshot; round: RoundState; me: DealPlayer }) {
+  const now = useNow(200);
+  const offset = useServerOffset(room);
   const result = round.result;
-  if (!result) return null;
+  if (!result || !room.clock) return null;
+  const shown = clockElapsed(room, now, offset) >= revealSchedule(room.clock.totalMs).total;
   const mine = result.scores.find((score) => score.playerId === me.id);
-  return <section className={`dod-phone-reveal verdict-${result.verdict}`}>
-    <div className="dod-stamp">{result.verdict === 'good' ? 'GOOD' : 'BAD'}</div>
-    <p>{result.explanation}</p>
-    <div className="dod-checks">{CATEGORIES.map((category) => <CheckRow key={category.id} room={room} category={category} row={result.scorecard.find((row) => row.category === category.id)} peeks={round.peeks}/>)}</div>
+  const myBid = result.offers[me.id];
+  if (!shown) return <section className="dod-phone-reveal"><div className="dod-drum" aria-hidden="true"><Emoji char="🥁"/></div><h2>Watch the TV!</h2>{myBid !== undefined && <p>Your bid: <b>{offerLabel(myBid)}</b></p>}</section>;
+  return <section className="dod-phone-reveal">
+    <p className="dod-kicker">{result.total ? 'Raised' : 'No offers'}</p>
+    <p className="dod-big">{moneyLabel(result.total)}</p>
+    {myBid !== undefined && <p>Your bid: <b>{offerLabel(myBid)}</b></p>}
     {mine && <p className="dod-big">{signed(mine.delta)} <small>{mine.reason}</small></p>}
   </section>;
 }
 
+function AwardsList({ room }: { room: DealSnapshot }) {
+  const awards = gameAwards(room.history, room.players);
+  if (!awards.length) return null;
+  return <ul className="dod-awards-phone">{awards.map((award) => <li key={award.id}><Emoji char={award.emoji}/> <b>{award.title}</b> {award.playerIds.map((id) => playerById(room, id)?.name).join(' & ')}</li>)}</ul>;
+}
+
 function StandingsView({ room, me }: { room: DealSnapshot; me: DealPlayer }) {
   return <section className="dod-phone-standings"><h2>{room.phase === 'gameover' ? `${playerById(room, room.winnerIds[0])?.name ?? ''} wins!` : 'Scores'}</h2>
-    <ol>{standings(room).map((player) => <li key={player.id} className={player.id === me.id ? 'is-me' : ''}><Avatar look={player.look} size={32}/>{player.name}<b>{player.score}</b></li>)}</ol></section>;
+    <ol>{standings(room).map((player) => <li key={player.id} className={player.id === me.id ? 'is-me' : ''}><Avatar look={player.look} size={32}/>{player.name}<b>{player.score}</b></li>)}</ol>
+    {room.phase === 'gameover' && <AwardsList room={room}/>}</section>;
 }
 
 function ForecastView({ room, me, send }: { room: DealSnapshot; me: DealPlayer; send: Send }) {
@@ -261,7 +240,7 @@ function VipControls({ room, send }: { room: DealSnapshot; send: Send }) {
       {room.phase === 'lobby' && <button disabled={!allReady} onClick={() => { setOpen(false); void send('player:vip', { action: 'start' }); }}>{allReady ? '▶ Start the game' : `Start when 4 players are in (${room.players.length}/4)`}</button>}
       {room.phase === 'gameover' && <button onClick={() => { setOpen(false); void send('player:vip', { action: 'new-game' }); }}>↻ Play again</button>}
       {!['lobby', 'gameover'].includes(room.phase) && (room.paused ? <button onClick={() => { setOpen(false); void send('player:vip', { action: 'resume' }); }}>▶ Resume</button> : <button onClick={() => { setOpen(false); void send('player:vip', { action: 'pause' }); }}>⏸ Pause</button>)}
-      {skippable && <button onClick={() => { setOpen(false); void send('player:vip', { action: 'continue' }); }}>{room.phase === 'build' ? 'Lock everyone in ▶▶' : room.phase === 'stage' ? 'Skip to bids ▶▶' : 'Skip ▶▶'}</button>}
+      {skippable && <button onClick={() => { setOpen(false); void send('player:vip', { action: 'continue' }); }}>{skipLabel(room)}</button>}
       <AudioControls audio={room.settings.audio} onAudio={(audio) => void send('player:vip', { action: 'audio', audio })}/>
     </div>}
   </div>;
@@ -333,7 +312,7 @@ export function PhoneApp({ urlRoomCode }: { urlRoomCode: string }) {
   } else if (round && ['reveal'].includes(room.phase)) {
     body = <RevealView room={room} round={round} me={me}/>;
   } else if (round && round.presenterId === me.id && room.phase !== 'break') {
-    body = <PresenterView room={room} round={round} send={send}/>;
+    body = <PresenterView room={room} round={round}/>;
   } else if (round && room.phase !== 'break') {
     body = <SharkView room={room} round={round} me={me} send={send}/>;
   } else if (room.phase === 'forecast' || room.phase === 'forecast-result') {

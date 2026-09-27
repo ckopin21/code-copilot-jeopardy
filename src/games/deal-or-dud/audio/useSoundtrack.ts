@@ -2,13 +2,12 @@
 import { useEffect, useRef } from 'react';
 import type { DealSnapshot, Phase } from '../types';
 import { dealAudio, type MusicTrack, type Sting } from './dealAudio';
-import { TUTORIAL_TIMELINE } from '../ui/labels';
-import { tutorialElapsed } from '../ui/TvStage';
+import { TUTORIAL_TIMELINE, clockElapsed, revealSchedule } from '../ui/labels';
 import { useNarration } from './useNarration';
 
 const MUSIC_FOR: Record<Phase, MusicTrack> = {
   lobby: 'lobby', tutorial: 'lobby', build: 'bed', stage: 'bed',
-  offers: 'offers', 'offers-reveal': 'offers', partner: 'offers', reveal: null, break: 'lobby',
+  offers: 'offers', reveal: null, break: 'lobby',
   final: null, forecast: 'offers', 'forecast-result': null, gameover: 'celebrate'
 };
 
@@ -27,12 +26,13 @@ function openingSting(before: DealSnapshot, room: DealSnapshot): { name: Sting; 
   return null;
 }
 
-const TICKING_PHASES: readonly Phase[] = ['build', 'offers', 'partner', 'forecast'];
+const TICKING_PHASES: readonly Phase[] = ['build', 'offers', 'forecast'];
 
 export function useSoundtrack(room: DealSnapshot | null, enabled: boolean, onTutorialDone?: () => void): void {
   const previous = useRef<DealSnapshot | null>(null);
   const narrated = useRef<string>('');
   const ticked = useRef('');
+  const revealCues = useRef(new Set<string>());
   const hold = useRef<Hold | null>(null);
   const holdTimer = useRef(0);
   useNarration(room, enabled);
@@ -70,12 +70,11 @@ export function useSoundtrack(room: DealSnapshot | null, enabled: boolean, onTut
     if (!sameRoom) return;
     const round = room.round;
     if (changed) {
-      if (room.phase === 'reveal' && round?.result) void dealAudio.sting(round.result.verdict === 'good' ? 'good' : 'bad', 1);
-      if (room.phase === 'offers-reveal') void dealAudio.sting('reveal-card', 0.8);
+      if (room.phase === 'reveal') void dealAudio.sting('drumroll', 0.9);
       if (before.phase === 'tutorial') dealAudio.stopNarration();
     }
-    // A shark peeked: a soft card flip. Never loud over speech.
-    if (round && before.round?.index === round.index && room.phase === 'stage' && round.peeks.length > (before.round?.peeks.length ?? 0)) void dealAudio.sting('reveal-card', 0.4);
+    // A shark said "I'm out!": the buzzer.
+    if (round && before.round?.index === round.index && room.phase === 'stage' && round.out.length > (before.round?.out.length ?? 0)) void dealAudio.sting('bad', 0.7);
     if (round && before.round?.index === round.index && round.lockedOffers.length > (before.round?.lockedOffers.length ?? 0) && room.phase === 'offers') void dealAudio.sting('lock', 0.5);
   }, [room, enabled]);
 
@@ -94,12 +93,34 @@ export function useSoundtrack(room: DealSnapshot | null, enabled: boolean, onTut
     return () => window.clearInterval(id);
   }, [room, enabled]);
 
+  // The reveal: a card flip as each bid turns over, then a fanfare for the total (a buzzer when nobody bid).
+  useEffect(() => {
+    if (!room || !enabled || room.paused || room.phase !== 'reveal' || !room.clock || !room.round?.result) return;
+    const offset = room.serverNow - Date.now();
+    const schedule = revealSchedule(room.clock.totalMs);
+    const total = room.round.result.total;
+    const base = `${room.code}:${room.gameNumber}:${room.roundIndex}`;
+    const cues: { at: number; key: string; play: () => void }[] = [
+      ...schedule.flips.map((at, index) => ({ at, key: `${base}:flip${index}`, play: () => void dealAudio.sting('reveal-card', 0.9) })),
+      { at: schedule.total, key: `${base}:total`, play: () => void dealAudio.sting(total > 0 ? 'good' : 'bad', 1) }
+    ];
+    const id = window.setInterval(() => {
+      const elapsed = clockElapsed(room, Date.now(), offset);
+      for (const cue of cues) {
+        if (elapsed < cue.at || revealCues.current.has(cue.key)) continue;
+        revealCues.current.add(cue.key);
+        if (elapsed < cue.at + 1) cue.play();
+      }
+    }, 50);
+    return () => window.clearInterval(id);
+  }, [room, enabled]);
+
   // Tutorial narration follows the shared timeline; the host tab ends the tutorial when the last line finishes.
   useEffect(() => {
     if (!room || room.phase !== 'tutorial') { narrated.current = ''; return; }
     const offset = room.serverNow - Date.now();
     const id = window.setInterval(() => {
-      const elapsed = tutorialElapsed(room, Date.now(), offset);
+      const elapsed = clockElapsed(room, Date.now(), offset);
       const current = [...TUTORIAL_TIMELINE].reverse().find((item) => elapsed >= item.start);
       const key = current ? `${room.tutorialRun}:${current.step.id}` : '';
       if (enabled && current && narrated.current !== key && !room.paused) {

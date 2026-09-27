@@ -1,9 +1,8 @@
-// Pure content logic: builder hands, headlines, names, and the secret scorecard. Shared by server and phones.
-import type { BuilderColumn, BuilderPicks, CategoryId, ProductForm, ScoreRow, Tone, Verdict } from '../types';
-import { CATEGORY_IDS, toneAllows } from '../types';
+// Pure content logic: builder hands, headlines and business names. Shared by server and phones.
+import type { BuilderColumn, BuilderPicks, ProductForm, Tone } from '../types';
+import { toneAllows } from '../types';
 import { AUDIENCES, MODIFIERS, PRODUCTS, type ModifierWord, type ProductWord } from './words';
-import { LATER_LINES, NAME_PATTERNS, PITCH_CUES, type ToneLine } from './cues';
-import { SCORE_LINES, categoryInfo, fillTokens, type ScoreLine } from './scorecard';
+import { NAME_PATTERNS, type ToneLine } from './cues';
 
 export type Rng = () => number;
 
@@ -92,56 +91,6 @@ export function businessNames(picks: Pick<BuilderPicks, 'product' | 'modifier'>,
   return [...names];
 }
 
-/** How many checks come back ✅: GOOD gets 3 or 4, BAD 0 to 2, so a BAD business still has something to sell. */
-export function passCount(verdict: Verdict, rng: Rng): number {
-  const roll = rng();
-  if (verdict === 'good') return roll < 0.7 ? 3 : 4;
-  return roll < 0.5 ? 2 : roll < 0.85 ? 1 : 0;
-}
-
-export function scoreLinesFor(category: CategoryId, ok: boolean, form: ProductForm, tone: Tone): ScoreLine[] {
-  return tonePool(SCORE_LINES, tone).filter((item) => item.category === category && item.ok === ok && (!item.forms || item.forms.includes(form)));
-}
-
-function joinAnd(items: readonly string[]): string {
-  return items.length <= 1 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
-}
-
-/** One sentence for the reveal, built from which checks failed. */
-export function explainScorecard(verdict: Verdict, rows: readonly ScoreRow[]): string {
-  const failed = rows.filter((row) => !row.ok).map((row) => categoryInfo(row.category).problem);
-  const passed = rows.length - failed.length;
-  if (verdict === 'good') return failed.length ? `Three of four checks passed. ${capitalize(failed[0])}, but that is fixable.` : 'All four checks passed. A real winner.';
-  if (passed === 0) return 'Zero checks passed. A total dud.';
-  if (passed === 1) return 'Only one check passed. Everything else is broken.';
-  return `${capitalize(joinAnd(failed))}. Too much to fix.`;
-}
-
-export interface Scorecard { rows: ScoreRow[]; explanation: string }
-
-/** The secret scorecard for a product: which checks pass is random, and lines avoid recently used ones. */
-export function dealScorecard(product: ProductWord, verdict: Verdict, tone: Tone, rng: Rng, recentLineIds: readonly string[] = []): Scorecard {
-  const passing = new Set(shuffle(CATEGORY_IDS, rng).slice(0, passCount(verdict, rng)));
-  const rows = CATEGORY_IDS.map((category): ScoreRow => {
-    const ok = passing.has(category);
-    const pool = scoreLinesFor(category, ok, product.form, tone);
-    const fresh = pool.filter((item) => !recentLineIds.includes(item.id));
-    const chosen = pick(fresh.length ? fresh : pool, rng);
-    return { category, ok, text: fillTokens(chosen.text, product.form, product.short), lineId: chosen.id };
-  });
-  return { rows, explanation: explainScorecard(verdict, rows) };
-}
-
-export function laterLine(verdict: Verdict, tone: Tone, name: string, short: string, rng: Rng): string {
-  const line = pick(tonePool(LATER_LINES, tone).filter((item) => item.verdict === verdict), rng);
-  // Names like "Sway Bros." already end in a period.
-  return line.text.replaceAll('{name}', name).replaceAll('{short}', short).replaceAll('..', '.');
-}
-
 export function toneLine(pool: readonly ToneLine[], tone: Tone, rng: Rng): ToneLine {
   return pick(tonePool(pool, tone), rng);
-}
-
-export function pitchCueIds(tone: Tone, rng: Rng, count = 4): string[] {
-  return shuffle(tonePool(PITCH_CUES, tone), rng).slice(0, count).map((cue) => cue.id);
 }

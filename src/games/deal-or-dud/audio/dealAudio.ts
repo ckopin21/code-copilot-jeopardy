@@ -3,7 +3,7 @@
 import type { AudioSettings } from '../types';
 
 export type MusicTrack = 'lobby' | 'bed' | 'offers' | 'celebrate' | null;
-export type Sting = 'fanfare' | 'pitch' | 'good' | 'bad' | 'winner' | 'lock' | 'reveal-card' | 'tick';
+export type Sting = 'fanfare' | 'pitch' | 'good' | 'bad' | 'winner' | 'lock' | 'reveal-card' | 'tick' | 'drumroll';
 
 const BASE = '/deal-or-dud/audio/';
 /**
@@ -23,7 +23,7 @@ const MUSIC_FILES: Record<Exclude<MusicTrack, null>, MusicLoop> = {
 };
 const STING_FILES: Record<Sting, string> = {
   fanfare: 'fanfare.mp3', pitch: 'pitch-intro.mp3', good: 'reveal-good.mp3', bad: 'reveal-bad.mp3',
-  winner: 'winner.mp3', lock: 'lock.mp3', 'reveal-card': 'card.mp3', tick: 'tick.mp3'
+  winner: 'winner.mp3', lock: 'lock.mp3', 'reveal-card': 'card.mp3', tick: 'tick.mp3', drumroll: 'drumroll.mp3'
 };
 /** Per-track level so the discussion bed sits under conversation and the offer pulse is only slightly more present. */
 const MUSIC_LEVEL: Record<Exclude<MusicTrack, null>, number> = { lobby: 0.55, bed: 0.22, offers: 0.3, celebrate: 0.5 };

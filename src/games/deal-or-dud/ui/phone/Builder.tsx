@@ -42,7 +42,7 @@ export function BuildLocked({ room, round, send }: { room: DealSnapshot; round: 
   return <section className="dod-screen dod-builder"><div className="dod-screen-main">
     <div className="dod-headline-preview"><small>Locked in 🔒 · you pitch in round {round.index + 1}</small><b>{round.premise?.headline}</b></div>
     <NameChoice round={round} send={send}/>
-    <p className="dod-hint">Your secret scorecard (GOOD or BAD) shows up when it's your turn on stage.</p>
+    <p className="dod-hint">On your turn you get pitch time to sell it, then the sharks ask questions. Think of a killer line!</p>
   </div>
     <div className="dod-screen-action"><p className="dod-hint">{locked}/{room.players.length} locked in · round 1 starts when everyone is ready, or in {lockSeconds}s</p></div>
   </section>;

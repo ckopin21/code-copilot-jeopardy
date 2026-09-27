@@ -2,7 +2,8 @@
 import { useEffect, useRef, useSyncExternalStore } from 'react';
 import type { DealSnapshot } from '../types';
 import { narrator } from './narrator';
-import { dueWarning, lobbyPrefetch, planNarration } from './narrationPlan';
+import { dueWarning, lobbyPrefetch, planNarration, revealTotalPlan } from './narrationPlan';
+import { clockElapsed, revealSchedule } from '../ui/labels';
 
 export function useNarration(room: DealSnapshot | null, enabled: boolean): void {
   const previous = useRef<DealSnapshot | null>(null);
@@ -30,6 +31,27 @@ export function useNarration(room: DealSnapshot | null, enabled: boolean): void 
       warned.current.add(due.key);
       narrator.say({ items: [{ fixed: due.line }], interrupt: false, staleMs: 2_500 });
     }, 250);
+    return () => window.clearInterval(id);
+  }, [room, enabled]);
+
+  // The reveal: the total is announced as the last bid flips, in step with the TV.
+  const revealed = useRef('');
+  useEffect(() => {
+    if (!room || !enabled || room.paused || room.phase !== 'reveal' || !room.clock) return;
+    const key = `${room.code}:${room.gameNumber}:${room.roundIndex}`;
+    if (revealed.current === key) return;
+    const offset = room.serverNow - Date.now();
+    const at = revealSchedule(room.clock.totalMs).total;
+    const id = window.setInterval(() => {
+      const elapsed = clockElapsed(room, Date.now(), offset);
+      if (elapsed < at) return;
+      window.clearInterval(id);
+      revealed.current = key;
+      // A screen opened long after the flip stays quiet.
+      if (elapsed > at + 2) return;
+      const plan = revealTotalPlan(room);
+      if (plan) narrator.say(plan);
+    }, 100);
     return () => window.clearInterval(id);
   }, [room, enabled]);
 

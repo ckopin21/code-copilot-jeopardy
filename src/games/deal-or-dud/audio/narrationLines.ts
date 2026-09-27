@@ -18,7 +18,10 @@ export const FIXED_LINES = {
   build: ['Everybody, build a business on your phone!', 'Time to build something ridiculous. Everyone, grab your phones!'],
   'build-10': ['Ten seconds! Lock in that product.'],
   pitch: ['Please welcome our next entrepreneur!'],
-  peeks: ['Sharks, you each get one peek.', 'Sharks, you each get one secret peek. Use it wisely!'],
+  'pitch-go': ['The floor is yours. Sell it!', 'Your pitch starts now!'],
+  'questions-open': ['Questions open!', 'Sharks, questions are open!'],
+  out: ['That shark is out!'],
+  'all-out': ['All three sharks are out!'],
   'stage-60': ['One minute left on stage.'],
   'stage-30': ['Thirty seconds left!'],
   'stage-10': ['Ten seconds! Wrap it up.'],
@@ -26,13 +29,24 @@ export const FIXED_LINES = {
   'bids-10': ['Ten seconds to lock in!'],
   'offers-reveal': ["Let's see those offers."],
   'no-offers': ['Not a single offer!'],
-  tie: ["It's a tie! Time to pick a partner."],
-  'verdict-good': ['It was a real deal!', "It's legit! A genuinely good business.", 'The scorecard checks out. Good business!'],
-  'verdict-bad': ["It's a dud!", 'Total dud!', "The scorecard doesn't lie. It's a dud!"],
-  'deal-good': ['That shark just struck gold!'],
-  'deal-bad': ['Ouch. That shark just bought a dud.'],
-  'missed-good': ['The sharks let a winner get away!'],
-  'dodged-bad': ['Smart sharks. Nobody got burned.'],
+  'raised-1': ['One hundred thousand dollars raised!'],
+  'raised-2': ['Two hundred thousand dollars raised!'],
+  'raised-3': ['Three hundred thousand dollars raised!'],
+  'raised-4': ['Four hundred thousand dollars raised!'],
+  'raised-5': ['Five hundred thousand dollars raised!'],
+  'raised-6': ['Six hundred thousand dollars raised!'],
+  'raised-7': ['Seven hundred thousand dollars raised!'],
+  'raised-8': ['Eight hundred thousand dollars raised!'],
+  'raised-9': ['Nine hundred thousand dollars raised!'],
+  'raised-10': ['One million dollars raised!'],
+  'raised-11': ['One point one million dollars raised!'],
+  'raised-12': ['One point two million dollars raised!'],
+  'raised-13': ['One point three million dollars raised!'],
+  'raised-14': ['One point four million dollars raised!'],
+  'raised-15': ['One point five million dollars raised!'],
+  'deal-in': ['We have a deal!'],
+  'both-in': ['Two sharks want in!'],
+  'all-in': ['All three sharks want in!'],
   scores: ["Let's check the scoreboard."],
   'neck-and-neck': ["It's neck and neck at the top!"],
   final: ["That's the game! Here are the final scores."],
@@ -94,9 +108,9 @@ export const LIVE_LINES = {
     text: `Please welcome ${name}, founder of ${business.trim().replace(/[.!?]+$/, '')}! ${sentence(headline)}`,
     voice: 'adam', fallback: 'pitch'
   }),
-  pickPartner: (name: string): LiveLine => ({ text: `It's a tie! ${name}, pick your partner.`, voice: 'george', fallback: 'tie' }),
-  dealGood: (name: string): LiveLine => ({ text: `${name} just struck gold!`, voice: 'george', fallback: 'deal-good' }),
-  dealBad: (name: string): LiveLine => ({ text: `Ouch. ${name} just bought a dud.`, voice: 'george', fallback: 'deal-bad' }),
+  out: (name: string): LiveLine => ({ text: `${name} is out!`, voice: 'george', fallback: 'out' }),
+  dealIn: (name: string): LiveLine => ({ text: `${name} is in!`, voice: 'adam', fallback: 'deal-in' }),
+  bothIn: (first: string, second: string): LiveLine => ({ text: `${first} and ${second} both want in!`, voice: 'adam', fallback: 'both-in' }),
   leader: (name: string): LiveLine => ({ text: `${name} takes the lead!`, voice: 'george', fallback: 'scores' }),
   stillLeads: (name: string): LiveLine => ({ text: `${name} is still on top!`, voice: 'george', fallback: 'scores' }),
   winner: (name: string): LiveLine => ({ text: `${name}! Congratulations!`, voice: 'adam', fallback: 'winner' })
@@ -105,7 +119,13 @@ export const LIVE_LINES = {
 export type LiveLineKind = keyof typeof LIVE_LINES;
 
 /** Lines worth rendering in the lobby for each player so they play without a wait later. */
-export const PER_PLAYER_LINES: readonly Exclude<LiveLineKind, 'pitch' | 'joined' | 'hotSeat'>[] = ['leader', 'stillLeads', 'dealGood', 'dealBad', 'pickPartner', 'winner'];
+export const PER_PLAYER_LINES: readonly Exclude<LiveLineKind, 'pitch' | 'joined' | 'hotSeat' | 'bothIn'>[] = ['leader', 'stillLeads', 'out', 'dealIn', 'winner'];
+
+/** "Nine hundred thousand dollars raised!" for a total in $K; null for $0 (the hosts say "Not a single offer!"). */
+export function raisedLine(total: number): FixedLineId | null {
+  const steps = Math.round(total / 100);
+  return steps >= 1 && steps <= 15 ? `raised-${steps}` as FixedLineId : null;
+}
 
 export function liveLineUrl(line: LiveLine): string {
   return `/api/deal-or-dud/voice?voice=${line.voice}&text=${encodeURIComponent(line.text)}`;

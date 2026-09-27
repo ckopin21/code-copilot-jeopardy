@@ -4,7 +4,7 @@ import { DEFAULT_TIMERS, OTHER_TIMERS, PLAYER_COUNT, STAGE_PRESETS, TIMER_LIMITS
 import { useHostRoom } from './net';
 import { TvStage } from './TvStage';
 import { JoinCard } from './JoinCard';
-import { formatClock } from './labels';
+import { formatClock, skipLabel } from './labels';
 import { useSoundtrack } from '../audio/useSoundtrack';
 import { useAutoSound } from '../audio/useAutoSound';
 import { narrator } from '../audio/narrator';
@@ -142,7 +142,7 @@ function HostBar({ room, send, soundOn, enableSound, openSettings, onStart }: { 
     {room.phase === 'lobby' && allReady && <button className="dod-primary" onClick={onStart}>▶ {room.settings.tutorial ? 'Start with the tutorial' : 'Start the game'}</button>}
     {room.phase === 'lobby' && <button className={allReady ? '' : 'dod-primary'} onClick={openSettings}>Settings & start</button>}
     {pausable && (room.paused ? <button onClick={() => void send('host:resume')}>▶ Resume</button> : <button onClick={() => void send('host:pause')}>⏸ Pause</button>)}
-    {skippable && <button onClick={() => void send('host:continue')}>{room.phase === 'tutorial' ? 'Skip tutorial' : room.phase === 'build' ? 'Lock everyone in ▶▶' : room.phase === 'stage' ? 'Skip to bids ▶▶' : 'Skip ▶▶'}</button>}
+    {skippable && <button onClick={() => void send('host:continue')}>{skipLabel(room)}</button>}
     {room.phase === 'break' && <button onClick={() => { enableSound(); void send('host:replay-tutorial'); }}>Replay tutorial</button>}
     {room.phase === 'gameover' && <button className="dod-primary" onClick={() => void send('host:new-game')}>Play again</button>}
     <button onClick={() => setAudioOpen((open) => !open)} aria-expanded={audioOpen}>🎚 Sound</button>

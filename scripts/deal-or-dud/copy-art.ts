@@ -9,19 +9,20 @@ import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync,
 import { join, resolve } from 'node:path';
 import { AVATAR_PRESETS } from '../../src/games/deal-or-dud/content/cues';
 import { AUDIENCES, MODIFIERS, PRODUCTS } from '../../src/games/deal-or-dud/content/words';
-import { CATEGORIES } from '../../src/games/deal-or-dud/content/scorecard';
+import { REACTIONS } from '../../src/games/deal-or-dud/types';
+import { BID_LABELS } from '../../src/games/deal-or-dud/ui/labels';
 import { emojiKey } from '../../src/games/deal-or-dud/ui/emojiKey';
 
 const ASSETS = process.env.FLUENT_EMOJI ?? 'C:/Users/caleb/code/tools/fluent-emoji/assets';
 const FFMPEG = process.env.FFMPEG ?? 'ffmpeg';
 const outDir = resolve('public/deal-or-dud/art');
-/** Extra emoji the screens draw outside the content pools (tutorial, peeks, trophy). */
-const EXTRA = ['👀', '🤫', '🏆', '🔒', '🍞', '🦜', '👵'];
+/** Extra emoji the screens draw outside the content pools (tutorial, stage banners, awards, trophy). */
+const EXTRA = ['🏆', '🔒', '🍞', '🦜', '👵', '🎤', '❓', '🥁', '🤝', '👅', '🪙', '💸', '🔮', '🚪'];
 
 const wanted = new Set<string>([
   ...AVATAR_PRESETS.flatMap((preset) => [preset.emoji, preset.prop ?? '']),
   ...PRODUCTS.map((item) => item.emoji), ...MODIFIERS.map((item) => item.emoji), ...AUDIENCES.map((item) => item.emoji),
-  ...CATEGORIES.map((item) => item.icon), ...EXTRA
+  ...REACTIONS, ...Object.values(BID_LABELS).map((item) => item.emoji), ...EXTRA
 ].filter(Boolean));
 
 // Index every Fluent folder by its glyph, without variation selectors.

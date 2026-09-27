@@ -1,63 +1,7 @@
 // Short text pools shown on phones and the TV. Tone defaults to 'clean'.
-import type { Tone, Verdict } from '../types';
+import type { Tone } from '../types';
 
 export interface ToneLine { id: string; text: string; tone?: Tone }
-
-/** Presenter's optional pitch nudges. */
-export const PITCH_CUES: readonly ToneLine[] = [
-  { id: 'pc-problem', text: 'Start with the problem your product solves.' },
-  { id: 'pc-name', text: 'Say the business name like it is already famous.' },
-  { id: 'pc-customer', text: 'Describe your happiest customer.' },
-  { id: 'pc-strength', text: 'Lead with your best ✅ check.' },
-  { id: 'pc-demo', text: 'Act out how someone uses it.' },
-  { id: 'pc-dream', text: 'Tell them where the company will be in five years.' },
-  { id: 'pc-ask', text: 'Tell the sharks exactly what you want from them.' },
-  { id: 'pc-origin', text: 'Share the (made-up) moment you invented it.' },
-  { id: 'pc-weak', text: 'Admit one small ❌ before a shark finds it.' },
-  { id: 'pc-compare', text: 'Explain why it beats what people use now.' },
-  { id: 'pc-slogan', text: 'Invent a slogan on the spot.' },
-  { id: 'pc-pause', text: 'Pause dramatically. Let it sink in.' },
-  { id: 'pc-gift', text: 'Explain why it makes the perfect gift.' },
-  { id: 'pc-testimonial', text: 'Quote a (fictional) customer review.' },
-  { id: 'pc-dramatic', text: 'Speak like a movie trailer narrator.', tone: 'silly' },
-  { id: 'pc-sweat', text: 'Wipe your forehead. Confidently.', tone: 'silly' },
-  { id: 'pc-grandma', text: 'Claim your grandma already invested. Emotionally.', tone: 'silly' },
-  { id: 'pc-smell', text: 'Describe what it smells like. In detail.', tone: 'crude' },
-  { id: 'pc-burp', text: 'Explain why it will not make anyone burp. Probably.', tone: 'crude' }
-];
-
-/** "What happened later" lines. {name} = business name, {short} = product short name. */
-export const LATER_LINES: readonly (ToneLine & { verdict: Verdict })[] = [
-  { id: 'lg-1', verdict: 'good', text: 'Two years later, {name} opened its fifth location.' },
-  { id: 'lg-2', verdict: 'good', text: '{name} was named "Most Surprising Success" by a business magazine.' },
-  { id: 'lg-3', verdict: 'good', text: 'The investor bought a boat and named it after {name}.' },
-  { id: 'lg-4', verdict: 'good', text: 'A school now takes field trips to the {name} factory.' },
-  { id: 'lg-5', verdict: 'good', text: '{name} became the gift everyone gives and nobody expected to love.' },
-  { id: 'lg-6', verdict: 'good', text: 'Sales tripled when a grandma posted a review that went viral.' },
-  { id: 'lg-7', verdict: 'good', text: '{name} now has a waiting list longer than the lunch line.' },
-  { id: 'lg-8', verdict: 'good', text: 'The founder bought matching jackets for the whole team.' },
-  { id: 'lg-9', verdict: 'good', text: 'A museum asked to display the very first {short}.' },
-  { id: 'lg-10', verdict: 'good', text: '{name} expanded to three countries and one very enthusiastic island.' },
-  { id: 'lg-s1', verdict: 'good', tone: 'silly', text: 'The {short} got their own cartoon show. Season two is confirmed.' },
-  { id: 'lg-s2', verdict: 'good', tone: 'silly', text: 'A llama became the official mascot of {name}. Profits soared.' },
-  { id: 'lg-s3', verdict: 'good', tone: 'silly', text: '{name} stock went up so fast the chart needed a second screen.' },
-  { id: 'lg-c1', verdict: 'good', tone: 'crude', text: 'The smell faded, but the profits did not.' },
-  { id: 'lb-1', verdict: 'bad', text: 'A year later, {name} sold its last {short} at a yard sale.' },
-  { id: 'lb-2', verdict: 'bad', text: 'The office is now a smoothie shop.' },
-  { id: 'lb-3', verdict: 'bad', text: '{name} closed, but the founder kept one {short} as a reminder.' },
-  { id: 'lb-4', verdict: 'bad', text: 'The warehouse is still full of {short}. Anyone want some?' },
-  { id: 'lb-5', verdict: 'bad', text: 'The company website now just says "We tried."' },
-  { id: 'lb-6', verdict: 'bad', text: '{name} became a business class example. Of what not to do.' },
-  { id: 'lb-7', verdict: 'bad', text: 'The investor now changes the subject whenever {name} comes up.' },
-  { id: 'lb-8', verdict: 'bad', text: 'The last {short} was spotted in a lost-and-found bin.' },
-  { id: 'lb-9', verdict: 'bad', text: '{name} ran out of money before the second birthday party.' },
-  { id: 'lb-10', verdict: 'bad', text: 'The founder now sells lemonade. It is going much better.' },
-  { id: 'lb-s1', verdict: 'bad', tone: 'silly', text: 'Archaeologists in the year 3000 will be very confused by {name}.' },
-  { id: 'lb-s2', verdict: 'bad', tone: 'silly', text: 'The {short} are now used as doorstops across the nation.' },
-  { id: 'lb-s3', verdict: 'bad', tone: 'silly', text: 'The mascot quit and joined a rival company.' },
-  { id: 'lb-c1', verdict: 'bad', tone: 'crude', text: 'The warehouse still smells. Nobody knows why.' },
-  { id: 'lb-c2', verdict: 'bad', tone: 'crude', text: 'The leftover {short} were donated to a very unlucky gym.' }
-];
 
 /** Suffixes for generated business names. */
 export const NAME_PATTERNS: readonly ToneLine[] = [

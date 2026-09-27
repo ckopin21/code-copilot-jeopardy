@@ -7,7 +7,7 @@ export interface ProductWord {
   id: string;
   /** Plural phrase used in the headline, e.g. "toasters". */
   text: string;
-  /** Short plural used inside scorecard lines, e.g. "toasters". */
+  /** Short plural for tight spots, e.g. "toasters". */
   short: string;
   form: ProductForm;
   emoji: string;

@@ -7,7 +7,7 @@ async function joinPhone(page: Page, roomKey: string, name: string) {
   await page.getByPlaceholder('Name').fill(name);
   await page.getByRole('button', { name: /pick your look/i }).click();
   await page.getByRole('option').first().click();
-  await page.getByRole('button', { name: 'Enter the studio' }).click();
+  await page.getByRole('button', { name: 'Join the tank' }).click();
   await expect(page.getByText(`You're in, ${name}!`)).toBeVisible();
 }
 
@@ -75,30 +75,49 @@ test('Deal or Dud: four phones join by room key and the host starts round one', 
     await phones[0].locator('.dod-pick-card').first().click();
   }
   await phones[0].getByRole('button', { name: /Lock it in/ }).click();
-  // The last lock starts round 1 on stage: the first to join presents and sees the secret verdict and all four checks.
+  // The last lock starts round 1 on stage with pitch time: the product goes up big on the TV, the presenter's phone
+  // shows the product and the clock, and the sharks have no buttons yet.
   await expect(host.getByText('Round 1 of 4 · On stage')).toBeVisible();
-  await expect(phones[0].getByText(/^(GOOD|BAD) business/)).toBeVisible();
-  await expect(phones[0].locator('.dod-check-row b')).toHaveCount(4);
-  // The TV shows four secret tiles, the headline, and never the verdict.
-  await expect(host.locator('.dod-tile')).toHaveCount(4);
-  await expect(host.locator('.dod-tile-secret')).toHaveCount(4);
-  await expect(host.locator('.dod-headline h1')).not.toHaveText('');
-  await expect(host.getByText(/GOOD business|BAD business/)).toHaveCount(0);
-
-  // A shark peeks (tap, then tap again): only that phone sees the answer; the TV and the other sharks see who peeked.
+  await expect(host.locator('.dod-product-card.is-stage-big b')).not.toHaveText('');
+  await expect(host.getByText(/Pitch time! Ava has the floor/)).toBeVisible();
+  await expect(phones[0].locator('.dod-product-card b')).not.toHaveText('');
+  await expect(phones[0].locator('.dod-big-clock small')).toHaveText('Pitch time');
   const shark = phones[1];
-  await shark.getByRole('button', { name: /Does it make money\?/ }).click();
-  await expect(shark.getByText('Tap again to peek 👀')).toBeVisible();
-  await shark.getByRole('button', { name: /Does it make money\?/ }).click();
-  await expect(shark.getByText(/Only you see this/)).toBeVisible();
-  await expect(shark.locator('.dod-my-peek b')).toHaveText(/^(✅|❌) /);
-  await expect(host.locator('[data-category="money"] .dod-tile-peeks')).toHaveText('👀 Ben peeked');
-  await expect(host.locator('.dod-tile-secret')).toHaveCount(4);
-  await expect(phones[2].getByText(/Only you see this/)).toHaveCount(0);
-  await expect(phones[2].getByRole('button', { name: /Does it make money\?.*Ben/ })).toBeVisible();
-  await expect(phones[0].getByText('· 👀 Ben')).toBeVisible();
+  await expect(shark.getByRole('heading', { name: 'Pitch time. Just listen!' })).toBeVisible();
+  await expect(shark.getByRole('button', { name: /React/ })).toHaveCount(0);
+  await expect(shark.getByRole('button', { name: /Ready to bid/ })).toHaveCount(0);
+
+  // The host skips pitch time: questions open, and the sharks get reactions, I'm out and Ready to bid.
+  await host.getByRole('button', { name: 'Skip to questions ▶▶' }).click();
+  await expect(host.getByText(/Questions open! Sharks: ask anything/)).toBeVisible();
+  await expect(host.locator('.dod-product-card.is-stage-corner')).toBeVisible();
+  await shark.getByRole('button', { name: 'React 😂' }).click();
+  await expect(host.locator('.dod-float')).toHaveCount(1);
+  const bailer = phones[2];
+  await bailer.getByRole('button', { name: "I'm out!" }).click();
+  await bailer.getByRole('button', { name: /Tap again/ }).click();
+  await expect(host.locator('.dod-out-sting')).toHaveText(/Cy is out!/);
+  await expect(host.getByText('Out: Cy')).toBeVisible();
+  await expect(bailer.getByText('Your bid is locked at $0.')).toBeVisible();
+  await expect(shark.getByRole('button', { name: 'Ready to bid (0/2)' })).toBeVisible();
   // Phone screens fit without page scrolling.
   for (const phone of [phones[0], phones[1], phones[2]]) await noScroll(phone);
+
+  // Both sharks still in get ready: secret bids, with labels.
+  await shark.getByRole('button', { name: 'Ready to bid (0/2)' }).click();
+  await phones[3].getByRole('button', { name: /Ready to bid/ }).click();
+  await expect(shark.getByRole('heading', { name: 'Your secret bid' })).toBeVisible();
+  await expect(bailer.getByRole('heading', { name: "You're out 🚪" })).toBeVisible();
+  await shark.getByRole('button', { name: /\$500K.*Take my money/ }).click();
+  await shark.getByRole('button', { name: 'Lock in $500K' }).click();
+  await noScroll(shark);
+  await phones[3].getByRole('button', { name: /\$300K/ }).click();
+  await phones[3].getByRole('button', { name: 'Lock in $300K' }).click();
+  // The reveal flips the bids lowest first, then the total.
+  await expect(host.getByText('Round 1 of 4 · The reveal')).toBeVisible();
+  await expect(host.locator('.dod-total')).toHaveText('$800K raised!', { timeout: 10_000 });
+  await expect(host.locator('.dod-deal-line')).toHaveText(/Ben is in!/);
+  await expect(phones[0].locator('.dod-phone-reveal .dod-big').last()).toHaveText(/^\+8 Raised \$800K/);
 
   expect(pageErrors).toEqual([]);
   await hostContext.close();

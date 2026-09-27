@@ -3,8 +3,8 @@ import { resolve } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { DealEngine } from '../../src/games/deal-or-dud/engine/DealEngine';
 import { sanitizeDealSnapshot } from '../../src/games/deal-or-dud/engine/sanitize';
-import { FIXED_LINES, HOST_VOICES, JOIN_GREETINGS, LIVE_LINES, MAX_LIVE_TEXT, fixedLineFile, speakable, type FixedLineId } from '../../src/games/deal-or-dud/audio/narrationLines';
-import { dueWarning, lobbyPrefetch, planNarration, spokenName, type NarrationPlan, type Utterance } from '../../src/games/deal-or-dud/audio/narrationPlan';
+import { FIXED_LINES, HOST_VOICES, JOIN_GREETINGS, LIVE_LINES, MAX_LIVE_TEXT, fixedLineFile, raisedLine, speakable, type FixedLineId } from '../../src/games/deal-or-dud/audio/narrationLines';
+import { dueWarning, lobbyPrefetch, planNarration, revealTotalPlan, spokenName, type NarrationPlan, type Utterance } from '../../src/games/deal-or-dud/audio/narrationPlan';
 import { voiceRoute } from '../../src/games/deal-or-dud/voiceRoute';
 import { linesToPrepare, prepareVoices } from '../../src/games/deal-or-dud/voicePrep';
 import type { DealSnapshot } from '../../src/games/deal-or-dud/types';
@@ -78,7 +78,7 @@ describe('narration plan', () => {
     engine.updateSettings(code, host, { tutorial: false });
   });
 
-  it('welcomes everyone to the build, then opens each round on stage with the peek reminder', () => {
+  it('welcomes everyone to the build, then opens each round on stage and hands the presenter the floor', () => {
     let before = tv();
     engine.startGame(code, host);
     let after = tv();
@@ -90,7 +90,7 @@ describe('narration plan', () => {
     const plan = planNarration(before, after)!;
     expect(plan.interrupt).toBe(true);
     expect(plan.delayMs).toBeGreaterThan(0);
-    expect(spoken(plan)).toEqual(['round-1', `Please welcome Ava, founder of ${premise.businessName}! ${premise.headline}.`, 'peeks']);
+    expect(spoken(plan)).toEqual(['round-1', `Please welcome Ava, founder of ${premise.businessName}! ${premise.headline}.`, 'pitch-go']);
   });
 
   it('prepares every pitch intro on the server as products lock, next round first', async () => {
@@ -108,8 +108,10 @@ describe('narration plan', () => {
     const fake = (async (url: string) => { asked.push(decodeURIComponent(url)); return new Response('ok'); }) as unknown as typeof fetch;
     prepareVoices(engine.snapshot(code), fake);
     await new Promise((resolve) => setTimeout(resolve, 20));
-    expect(asked).toHaveLength(3);
-    expect(asked[0]).toContain(`${full.players[1].name}, founder of`);
+    // On stage: "X and Y both want in!" for each pair of this round's sharks, then the next pitch intros.
+    expect(asked.slice(0, 3).map((url) => url.replace(/^.*text=/, ''))).toEqual(['Ben and Cy both want in!', 'Ben and Di both want in!', 'Cy and Di both want in!']);
+    expect(asked).toHaveLength(6);
+    expect(asked[3]).toContain(`${full.players[1].name}, founder of`);
   });
 
   it('uses the host pronunciation and falls back when a name cannot be spoken', () => {
@@ -125,7 +127,7 @@ describe('narration plan', () => {
     const after = tv();
     after.players[0].name = '🦈';
     expect(spokenName(after, ids[0])).toBeNull();
-    expect(spoken(planNarration(before, after))).toEqual(['round-1', 'pitch', 'peeks']);
+    expect(spoken(planNarration(before, after))).toEqual(['round-1', 'pitch', 'pitch-go']);
   });
 
   it('speaks the pronunciation but captions the typed name', () => {
@@ -142,29 +144,57 @@ describe('narration plan', () => {
     expect(() => engine.setSayAs(code, host, 'nobody', 'x')).toThrow();
   });
 
-  it('announces the verdict, the deal, and the leader', () => {
+  it('says "Questions open!" and who is out on stage', () => {
+    engine.startGame(code, host);
+    buildAll();
+    let before = tv();
+    advance(60_000);
+    let after = tv();
+    expect(spoken(planNarration(before, after))).toEqual(['questions-open']);
+    before = after;
+    engine.goOut(code, ids[2]);
+    after = tv();
+    const plan = planNarration(before, after)!;
+    expect(spoken(plan)).toEqual(['Cy is out!']);
+    expect(plan.interrupt).toBe(false);
+    // Everyone else bails too: straight to the reveal.
+    engine.goOut(code, ids[1]);
+    before = tv();
+    engine.goOut(code, ids[3]);
+    expect(spoken(planNarration(before, tv()))).toEqual(['all-out']);
+    expect(spoken(revealTotalPlan(tv()))).toEqual(['no-offers']);
+  });
+
+  it('opens the reveal, then announces the total, who is in, and the leader', () => {
     engine.startGame(code, host);
     buildAll();
     advance(180_000);
     engine.lockOffer(code, ids[1], 300);
-    engine.lockOffer(code, ids[2], 100);
+    engine.lockOffer(code, ids[2], 400);
     let before = tv();
     engine.lockOffer(code, ids[3], 0);
     let after = tv();
     expect(spoken(planNarration(before, after))).toEqual(['offers-reveal']);
-    before = after;
-    advance(5_000);
-    after = tv();
-    const result = after.round!.result!;
-    const reveal = spoken(planNarration(before, after));
-    expect(reveal[0]).toBe(result.verdict === 'good' ? 'verdict-good' : 'verdict-bad');
-    expect(reveal[1]).toBe(result.verdict === 'good' ? 'Ben just struck gold!' : 'Ouch. Ben just bought a dud.');
+    expect(spoken(revealTotalPlan(after))).toEqual(['raised-7', 'Cy is in!']);
     before = after;
     advance(10_000);
     after = tv();
     expect(after.phase).toBe('break');
     const leader = [...after.players].sort((a, b) => b.score - a.score)[0];
     expect(spoken(planNarration(before, after))).toEqual([`${leader.name} takes the lead!`]);
+  });
+
+  it('names both sharks on a tie at the top, and has a total line for every possible total', () => {
+    engine.startGame(code, host);
+    buildAll();
+    advance(180_000);
+    engine.lockOffer(code, ids[1], 500);
+    engine.lockOffer(code, ids[2], 500);
+    engine.lockOffer(code, ids[3], 500);
+    expect(spoken(revealTotalPlan(tv()))).toEqual(['raised-15', 'all-in']);
+    for (let total = 100; total <= 1500; total += 100) expect(FIXED_LINES[raisedLine(total)!]).toBeTruthy();
+    expect(raisedLine(0)).toBeNull();
+    expect(LIVE_LINES.bothIn('Ava', 'Ben').text).toBe('Ava and Ben both want in!');
   });
 
   it('says nothing while paused and nothing on an unchanged phase outside the lobby', () => {

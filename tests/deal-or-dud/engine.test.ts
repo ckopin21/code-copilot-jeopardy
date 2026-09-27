@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { DealEngine } from '../../src/games/deal-or-dud/engine/DealEngine';
 import { sanitizeDealSnapshot } from '../../src/games/deal-or-dud/engine/sanitize';
-import { largestOffers, scoreRound } from '../../src/games/deal-or-dud/engine/scoring';
+import { gameAwards, readTheRoom, revealOrder, scoreRound, topBidders } from '../../src/games/deal-or-dud/engine/scoring';
 import { buildHeadline, modifierById, productById } from '../../src/games/deal-or-dud/content/dealer';
-import type { DealSnapshot } from '../../src/games/deal-or-dud/types';
+import { pitchSeconds, type DealPlayer, type DealSnapshot, type RoundResult } from '../../src/games/deal-or-dud/types';
 
 class MemoryStorage implements Storage {
   private map = new Map<string, string>();
@@ -22,37 +22,60 @@ function seeded(seed: number) {
 const JOIN = { roomCode: 'X', name: 'P', avatar: '🙂', accent: '#123456' };
 
 describe('scoring', () => {
-  it('scales both the presenter and the winning shark with the deal size', () => {
-    const offers = { a: 300 as const, b: 0 as const, c: 100 as const };
-    const good = scoreRound('good', 'p', offers, { sharkId: 'a', amount: 300 });
-    expect(good).toEqual(expect.arrayContaining([
-      expect.objectContaining({ playerId: 'p', delta: 5 }),
-      expect.objectContaining({ playerId: 'a', delta: 5 }),
-      expect.objectContaining({ playerId: 'b', delta: 0 }),
-      expect.objectContaining({ playerId: 'c', delta: 0 })
-    ]));
-    const bad = scoreRound('bad', 'p', { a: 500, b: 0, c: 300 }, { sharkId: 'a', amount: 500 });
-    expect(bad).toEqual(expect.arrayContaining([
-      expect.objectContaining({ playerId: 'p', delta: 5 }),
-      expect.objectContaining({ playerId: 'a', delta: -5 }),
-      expect.objectContaining({ playerId: 'b', delta: 1 }),
-      expect.objectContaining({ playerId: 'c', delta: 0 })
-    ]));
-    // $500K on a GOOD business: presenter and shark both +7.
-    expect(scoreRound('good', 'p', { a: 500, b: 0, c: 0 }, { sharkId: 'a', amount: 500 }).map((score) => score.delta)).toEqual([7, 7, 0, 0]);
+  it('gives the presenter one point per $100K raised', () => {
+    const outcome = scoreRound('p', ['a', 'b', 'c'], { a: 500, b: 500, c: 500 });
+    expect(outcome.total).toBe(1500);
+    expect(outcome.scores[0]).toEqual({ playerId: 'p', delta: 15, reason: 'Raised $1.5M' });
+    expect(scoreRound('p', ['a', 'b', 'c'], { a: 0, b: 0, c: 0 }).scores[0].delta).toBe(0);
+    expect(scoreRound('p', ['a', 'b', 'c'], { a: 300, b: 0, c: 100 }).scores[0].delta).toBe(4);
   });
 
-  it('scores no-deal rounds', () => {
-    const allOut = { a: 0 as const, b: 0 as const, c: 0 as const };
-    expect(scoreRound('bad', 'p', allOut, null).map((s) => s.delta)).toEqual([-2, 1, 1, 1]);
-    expect(scoreRound('good', 'p', allOut, null).map((s) => s.delta)).toEqual([1, 0, 0, 0]);
-    expect(scoreRound('good', 'p', { a: 100, b: 0, c: 0 }, { sharkId: 'a', amount: 100 }).map((s) => s.delta)).toEqual([3, 3, 0, 0]);
-    expect(scoreRound('bad', 'p', { a: 200, b: 0, c: 0 }, { sharkId: 'a', amount: 200 }).map((s) => s.delta)).toEqual([2, -2, 1, 1]);
+  it('reads the room: +2 for the one bid closest to the average of the other two', () => {
+    // a vs avg(b, c) = 200: 200 off; b vs avg(a, c) = 100: 100 off; c the same. b and c tie.
+    expect(readTheRoom({ a: 0, b: 200, c: 200 })).toEqual({ a: 0, b: 1, c: 1 });
+    // b sits right between the others.
+    expect(readTheRoom({ a: 100, b: 300, c: 500 })).toEqual({ a: 0, b: 2, c: 0 });
+    // b is 150 off avg(0, 500); c is 300 off avg(0, 400).
+    expect(readTheRoom({ a: 0, b: 400, c: 500 })).toEqual({ a: 0, b: 2, c: 0 });
+    // All three equal (all out counts as $0 each): +1 each.
+    expect(readTheRoom({ a: 0, b: 0, c: 0 })).toEqual({ a: 1, b: 1, c: 1 });
+    expect(readTheRoom({ a: 300, b: 300, c: 300 })).toEqual({ a: 1, b: 1, c: 1 });
   });
 
-  it('finds ties at the largest bid and ignores $0 bids', () => {
-    expect(largestOffers({ a: 400, b: 400, c: 100 })).toEqual({ amount: 400, sharkIds: ['a', 'b'] });
-    expect(largestOffers({ a: 0, b: 0, c: 0 })).toEqual({ amount: null, sharkIds: [] });
+  it('flips lowest first and names the top bidders', () => {
+    expect(revealOrder(['a', 'b', 'c'], { a: 400, b: 0, c: 200 })).toEqual(['b', 'c', 'a']);
+    expect(topBidders({ a: 400, b: 400, c: 100 })).toEqual(['a', 'b']);
+    expect(topBidders({ a: 0, b: 0, c: 0 })).toEqual([]);
+  });
+
+  it('hands out the end awards, sharing ties and skipping ones nobody earned', () => {
+    const players = ['p', 'a', 'b', 'c'].map((id) => ({ id, name: id.toUpperCase() })) as DealPlayer[];
+    const round = (presenterId: string, businessName: string, offers: Record<string, 0 | 100 | 200 | 300 | 400 | 500>): RoundResult => {
+      const sharkIds = Object.keys(offers);
+      const outcome = scoreRound(presenterId, sharkIds, offers);
+      return { presenterId, businessName, offers, ...outcome };
+    };
+    const history = [
+      round('p', 'Flakely', { a: 500, b: 400, c: 300 }),
+      round('a', 'Sockify', { p: 100, b: 0, c: 200 })
+    ];
+    const awards = gameAwards(history, players);
+    expect(awards.find((award) => award.id === 'silver-tongue')).toMatchObject({ playerIds: ['p'], detail: 'Raised $1.2M for Flakely' });
+    expect(awards.find((award) => award.id === 'tightwad')).toMatchObject({ playerIds: ['p'] });
+    // a bid $500K once; c bid $300K and $200K. They share it.
+    expect(awards.find((award) => award.id === 'big-spender')).toMatchObject({ playerIds: ['a', 'c'], detail: '$500K in bids all game' });
+    // Round 1: b is closest (+2). Round 2: p is closest to avg(0, 200) = 100 (+2). b and p tie at 2.
+    expect(awards.find((award) => award.id === 'mind-reader')).toMatchObject({ playerIds: ['p', 'b'] });
+    expect(gameAwards([round('p', 'Nope', { a: 0, b: 0, c: 0 })], players).map((award) => award.id)).toEqual(['mind-reader']);
+  });
+});
+
+describe('pitch time', () => {
+  it('is the first minute on stage, or the first third of a short clock', () => {
+    expect(pitchSeconds(180)).toBe(60);
+    expect(pitchSeconds(600)).toBe(60);
+    expect(pitchSeconds(120)).toBe(40);
+    expect(pitchSeconds(60)).toBe(20);
   });
 });
 
@@ -67,6 +90,8 @@ describe('DealEngine', () => {
   const advance = (ms: number) => { now += ms; engine.tick(now); };
   /** Everyone locks their product; the last lock puts round 1 on stage. */
   const buildAll = () => { for (const id of ids) engine.lockPremiseRequest(code, id); };
+  /** Round 1 on stage, past pitch time. */
+  const toQuestions = () => { buildAll(); advance(60_000); expect(snap().round!.questionsOpen).toBe(true); };
 
   beforeEach(() => {
     now = 1_000_000;
@@ -91,7 +116,7 @@ describe('DealEngine', () => {
     expect(snap().upcoming.map((round) => round.presenterId)).toEqual(ids);
   });
 
-  it('plays a full round with a tie choice and scores it', () => {
+  it('plays a full round: pitch time, questions, secret bids, the reveal and the scores', () => {
     engine.startGame(code, host);
     const [presenter, s1, s2, s3] = ids;
     const hands = () => snap().upcoming[0].builder.hands;
@@ -101,36 +126,39 @@ describe('DealEngine', () => {
     const picks = snap().upcoming[0].builder;
     buildAll();
     let state = snap();
-    // Locking goes straight on stage: one clock for the pitch and the questions.
     expect(state.phase).toBe('stage');
     expect(state.clock!.totalMs).toBe(180_000);
     expect(state.round!.premise!.headline).toBe(buildHeadline(picks));
-    expect(state.round!.scorecard.map((row) => row.category)).toEqual(['works', 'demand', 'money', 'trouble']);
-    const passed = state.round!.scorecard.filter((row) => row.ok).length;
-    expect(state.round!.verdict === 'good' ? passed >= 3 : passed <= 2).toBe(true);
+    expect(state.round!.premise!.emojis).toEqual([productById(picks.product)!.emoji, modifierById(picks.modifier)!.emoji, expect.any(String)]);
+    // Pitch time: the sharks' buttons are locked.
+    expect(state.round!.questionsOpen).toBe(false);
+    expect(() => engine.react(code, s1, '😂')).toThrow(/Pitch time/);
+    expect(() => engine.goOut(code, s1)).toThrow(/Pitch time/);
+    expect(() => engine.toggleReadyToBid(code, s1)).toThrow(/Pitch time/);
+    advance(59_000);
+    expect(snap().round!.questionsOpen).toBe(false);
+    advance(1_000);
+    expect(snap().round!.questionsOpen).toBe(true);
 
-    advance(180_000);
+    advance(120_000);
     state = snap();
-    // The stage ends straight into bidding.
     expect(state.phase).toBe('offers');
-
     engine.lockOffer(code, s1, 300);
-    engine.chooseOffer(code, s2, 300); engine.lockOffer(code, s2);
-    engine.lockOffer(code, s3, 0);
-    expect(snap().phase).toBe('offers-reveal');
-    advance(5_000);
-    expect(snap().phase).toBe('partner');
-    engine.choosePartner(code, presenter, s2);
+    engine.chooseOffer(code, s2, 500); engine.lockOffer(code, s2);
+    expect(snap().phase).toBe('offers');
+    engine.lockOffer(code, s3, 100);
     state = snap();
+    // Everyone locked: straight to the reveal.
     expect(state.phase).toBe('reveal');
     expect(state.clock!.totalMs).toBe(10_000);
-    expect(state.round!.result!.scorecard).toEqual(state.round!.scorecard);
-    const verdict = state.round!.result!.verdict;
+    const result = state.round!.result!;
+    expect(result.total).toBe(900);
+    expect(result.revealOrder).toEqual([s3, s1, s2]);
+    expect(result.dealSharkIds).toEqual([s2]);
     const score = (id: string) => state.players.find((player) => player.id === id)!.score;
-    expect(score(presenter)).toBe(verdict === 'good' ? 5 : 3);
-    expect(score(s2)).toBe(verdict === 'good' ? 5 : -3);
-    expect(score(s1)).toBe(0);
-    expect(score(s3)).toBe(verdict === 'good' ? 0 : 1);
+    // s1 bid 300, the average of the other two: closest.
+    expect([score(presenter), score(s1), score(s2), score(s3)]).toEqual([9, 2, 0, 0]);
+    expect(state.history).toHaveLength(1);
   });
 
   it('accepts only $0-$500K bids in $100K steps and locks once', () => {
@@ -147,27 +175,85 @@ describe('DealEngine', () => {
     expect(() => engine.chooseOffer(code, presenter, 100)).toThrow(/Only sharks/);
   });
 
-  it('defaults unlocked sharks to $0 and picks randomly among tied sharks on timeout', () => {
+  it('counts an unlocked bid as $0 when the bid clock runs out', () => {
     engine.startGame(code, host);
-    const [, s1, s2] = ids;
+    const [, s1, s2, s3] = ids;
     buildAll();
     advance(180_000);
-    expect(snap().phase).toBe('offers');
     engine.lockOffer(code, s1, 500);
-    engine.lockOffer(code, s2, 500);
+    engine.chooseOffer(code, s2, 400);
     advance(45_000);
-    expect(snap().round!.offers[ids[3]]).toBe(0);
-    advance(5_000);
-    expect(snap().phase).toBe('partner');
-    advance(20_000);
-    expect(snap().phase).toBe('reveal');
-    expect([s1, s2]).toContain(snap().round!.result!.deal!.sharkId);
+    const state = snap();
+    expect(state.phase).toBe('reveal');
+    expect(state.round!.result!.offers).toEqual({ [s1]: 500, [s2]: 0, [s3]: 0 });
+    expect(state.round!.result!.total).toBe(500);
   });
 
-  it('opens bidding early once all three sharks are ready, and a shark can take it back', () => {
+  it('floats reactions on the TV, drops a shark tapping too fast, and keeps only the last few', () => {
+    engine.startGame(code, host);
+    const [presenter, s1, s2] = ids;
+    toQuestions();
+    engine.react(code, s1, '😂');
+    engine.react(code, s1, '🔥');
+    engine.react(code, s2, '💀');
+    expect(snap().round!.reactions.map((item) => [item.sharkId, item.emoji])).toEqual([[s1, '😂'], [s2, '💀']]);
+    expect(() => engine.react(code, s1, '💩')).toThrow(/Unknown reaction/);
+    expect(() => engine.react(code, presenter, '😂')).toThrow(/Only sharks/);
+    for (let i = 0; i < 20; i += 1) { now += 700; engine.react(code, s2, '🤔'); }
+    const reactions = snap().round!.reactions;
+    expect(reactions).toHaveLength(12);
+    expect(reactions[reactions.length - 1].id).toBe(22);
+    // Reactions score nothing.
+    expect(snap().players.every((player) => player.score === 0)).toBe(true);
+  });
+
+  it("locks an out shark at $0, skips it in the bids, and goes straight to the reveal when all three are out", () => {
+    engine.startGame(code, host);
+    const [, s1, s2, s3] = ids;
+    toQuestions();
+    engine.toggleReadyToBid(code, s1);
+    engine.goOut(code, s1);
+    expect(snap().round!.out.map((item) => item.sharkId)).toEqual([s1]);
+    expect(snap().round!.readyToBid).toEqual([]);
+    expect(() => engine.toggleReadyToBid(code, s1)).toThrow(/out/);
+    // Going out twice is harmless.
+    engine.goOut(code, s1);
+    expect(snap().round!.out).toHaveLength(1);
+    // The two still in are ready: bids open, with the out shark already locked at $0.
+    engine.toggleReadyToBid(code, s2);
+    engine.toggleReadyToBid(code, s3);
+    const offers = snap();
+    expect(offers.phase).toBe('offers');
+    expect(offers.round!.offers[s1]).toBe(0);
+    expect(offers.round!.lockedOffers).toEqual([s1]);
+    expect(() => engine.lockOffer(code, s1, 500)).toThrow(/locked/);
+    // Everyone sees that the out shark bid $0 (it was said out loud), but not the others' bids.
+    engine.chooseOffer(code, s2, 400);
+    const tv = sanitizeDealSnapshot(snap(), 'presentation');
+    expect(tv.round!.offers).toEqual({ [s1]: 0, [s2]: null, [s3]: null });
+  });
+
+  it('skips the bids when every shark is out', () => {
     engine.startGame(code, host);
     const [presenter, s1, s2, s3] = ids;
-    buildAll();
+    toQuestions();
+    engine.goOut(code, s1);
+    engine.goOut(code, s2);
+    expect(snap().phase).toBe('stage');
+    engine.goOut(code, s3);
+    const state = snap();
+    expect(state.phase).toBe('reveal');
+    expect(state.round!.result!.total).toBe(0);
+    expect(state.round!.result!.dealSharkIds).toEqual([]);
+    // All three bid $0: they all read the room equally.
+    expect(state.players.map((player) => player.score)).toEqual([0, 1, 1, 1]);
+    expect(state.players.find((player) => player.id === presenter)!.score).toBe(0);
+  });
+
+  it('opens bidding early once every shark still in is ready, and a shark can take it back', () => {
+    engine.startGame(code, host);
+    const [presenter, s1, s2, s3] = ids;
+    toQuestions();
     engine.toggleReadyToBid(code, s1);
     engine.toggleReadyToBid(code, s2);
     engine.toggleReadyToBid(code, s2);
@@ -175,24 +261,43 @@ describe('DealEngine', () => {
     expect(() => engine.toggleReadyToBid(code, presenter)).toThrow(/Only sharks/);
     engine.toggleReadyToBid(code, s2);
     expect(snap().phase).toBe('stage');
-    engine.toggleReadyToBid(code, s3);
+    // The last shark bails instead: the other two were ready, so bidding opens.
+    engine.goOut(code, s3);
     expect(snap().phase).toBe('offers');
   });
 
-  it('lets the host skip the stage', () => {
+  it('lets the host skip pitch time, then the questions', () => {
     engine.startGame(code, host);
     buildAll();
+    expect(snap().round!.questionsOpen).toBe(false);
+    engine.continue(code, host);
     expect(snap().phase).toBe('stage');
+    expect(snap().round!.questionsOpen).toBe(true);
     engine.continue(code, host);
     expect(snap().phase).toBe('offers');
   });
 
-  it('keeps the truth and the between-rounds scores short', () => {
+  it('keeps pitch time to a third of a short stage clock, and holds it while paused', () => {
+    engine.updateSettings(code, host, { timerPreset: 'quick' });
     engine.startGame(code, host);
     buildAll();
+    advance(20_000);
+    engine.pause(code, host);
+    advance(60_000);
+    expect(snap().round!.questionsOpen).toBe(false);
+    engine.resume(code, host);
+    advance(19_000);
+    expect(snap().round!.questionsOpen).toBe(false);
+    advance(1_000);
+    expect(snap().round!.questionsOpen).toBe(true);
+  });
+
+  it('keeps the reveal and the between-rounds scores short', () => {
+    engine.startGame(code, host);
+    buildAll();
+    engine.continue(code, host);
     engine.continue(code, host);
     for (const id of ids.slice(1)) engine.lockOffer(code, id, 0);
-    advance(5_000);
     expect(snap().phase).toBe('reveal');
     expect(snap().clock!.totalMs).toBe(10_000);
     engine.continue(code, host);
@@ -200,73 +305,25 @@ describe('DealEngine', () => {
     expect(snap().clock!.totalMs).toBe(5_000);
   });
 
-  it('gives each shark one peek, on stage only', () => {
-    engine.startGame(code, host);
-    const [presenter, s1, s2] = ids;
-    expect(() => engine.peek(code, s1, 'money')).toThrow(/not available/);
-    buildAll();
-    expect(() => engine.peek(code, presenter, 'money')).toThrow(/Only sharks/);
-    expect(() => engine.peek(code, s1, 'vibes')).toThrow(/Unknown check/);
-    engine.peek(code, s1, 'money');
-    expect(() => engine.peek(code, s1, 'works')).toThrow(/already used/);
-    engine.peek(code, s2, 'money');
-    expect(snap().round!.peeks).toEqual([{ sharkId: s1, category: 'money' }, { sharkId: s2, category: 'money' }]);
-    engine.continue(code, host);
-    expect(() => engine.peek(code, ids[3], 'works')).toThrow(/not available/);
-  });
-
-  it('shows a shark only its own peek, the TV only who peeked, and the presenter everything', () => {
+  it('keeps bids secret until the reveal, then shows them to everyone', () => {
     engine.startGame(code, host);
     const [presenter, s1, s2, s3] = ids;
     buildAll();
-    engine.peek(code, s1, 'trouble');
-    engine.peek(code, s2, 'works');
-    const full = snap();
-    const row = (category: string) => full.round!.scorecard.find((item) => item.category === category)!;
-
-    const mine = sanitizeDealSnapshot(full, 'player', s1);
-    expect(mine.round!.scorecard).toEqual([row('trouble')]);
-    expect(mine.round!.verdict).toBeNull();
-    expect(mine.round!.explanation).toBeNull();
-    expect(mine.round!.peeks).toEqual(full.round!.peeks);
-    expect(sanitizeDealSnapshot(full, 'player', s2).round!.scorecard).toEqual([row('works')]);
-    // A shark who hasn't peeked sees no rows, but does see who peeked at what.
-    const unpeeked = sanitizeDealSnapshot(full, 'player', s3);
-    expect(unpeeked.round!.scorecard).toEqual([]);
-    expect(unpeeked.round!.peeks.map((item) => item.category)).toEqual(['trouble', 'works']);
-
-    for (const view of [sanitizeDealSnapshot(full, 'host'), sanitizeDealSnapshot(full, 'presentation')]) {
-      expect(view.round!.scorecard).toEqual([]);
-      expect(view.round!.verdict).toBeNull();
-      expect(view.round!.peeks).toEqual(full.round!.peeks);
-      // No line text leaks anywhere in the TV's copy, even inside the unplayed rounds.
-      const json = JSON.stringify(view);
-      for (const item of full.round!.scorecard) expect(json).not.toContain(item.text);
-      for (const round of full.upcoming) for (const item of round.scorecard) expect(json).not.toContain(item.text);
-    }
-    const presenterView = sanitizeDealSnapshot(full, 'player', presenter);
-    expect(presenterView.round!.scorecard).toEqual(full.round!.scorecard);
-    expect(presenterView.round!.verdict).toBe(full.round!.verdict);
-  });
-
-  it('keeps the scorecard hidden through the bids and shows it to everyone at the reveal', () => {
-    engine.startGame(code, host);
-    const [, s1, s2, s3] = ids;
-    buildAll();
-    engine.peek(code, s1, 'demand');
-    engine.continue(code, host);
-    engine.lockOffer(code, s1, 0);
-    engine.lockOffer(code, s2, 0);
-    const bidding = snap();
-    expect(sanitizeDealSnapshot(bidding, 'host').round!.scorecard).toEqual([]);
-    expect(sanitizeDealSnapshot(bidding, 'player', s1).round!.scorecard.map((item) => item.category)).toEqual(['demand']);
+    advance(180_000);
+    engine.chooseOffer(code, s1, 500);
+    engine.lockOffer(code, s2, 200);
+    expect(sanitizeDealSnapshot(snap(), 'player', s2).round!.offers[s1]).toBeNull();
+    expect(sanitizeDealSnapshot(snap(), 'player', s1).round!.offers[s1]).toBe(500);
+    expect(sanitizeDealSnapshot(snap(), 'player', presenter).round!.offers[s1]).toBeNull();
+    const tv = sanitizeDealSnapshot(snap(), 'host');
+    expect(tv.round!.offers[s2]).toBeNull();
+    expect(tv.round!.lockedOffers).toEqual([s2]);
+    engine.lockOffer(code, s1);
     engine.lockOffer(code, s3, 0);
-    advance(5_000);
-    const reveal = sanitizeDealSnapshot(snap(), 'host');
+    const reveal = sanitizeDealSnapshot(snap(), 'presentation');
     expect(reveal.phase).toBe('reveal');
-    expect(reveal.round!.scorecard).toHaveLength(4);
-    expect(reveal.round!.result!.scorecard).toHaveLength(4);
-    expect(reveal.round!.verdict).toBe(snap().round!.verdict);
+    expect(reveal.round!.offers).toEqual({ [s1]: 500, [s2]: 200, [s3]: 0 });
+    expect(reveal.round!.result!.total).toBe(700);
   });
 
   it('deals the builder in three steps of four cards, with twists that fit the product', () => {
@@ -299,19 +356,6 @@ describe('DealEngine', () => {
     expect(snap().upcoming[1].premise!.headline).toBe(buildHeadline(mine()));
   });
 
-  it('hides other sharks offers until everyone locks', () => {
-    engine.startGame(code, host);
-    const [presenter, s1, s2] = ids;
-    buildAll();
-    advance(180_000);
-    engine.chooseOffer(code, s1, 500);
-    const other = sanitizeDealSnapshot(snap(), 'player', s2);
-    expect(other.round!.offers[s1]).toBeNull();
-    const own = sanitizeDealSnapshot(snap(), 'player', s1);
-    expect(own.round!.offers[s1]).toBe(500);
-    expect(sanitizeDealSnapshot(snap(), 'player', presenter).round!.offers[s1]).toBeNull();
-  });
-
   it('pauses when the presenter disconnects and shifts every deadline on resume', () => {
     engine.startGame(code, host);
     const [presenter] = ids;
@@ -342,7 +386,7 @@ describe('DealEngine', () => {
     expect([picks.product, picks.modifier, picks.audience].every(Boolean)).toBe(true);
     expect(snap().round!.premise!.headline).toMatch(/ for /);
     expect(snap().upcoming.map((round) => round.presenterId)).toEqual(ids.slice(1));
-    expect(snap().upcoming.every((round) => round.premise && round.scorecard.length === 4)).toBe(true);
+    expect(snap().upcoming.every((round) => round.premise && round.premise.emojis.length === 3)).toBe(true);
   });
 
   it('builds everyone at once, each phone privately, and pitches them back to back', () => {
@@ -357,16 +401,14 @@ describe('DealEngine', () => {
     const names = snap().upcoming[1].nameOptions;
     engine.chooseName(code, b, 2);
     expect(snap().upcoming[1].premise!.businessName).toBe(names[2]);
-    // A phone sees only its own product, and no verdict or file before its pitch; the TV only who has locked.
+    // A phone sees only its own product before its pitch; the TV only who has locked.
     const full = snap();
     const bView = sanitizeDealSnapshot(full, 'player', b);
     expect(bView.upcoming[1].premise!.headline).toBe(full.upcoming[1].premise!.headline);
-    expect(bView.upcoming[1].verdict).toBeNull();
-    expect(bView.upcoming[1].scorecard).toEqual([]);
     expect(bView.upcoming[0].builder.hands.products).toEqual([]);
     const tv = sanitizeDealSnapshot(full, 'host');
     expect(tv.upcoming.map((round) => Boolean(round.lockedAt))).toEqual([false, true, false, false]);
-    expect(tv.upcoming.every((round) => round.premise === null && round.scorecard.length === 0 && round.nameOptions.length === 0)).toBe(true);
+    expect(tv.upcoming.every((round) => round.premise === null && round.nameOptions.length === 0)).toBe(true);
     expect(JSON.stringify(sanitizeDealSnapshot(full, 'player', a))).not.toContain(full.upcoming[1].premise!.headline);
     // The last lock starts round 1 without waiting for the clock.
     engine.lockPremiseRequest(code, a);
@@ -375,8 +417,9 @@ describe('DealEngine', () => {
     engine.lockPremiseRequest(code, d);
     expect(snap().phase).toBe('stage');
     expect(snap().round!.presenterId).toBe(a);
-    // B's scorecard shows up on B's phone only when B's round starts.
-    expect(sanitizeDealSnapshot(snap(), 'player', b).upcoming[0].scorecard).toEqual([]);
+    // Round 1 on stage: its product is public now, B's is still only on B's phone.
+    expect(sanitizeDealSnapshot(snap(), 'player', c).round!.premise).not.toBeNull();
+    expect(JSON.stringify(sanitizeDealSnapshot(snap(), 'player', c))).not.toContain(full.upcoming[1].premise!.headline);
   });
 
   it('lets the host lock everyone in early', () => {
@@ -392,7 +435,7 @@ describe('DealEngine', () => {
     buildAll();
     for (let round = 0; round < 4; round += 1) {
       presenters.push(snap().round!.presenterId);
-      for (let step = 0; step < 40 && ['stage', 'offers', 'offers-reveal', 'partner', 'reveal', 'break'].includes(snap().phase) && snap().roundIndex === round; step += 1) advance(30_000);
+      for (let step = 0; step < 40 && ['stage', 'offers', 'reveal', 'break'].includes(snap().phase) && snap().roundIndex === round; step += 1) advance(30_000);
     }
     expect(presenters).toEqual(ids);
     for (let step = 0; step < 20 && snap().phase !== 'gameover'; step += 1) {
@@ -404,21 +447,18 @@ describe('DealEngine', () => {
     expect(snap().winnerIds).toHaveLength(1);
   });
 
-  it('never repeats a product, headline or scorecard line within a game', () => {
+  it('never repeats a product or headline within a game', () => {
     engine.startGame(code, host);
     const headlines: string[] = [];
-    const lines: string[] = [];
     const hands = engine.debugRoom(code).state.upcoming.flatMap((round) => round.builder.hands.products);
     // Everyone starts with four different products.
     expect(new Set(hands).size).toBe(16);
     buildAll();
     for (let round = 0; round < 4; round += 1) {
       headlines.push(snap().round!.premise!.headline);
-      lines.push(...snap().round!.scorecard.map((row) => row.lineId));
       for (let step = 0; step < 40 && snap().roundIndex === round && snap().phase !== 'final'; step += 1) advance(30_000);
     }
     expect(new Set(headlines).size).toBe(4);
-    expect(new Set(lines).size).toBe(16);
   });
 
   it('restores saved rooms paused after a restart', () => {
@@ -460,7 +500,7 @@ describe('DealEngine', () => {
     expect(restored.players).toHaveLength(4);
   });
 
-  it('sends a room saved mid-round with the old fact cards back to its lobby, and moves old timers to the stage clock', () => {
+  it('sends a room saved mid-round by an older version back to its lobby, and moves old timers to the stage clock', () => {
     const storage = new MemoryStorage();
     const first = new DealEngine(storage, { rng: seeded(1), now: () => now });
     const custom = first.createRoom('http://lan');
@@ -482,7 +522,7 @@ describe('DealEngine', () => {
         state.phase = 'discussion';
         state.settings.timerPreset = 'custom';
         state.settings.timers = { prep: 50, pitch: 90, discussion: 150, offers: 40, tiebreaker: 25 };
-        for (const round of [state.round, ...state.upcoming].filter(Boolean)) { delete round.scorecard; round.dossier = []; round.publicFacts = []; }
+        for (const round of [state.round, ...state.upcoming].filter(Boolean)) { delete round.out; round.dossier = []; round.publicFacts = []; }
       } else {
         state.settings.timers = { prep: 35, pitch: 60, discussion: 120, offers: 30, tiebreaker: 15 };
         state.settings.timerPreset = 'quick';
@@ -504,6 +544,27 @@ describe('DealEngine', () => {
     expect(quick.timerPreset).toBe('quick');
     expect(quick.tone).toBe('crude');
     expect('complexity' in quick).toBe(false);
+  });
+
+  it('sends a finished scorecard-era game (no bids to show) back to its lobby', () => {
+    const storage = new MemoryStorage();
+    const first = new DealEngine(storage, { rng: seeded(1), now: () => now });
+    const credentials = first.createRoom('http://lan');
+    for (const name of ['A', 'B', 'C', 'D']) {
+      const joined = first.joinPlayer(credentials.roomCode, { ...JOIN, roomCode: credentials.roomCode, name });
+      first.setLook(credentials.roomCode, joined.playerId, { presetId: 'fancy-cat' });
+    }
+    const key = [...Array(storage.length).keys()].map((i) => storage.key(i)!).find((item) => storage.getItem(item)!.includes(credentials.roomCode))!;
+    const saved = JSON.parse(storage.getItem(key)!);
+    for (const room of saved.rooms) {
+      room.state.phase = 'gameover';
+      room.state.history = [{ verdict: 'good', explanation: '', laterLine: '', scorecard: [], deal: null, offers: {}, scores: [] }];
+    }
+    storage.setItem(key, JSON.stringify(saved));
+    const restored = new DealEngine(storage, { rng: seeded(2), now: () => now }).snapshot(credentials.roomCode);
+    expect(restored.phase).toBe('lobby');
+    expect(restored.history).toEqual([]);
+    expect(restored.players).toHaveLength(4);
   });
 
   it('rejects bad photos and settings changes mid-game', () => {
