@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import type { AudioSettings, DealPlayer, DealSettings, DealSnapshot } from '../types';
-import { DEFAULT_TIMERS, OTHER_TIMERS, PLAYER_COUNT, STAGE_PRESETS, TIMER_LIMITS, estimateMinutes, type TimerSettings } from '../types';
+import { DEFAULT_TIMERS, OTHER_TIMERS, PLAYER_COUNT, STAGE_PRESETS, TIMER_LIMITS, estimateMinutes, totalRounds, type TimerSettings } from '../types';
 import { useHostRoom } from './net';
 import { TvStage } from './TvStage';
 import { JoinCard } from './JoinCard';
@@ -62,15 +62,25 @@ function SettingsPage({ room, send, onClose, onStart }: { room: DealSnapshot; se
   const update = (updates: Partial<DealSettings>) => void send('host:update-settings', { updates });
   // A step, not a value, so fast taps and a preset tap still in flight all apply in order on the server.
   const stepTimer = (key: keyof TimerSettings, step: number) => void send('host:update-settings', { updates: { timerSteps: { [key]: step } } });
-  const { low, high } = estimateMinutes(settings.timers, settings.tutorial);
+  const { low, high } = estimateMinutes(settings.timers, settings.tutorial, settings.pitches);
+  const rounds = totalRounds(settings);
   const ready = room.players.filter((player) => player.lookSet && player.connected).length;
   const [moreTimers, setMoreTimers] = useState(false);
   if (moreTimers) return <TimersPage settings={settings} send={send} stepTimer={stepTimer} onClose={() => setMoreTimers(false)}/>;
   return <div className="dod-modal" role="dialog" aria-label="Game settings">
     <div className="dod-settings">
-      <header><h2>Game settings</h2><p>These apply to all four rounds. Rules and points stay the same in every setting.</p></header>
+      <header><h2>Game settings</h2><p>These apply to every round. Rules and points stay the same in every setting.</p></header>
       <section>
-        <h3>On stage clock <small>Pitch and questions · about {low}–{high} minutes for four rounds</small></h3>
+        <h3>Pitches per player <small>{rounds} rounds · about {low}–{high} minutes</small></h3>
+        <div className="dod-segment" role="group" aria-label="Pitches per player">
+          {[1, 2, 3].map((count) => <button key={count} className={settings.pitches === count ? 'is-on' : ''} aria-pressed={settings.pitches === count} onClick={() => update({ pitches: count })}>
+            {count === 1 ? '1 pitch each (4 rounds)' : `${count} pitches each (${count * 4} rounds)`}
+          </button>)}
+        </div>
+        <p className="dod-hint">Each extra pitch starts with a fresh build: everyone makes a new product.</p>
+      </section>
+      <section>
+        <h3>On stage clock <small>Pitch and questions</small></h3>
         <div className="dod-segment">
           {(Object.keys(STAGE_PRESETS) as (keyof typeof STAGE_PRESETS)[]).map((preset) => <button key={preset} className={settings.timerPreset === preset ? 'is-on' : ''} onClick={() => update({ timerPreset: preset })}>{preset[0].toUpperCase() + preset.slice(1)} {timerText(STAGE_PRESETS[preset])}</button>)}
           <TimerStepper settings={settings} timer="stage" stepTimer={stepTimer}/>
@@ -131,16 +141,14 @@ function JoinPanel({ room, joinUrl, send, enableSound }: { room: DealSnapshot; j
   </JoinCard>;
 }
 
-function HostBar({ room, send, soundOn, enableSound, openSettings, onStart }: { room: DealSnapshot; send: Send; soundOn: boolean; enableSound: () => void; openSettings: () => void; onStart: () => void }) {
+function HostBar({ room, send, soundOn, enableSound, openSettings }: { room: DealSnapshot; send: Send; soundOn: boolean; enableSound: () => void; openSettings: () => void }) {
   const [audioOpen, setAudioOpen] = useState(false);
   const [confirmEnd, setConfirmEnd] = useState(false);
   const skippable = ['tutorial', 'build', 'stage', 'reveal', 'break', 'final', 'forecast-result'].includes(room.phase);
   const pausable = !['lobby', 'gameover'].includes(room.phase);
-  const allReady = room.players.length === PLAYER_COUNT && room.players.every((player) => player.lookSet && player.connected);
   return <nav className="dod-hostbar" aria-label="Host controls">
     {!soundOn && <button className="dod-primary" onClick={enableSound}>🔊 Turn on sound</button>}
-    {room.phase === 'lobby' && allReady && <button className="dod-primary" onClick={onStart}>▶ {room.settings.tutorial ? 'Start with the tutorial' : 'Start the game'}</button>}
-    {room.phase === 'lobby' && <button className={allReady ? '' : 'dod-primary'} onClick={openSettings}>Settings & start</button>}
+    {room.phase === 'lobby' && <button className="dod-primary" onClick={openSettings}>Settings & start</button>}
     {pausable && (room.paused ? <button onClick={() => void send('host:resume')}>▶ Resume</button> : <button onClick={() => void send('host:pause')}>⏸ Pause</button>)}
     {skippable && <button onClick={() => void send('host:continue')}>{skipLabel(room)}</button>}
     {room.phase === 'break' && <button onClick={() => { enableSound(); void send('host:replay-tutorial'); }}>Replay tutorial</button>}
@@ -184,6 +192,6 @@ export function HostApp() {
           <button onClick={() => void navigator.clipboard?.writeText(credentials.presentationUrl)}>Copy display link</button>
         </div>}
       </>}
-      hostBar={<HostBar room={room} send={send} soundOn={soundOn} enableSound={enableSound} openSettings={() => { enableSound(); setSettingsOpen(true); }} onStart={start}/>}/>
+      hostBar={<HostBar room={room} send={send} soundOn={soundOn} enableSound={enableSound} openSettings={() => { enableSound(); setSettingsOpen(true); }}/>}/>
   </main>;
 }

@@ -14,6 +14,7 @@ import { gameAwards, moneyLabel } from '../../engine/scoring';
 import { AudioControls } from '../HostApp';
 import { GAME_ID } from '../../types';
 import { navigateInApp, pickerUrl } from '../../../../platform/session/resetInstance';
+import { useRoomLookup } from '../../../../platform/net/useRoomLookup';
 
 type Send = (event: string, payload?: Record<string, unknown>) => Promise<boolean>;
 
@@ -58,6 +59,11 @@ function JoinScreen({ initialCode, join, rejoin, busyError }: {
   // A join refused because the game started (or is full) points to the seat-code form, unless the player backs out of it.
   const [dismissed, setDismissed] = useState('');
   const view = step === 'name' && /seat code/i.test(busyError) && busyError !== dismissed ? 'seat' : step;
+  // The buttons stay greyed out until the room key belongs to a running game. A bad key in the link shows the field.
+  const lookup = useRoomLookup(code);
+  const keyOk = lookup.status === 'found';
+  const showCode = !initialCode || lookup.status === 'missing' || code !== initialCode;
+  const keyHint = lookup.status === 'missing' ? <p className="dod-error" role="alert">No game with that room key is running. Check the key on the TV.</p> : null;
   const submit = async () => {
     if (!look) return;
     setBusy(true);
@@ -70,10 +76,11 @@ function JoinScreen({ initialCode, join, rejoin, busyError }: {
   const codeField = <label>Room key<input value={code} onChange={(event) => setCode(event.target.value.toUpperCase())} maxLength={8} autoCapitalize="characters" autoComplete="off" inputMode="text" placeholder="ABCD"/></label>;
   return <main className="dod-app dod-phone dod-join-screen">
     <div className="dod-logo">Deal <span>or</span> Dud</div>
-    {view === 'name' && <form onSubmit={(event) => { event.preventDefault(); if (code.trim().length >= 4 && name.trim()) setStep('avatar'); }}>
-      {!initialCode && codeField}
+    {view === 'name' && <form onSubmit={(event) => { event.preventDefault(); if (keyOk && name.trim()) setStep('avatar'); }}>
+      {showCode && codeField}
+      {keyHint}
       <label>Your name<input value={name} onChange={(event) => setName(event.target.value)} maxLength={16} autoComplete="nickname" placeholder="Name"/></label>
-      <button className="dod-primary big" disabled={code.trim().length < 4 || !name.trim()}>Next: pick your look</button>
+      <button className="dod-primary big" disabled={!keyOk || !name.trim()}>Next: pick your look</button>
       <button type="button" className="dod-link" onClick={() => setStep('seat')}>Already playing? Get your seat back</button>
     </form>}
     {view === 'avatar' && <>
@@ -81,15 +88,16 @@ function JoinScreen({ initialCode, join, rejoin, busyError }: {
       <AvatarPicker tone="clean" value={look} onChange={setLook}/>
       <div className="dod-row dod-join-actions">
         <button className="dod-ghost" onClick={() => setStep('name')}>Back</button>
-        <button className="dod-primary big" disabled={!look || busy} onClick={() => void submit()}>{busy ? 'Joining…' : 'Join the tank'}</button>
+        <button className="dod-primary big" disabled={!look || busy || !keyOk} onClick={() => void submit()}>{busy ? 'Joining…' : 'Join the tank'}</button>
       </div>
     </>}
-    {view === 'seat' && <form onSubmit={(event) => { event.preventDefault(); if (code.trim().length >= 4 && seatCode.length === 4) void submitSeat(); }}>
+    {view === 'seat' && <form onSubmit={(event) => { event.preventDefault(); if (keyOk && seatCode.length === 4) void submitSeat(); }}>
       <h2>Get your seat back</h2>
       <p className="dod-hint">Your seat code is the 4-digit number under your name on your old screen.</p>
       {codeField}
+      {keyHint}
       <label>Seat code<input value={seatCode} onChange={(event) => setSeatCode(event.target.value.replace(/\D/g, '').slice(0, 4))} inputMode="numeric" pattern="[0-9]*" autoComplete="off" placeholder="1234"/></label>
-      <button className="dod-primary big" disabled={busy || code.trim().length < 4 || seatCode.length !== 4}>{busy ? 'Joining…' : 'Take my seat'}</button>
+      <button className="dod-primary big" disabled={busy || !keyOk || seatCode.length !== 4}>{busy ? 'Joining…' : 'Take my seat'}</button>
       <button type="button" className="dod-link" onClick={() => { setDismissed(busyError); setStep('name'); }}>I'm a new player</button>
     </form>}
     {busyError && <p className="dod-error" role="alert">{busyError}</p>}
@@ -129,7 +137,7 @@ function OfferPanel({ round, me, send }: { round: RoundState; me: DealPlayer; se
   }
   return <Screen action={<button className="dod-primary big" disabled={choice === null} onClick={() => void send('player:offer-lock', { choice })}>{choice === null ? 'Pick a bid' : `Lock in ${offerLabel(choice)}`}</button>}>
     <h2>Your secret bid</h2>
-    <p className="dod-hint">The presenter scores 1 per $100K raised. You score by bidding close to the other two sharks. No bid by the buzzer = $0.</p>
+    <p className="dod-hint">How much would you put in? The presenter scores 1 point per $100K raised by all three sharks. No bid by the buzzer = $0.</p>
     <div className="dod-offer-grid">{OFFER_CHOICES.map((option) => <button key={option} className={`${choice === option ? 'is-on' : ''} ${option === 0 ? 'out' : ''}`} aria-pressed={choice === option} onClick={() => setChoice(option)}>
       <span>{offerLabel(option)}</span><small><Emoji char={BID_LABELS[option].emoji}/> {BID_LABELS[option].text}</small>
     </button>)}</div>
@@ -185,7 +193,7 @@ function RevealView({ room, round, me }: { room: DealSnapshot; round: RoundState
     <p className="dod-kicker">{result.total ? 'Raised' : 'No offers'}</p>
     <p className="dod-big">{moneyLabel(result.total)}</p>
     {myBid !== undefined && <p>Your bid: <b>{offerLabel(myBid)}</b></p>}
-    {mine && <p className="dod-big">{signed(mine.delta)} <small>{mine.reason}</small></p>}
+    {mine && round.presenterId === me.id && <p className="dod-big">{signed(mine.delta)} <small>{mine.reason}</small></p>}
   </section>;
 }
 
@@ -318,8 +326,10 @@ export function PhoneApp({ urlRoomCode }: { urlRoomCode: string }) {
   } else if (room.phase === 'forecast' || room.phase === 'forecast-result') {
     body = <ForecastView room={room} me={me} send={send}/>;
   } else {
-    const next = room.phase === 'break' ? room.players[room.roundIndex + 1] : null;
-    body = <><StandingsView room={room} me={me}/>{next && <p className="dod-hint">{next.id === me.id ? 'You pitch next! Get ready.' : `Next presenter: ${next.name}`}</p>}</>;
+    const nextIndex = room.roundIndex + 1;
+    const newBuild = room.phase === 'break' && nextIndex % 4 === 0;
+    const next = room.phase === 'break' && !newBuild ? room.players[nextIndex % 4] : null;
+    body = <><StandingsView room={room} me={me}/>{next && <p className="dod-hint">{next.id === me.id ? 'You pitch next! Get ready.' : `Next presenter: ${next.name}`}</p>}{newBuild && nextIndex < room.settings.pitches * 4 && <p className="dod-hint">Next: everyone builds a brand new product!</p>}</>;
   }
 
   return <main className={`dod-app dod-phone ${round?.presenterId === me.id ? 'is-presenter' : ''}`}>

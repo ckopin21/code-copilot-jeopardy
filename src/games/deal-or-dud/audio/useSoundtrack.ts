@@ -51,6 +51,8 @@ export function useSoundtrack(room: DealSnapshot | null, enabled: boolean, onTut
     if (hold.current && hold.current.key !== key) { hold.current = null; window.clearTimeout(holdTimer.current); }
     // A phase that opens with a musical sting: the sting plays alone, then the phase's loop comes in.
     // (A screen opened mid-phase has no "before" and goes straight to the loop.)
+    // Whatever sting the last phase opened with stops now, so it never plays under this phase's music.
+    if (changed) dealAudio.stopStings();
     const opener = changed ? openingSting(before, room) : null;
     if (opener) {
       const current: Hold = { key, ready: false };

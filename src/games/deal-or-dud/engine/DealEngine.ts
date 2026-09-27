@@ -5,7 +5,7 @@ import { ROOM_CODE_ALPHABET, randomToken, secureEqual } from '../../../platform/
 import { mergeStoredRooms, serializeStoredRooms } from '../../../platform/rooms/roomStorageRecovery';
 import {
   DEFAULT_SETTINGS, DEFAULT_TIMERS, GAME_ID, GAME_TONE, STAGE_PRESETS, OFFER_CHOICES, PLAYER_COUNT, REACTIONS, REACTION_GAP_MS,
-  ROUND_COUNT, RULE_TIMINGS, TIMER_LIMITS, pitchSeconds, toneAllows,
+  PITCH_LIMITS, ROUND_COUNT, RULE_TIMINGS, TIMER_LIMITS, pitchSeconds, toneAllows, totalRounds,
   type AudioSettings, type BuilderColumn, type ClockState, type DealPlayer, type DealSettings, type DealSnapshot,
   type OfferChoice, type Phase, type ReactionEmoji, type RoundState, type TimerSettings
 } from '../types';
@@ -456,7 +456,8 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
         settings.timerPreset = stagePreset(next.stage);
       }
       if (typeof updates.tutorial === 'boolean') settings.tutorial = updates.tutorial;
-    } else if (updates.timers || updates.timerSteps || updates.timerPreset || updates.tutorial !== undefined) {
+      if (updates.pitches !== undefined) settings.pitches = clamp(updates.pitches, PITCH_LIMITS.min, PITCH_LIMITS.max, settings.pitches);
+    } else if (updates.timers || updates.timerSteps || updates.timerPreset || updates.tutorial !== undefined || updates.pitches !== undefined) {
       throw new Error('Game settings can only change between games');
     }
     return this.commit(room);
@@ -492,7 +493,7 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
     this.resetToLobby(room, false);
     room.state.players.sort((a, b) => a.joinedAt - b.joinedAt);
     if (room.state.settings.tutorial) this.beginTutorial(room, null);
-    else this.startBuild(room);
+    else this.startBuild(room, 0);
     return this.commit(room);
   }
 
@@ -507,7 +508,7 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
     room.state.tutorialReturn = null;
     if (back === 'lobby') { room.state.phase = 'lobby'; room.state.clock = null; return; }
     if (back === 'break') { room.state.phase = 'break'; this.startClock(room, room.state.settings.timers.scores); return; }
-    this.startBuild(room);
+    this.startBuild(room, 0);
   }
   replayTutorial(code: string, hostToken: string): DealSnapshot {
     const room = this.hostRoom(code, hostToken);
@@ -522,15 +523,18 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
     return this.commit(room);
   }
 
-  /** Everyone builds their product at once; the four rounds then run back to back. */
-  private startBuild(room: Room): void {
+  /**
+   * Everyone builds their product at once; four rounds then run back to back. With more than one pitch per player,
+   * each pass starts with a fresh build (`pass` 0, 1, 2), and its rounds carry on the numbering.
+   */
+  private startBuild(room: Room, pass: number): void {
     const state = room.state;
     state.round = null;
-    state.roundIndex = -1;
+    state.roundIndex = pass * ROUND_COUNT - 1;
     state.upcoming = [];
     // Deal each player's first four products in turn, so nobody starts with the same card as someone else.
     for (const [index, player] of state.players.entries()) {
-      const round = this.newRound(state, index, player.id);
+      const round = this.newRound(state, pass * ROUND_COUNT + index, player.id);
       state.upcoming.push(round);
       round.builder.hands.products = dealHand('products', round.builder, state.settings.tone, this.rng, this.cardsInPlay(room, round, 'products'));
       round.builder.hands.audiences = dealHand('audiences', round.builder, state.settings.tone, this.rng, this.cardsInPlay(room, round, 'audiences'));
@@ -575,10 +579,10 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
     state.phase = 'stage';
     this.startClock(room, state.settings.timers.stage);
   }
-  /** Locks every product still open (the build clock ran out, or the host skipped), then starts round 1. */
+  /** Locks every product still open (the build clock ran out, or the host skipped), then starts the pass's first round. */
   private finishBuild(room: Room): void {
     for (const round of room.state.upcoming) if (!round.premise) this.lockPremise(room, round, true);
-    this.startRound(room, 0);
+    this.startRound(room, room.state.roundIndex + 1);
   }
 
   /** The player's own round-to-be during the build. */
@@ -658,7 +662,7 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
     const round = this.openBuild(room, playerId);
     this.lockPremise(room, round, false);
     // The last product locked: no need to wait for the clock.
-    if (room.state.upcoming.every((item) => item.premise)) this.startRound(room, 0);
+    if (room.state.upcoming.every((item) => item.premise)) this.startRound(room, room.state.roundIndex + 1);
     return this.commit(room);
   }
 
@@ -826,7 +830,6 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
       revealOrder: outcome.revealOrder,
       total: outcome.total,
       dealSharkIds: outcome.dealSharkIds,
-      readRoom: outcome.readRoom,
       scores: outcome.scores
     };
     state.history.push(structuredClone(round.result));
@@ -834,13 +837,16 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
     this.startClock(room, room.state.settings.timers.reveal);
   }
   private startBreak(room: Room): void {
-    if (room.state.roundIndex >= ROUND_COUNT - 1) { this.startFinal(room); return; }
+    if (room.state.roundIndex >= totalRounds(room.state.settings) - 1) { this.startFinal(room); return; }
     room.state.phase = 'break';
     this.startClock(room, room.state.settings.timers.scores);
   }
   private nextRoundOrFinal(room: Room): void {
-    if (room.state.roundIndex >= ROUND_COUNT - 1) this.startFinal(room);
-    else this.startRound(room, room.state.roundIndex + 1);
+    const next = room.state.roundIndex + 1;
+    if (next >= totalRounds(room.state.settings)) this.startFinal(room);
+    // Everyone has pitched this pass: a new build before the next one.
+    else if (next % ROUND_COUNT === 0) this.startBuild(room, next / ROUND_COUNT);
+    else this.startRound(room, next);
   }
   private topPlayers(room: Room): string[] {
     const best = Math.max(...room.state.players.map((player) => player.score));
@@ -1027,5 +1033,6 @@ function migrateSettings(settings: DealSettings): void {
   settings.timers = next;
   settings.timerPreset = stagePreset(next.stage);
   settings.tone = GAME_TONE;
+  settings.pitches = clamp(settings.pitches, PITCH_LIMITS.min, PITCH_LIMITS.max, 1);
   delete (settings as Partial<DealSettings> & { complexity?: unknown }).complexity;
 }

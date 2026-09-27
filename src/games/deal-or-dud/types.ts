@@ -2,7 +2,10 @@
 
 export const GAME_ID = 'deal-or-dud';
 export const PLAYER_COUNT = 4;
+/** Rounds in one pass: everyone pitches once. A game plays `settings.pitches` passes. */
 export const ROUND_COUNT = 4;
+/** How many times each player can pitch in one game (the "Pitches per player" setting). */
+export const PITCH_LIMITS = { min: 1, max: 3 } as const;
 
 export type Tone = 'clean' | 'silly' | 'crude';
 
@@ -38,6 +41,8 @@ export interface AudioSettings {
 export interface DealSettings {
   timerPreset: TimerPreset;
   timers: TimerSettings;
+  /** Pitches per player: each pass is a fresh build, then four rounds. */
+  pitches: number;
   tone: Tone;
   tutorial: boolean;
   captions: boolean;
@@ -138,8 +143,6 @@ export interface RoundResult {
   total: number;
   /** The top bidder "makes the deal" (for show). Several on a tie at the top; none when nobody bid. */
   dealSharkIds: string[];
-  /** Read-the-room points per shark (0, 1 or 2). */
-  readRoom: Record<string, number>;
   scores: RoundScore[];
 }
 
@@ -245,6 +248,7 @@ export const GAME_TONE: Tone = 'crude';
 export const DEFAULT_SETTINGS: DealSettings = {
   timerPreset: 'standard',
   timers: { ...DEFAULT_TIMERS },
+  pitches: 1,
   tone: GAME_TONE,
   tutorial: true,
   captions: true,
@@ -268,9 +272,14 @@ export function toneAllows(setting: Tone, itemTone: Tone | undefined): boolean {
   return TONE_ORDER[itemTone ?? 'clean'] <= TONE_ORDER[setting];
 }
 
-/** Plain-language total time estimate in minutes: one shared build, then four rounds. */
-export function estimateMinutes(timers: TimerSettings, tutorial: boolean): { low: number; high: number } {
+/** Every round in a game: four per pass. */
+export function totalRounds(settings: Pick<DealSettings, 'pitches'>): number {
+  return ROUND_COUNT * (settings.pitches ?? 1);
+}
+
+/** Plain-language total time estimate in minutes: per pass, one shared build and four rounds. */
+export function estimateMinutes(timers: TimerSettings, tutorial: boolean, pitches = 1): { low: number; high: number } {
   const perRound = timers.stage + timers.offers + timers.reveal + timers.scores;
-  const base = timers.prep + perRound * ROUND_COUNT + (tutorial ? RULE_TIMINGS.tutorialSeconds : 0) + 60 /* lobby and final scores */;
+  const base = (timers.prep + perRound * ROUND_COUNT) * pitches + (tutorial ? RULE_TIMINGS.tutorialSeconds : 0) + 60 /* lobby and final scores */;
   return { low: Math.round((base * 0.85) / 60), high: Math.round((base * 1.05) / 60) };
 }

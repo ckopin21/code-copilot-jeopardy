@@ -6,7 +6,8 @@ import type { ProductForm, Tone } from '../../src/games/deal-or-dud/types';
 
 const TONES: Tone[] = ['clean', 'silly', 'crude'];
 const FORMS: ProductForm[] = ['food', 'gadget', 'goods', 'pet', 'service', 'rental', 'digital', 'event'];
-const CLEAN_BANNED = /\b(stink|stinky|fart|burp|belch|toot|sweaty?b|sweating|slime|slimy|haunted|ghost|zombie|vampire|blood|dead|kill|toilet|potty|butt|poop|pee|gross|spicy|sexy|drunk|cursed)\w*/i;
+/** The deck can be as absurd as it likes, but never sexual. */
+const SEXUAL = /\b(sex|sexy|sexual|nude|naked|strip|stripper|porn|horny|kinky|fetish|erotic|lingerie|nsfw|booty|boob|thong|orgy|seduc|lust|condom|viagra|onlyfans|hooker|brothel|bedroom)\w*/i;
 
 function seeded(seed: number) {
   return () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
@@ -33,16 +34,16 @@ describe('deal-or-dud card builder', () => {
     for (const item of [...PRODUCTS, ...MODIFIERS, ...AUDIENCES]) expect(item.emoji, item.id).toMatch(/\p{Extended_Pictographic}|\p{Regional_Indicator}|[🟠🟢]/u);
   });
 
-  it('keeps Clean pools free of crude, gross, or creepy words', () => {
+  it('keeps the whole deck, names included, free of anything sexual', () => {
     const texts = [
-      ...tonePool(MODIFIERS, 'clean').flatMap((item) => [item.text, item.root ?? '']),
-      ...tonePool(PRODUCTS, 'clean').flatMap((item) => [item.text, ...item.roots]),
-      ...tonePool(AUDIENCES, 'clean').map((item) => item.text),
-      ...tonePool(AVATAR_PRESETS, 'clean').map((item) => item.label),
-      ...tonePool(NAME_PATTERNS, 'clean').map((item) => item.text),
-      ...tonePool(FORECAST_CARDS, 'clean').flatMap((item) => [item.title, item.question, ...item.clues])
+      ...MODIFIERS.flatMap((item) => [item.text, item.root ?? '']),
+      ...PRODUCTS.flatMap((item) => [item.text, item.short, ...item.roots]),
+      ...AUDIENCES.map((item) => item.text),
+      ...AVATAR_PRESETS.map((item) => item.label),
+      ...NAME_PATTERNS.map((item) => item.text),
+      ...FORECAST_CARDS.flatMap((item) => [item.title, item.question, ...item.clues])
     ];
-    expect(texts.filter((text) => CLEAN_BANNED.test(text))).toEqual([]);
+    expect(texts.filter((text) => SEXUAL.test(text))).toEqual([]);
   });
 
   it('offers at least a full hand of twists for every product, in every tone', () => {
@@ -57,9 +58,9 @@ describe('deal-or-dud card builder', () => {
     picks.hands.products = dealHand('products', picks, 'silly', rng);
     expect(picks.hands.products).toHaveLength(4);
     expect(new Set(picks.hands.products.map((id) => PRODUCTS.find((item) => item.id === id)!.form)).size).toBe(4);
-    const again = dealHand('products', picks, 'silly', rng, ['toasters']);
+    const again = dealHand('products', picks, 'silly', rng, ['snitch-toasters']);
     expect(again.some((id) => picks.hands.products.includes(id))).toBe(false);
-    expect(again).not.toContain('toasters');
+    expect(again).not.toContain('snitch-toasters');
   });
 
   it('never deals a Crude card in a Clean game', () => {
@@ -86,15 +87,15 @@ describe('deal-or-dud card builder', () => {
 
 describe('deal-or-dud headlines', () => {
   it('builds "twist product for audience" headlines', () => {
-    expect(buildHeadline({ product: 'toasters', modifier: 'pirate-themed', audience: 'grandmas' })).toBe('Pirate-themed toasters for grandmas');
-    expect(buildHeadline({ product: 'cupcakes', modifier: null, audience: 'astronauts' })).toBe('Cupcakes for astronauts');
-    expect(buildHeadline({ product: null, modifier: 'luxury', audience: 'pirates' })).toBe('');
+    expect(buildHeadline({ product: 'gas-station-sushi', modifier: 'radioactive', audience: 'the-irs' })).toBe('Radioactive gas station sushi for the IRS');
+    expect(buildHeadline({ product: 'raccoon-butlers', modifier: null, audience: 'your-ex' })).toBe('Raccoon butlers for your ex');
+    expect(buildHeadline({ product: null, modifier: 'cursed', audience: 'pirates' })).toBe('');
     // A twist that doesn't fit the product is left out rather than breaking the headline.
-    expect(buildHeadline({ product: 'homework-apps', modifier: 'edible', audience: null })).toBe('Homework apps');
+    expect(buildHeadline({ product: 'wifi-stealers', modifier: 'edible', audience: null })).toBe('Apps that steal wifi passwords');
   });
 
   it('makes three distinct business names', () => {
-    const names = businessNames({ product: 'toasters', modifier: 'luxury' }, 'clean', seeded(7));
+    const names = businessNames({ product: 'snitch-toasters', modifier: 'radioactive' }, 'crude', seeded(7));
     expect(new Set(names).size).toBe(3);
   });
 });

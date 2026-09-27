@@ -5,5 +5,5 @@ export const NARRATION_SECONDS: Record<string, number> = {
   "tut-3": 3.48,
   "tut-4": 4.22,
   "tut-5": 4.21,
-  "tut-6": 7.16
+  "tut-6": 6.76
 };

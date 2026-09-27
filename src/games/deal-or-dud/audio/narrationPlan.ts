@@ -1,6 +1,7 @@
 // Decides what the hosts say when the game changes. Pure functions of two snapshots, so tests can cover them;
 // narrator.ts does the playing.
 import type { DealSnapshot, Phase, RoundState } from '../types';
+import { totalRounds } from '../types';
 import { LIVE_LINES, PER_PLAYER_LINES, raisedLine, speakable, type FixedLineId, type LiveLine } from './narrationLines';
 
 export type Utterance = { fixed: FixedLineId } | { live: LiveLine };
@@ -44,7 +45,13 @@ export function greetingVariant(room: DealSnapshot, playerId: string): number {
   return seat + shift;
 }
 
-const ROUND_LINES: readonly FixedLineId[] =['round-1', 'round-2', 'round-3', 'round-4'];
+const ROUND_LINES: readonly FixedLineId[] = ['round-1', 'round-2', 'round-3', 'round-4', 'round-5', 'round-6', 'round-7', 'round-8', 'round-9', 'round-10', 'round-11'];
+
+/** "Round two!", and "Final round!" for the last round of the game, however many there are. */
+export function roundLine(room: DealSnapshot): FixedLineId {
+  const index = Math.max(room.roundIndex, 0);
+  return index >= totalRounds(room.settings) - 1 ? 'round-final' : ROUND_LINES[Math.min(index, ROUND_LINES.length - 1)];
+}
 
 /**
  * "Please welcome Ava, founder of Flakely! Breakfast cereal." The TV says it when the stage opens; the server
@@ -87,8 +94,7 @@ function phasePlan(before: DealSnapshot, room: DealSnapshot): NarrationPlan | nu
     }
     case 'stage': {
       // Each round opens on stage: "Round two! Please welcome Ben, founder of… The floor is yours!"
-      const opener: FixedLineId = ROUND_LINES[Math.min(Math.max(room.roundIndex, 0), ROUND_LINES.length - 1)];
-      return { items: [{ fixed: opener }, say(round ? pitchLine(room, round) : null, 'pitch'), { fixed: 'pitch-go' }], interrupt: true, delayMs: 2_200 };
+      return { items: [{ fixed: roundLine(room) }, say(round ? pitchLine(room, round) : null, 'pitch'), { fixed: 'pitch-go' }], interrupt: true, delayMs: 2_200 };
     }
     case 'offers': return { items: [{ fixed: 'bids' }], interrupt: true };
     case 'reveal': {

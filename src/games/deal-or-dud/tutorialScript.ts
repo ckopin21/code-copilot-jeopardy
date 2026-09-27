@@ -22,8 +22,8 @@ export const TUTORIAL_STEPS: readonly TutorialStep[] = [
     line: "Then questions open! Sharks, grill them, send reactions, or say I'm out." },
   { id: 'tut-5', focus: 'offers', title: 'Secret bids', seconds: 5,
     line: 'Next, every shark secretly bids, from zero to five hundred thousand.' },
-  { id: 'tut-6', focus: 'reveal', title: 'Read the room', seconds: 8,
-    line: "Presenters score a point for every hundred thousand raised. Sharks score by bidding close to the other two. Let's make a deal!" }
+  { id: 'tut-6', focus: 'reveal', title: 'Raise the most', seconds: 7,
+    line: "You score a point for every hundred thousand raised in your pitch. Raise the most money to win. Let's make a deal!" }
 ];
 
 export const TUTORIAL_TOTAL_SECONDS = TUTORIAL_STEPS.reduce((sum, step) => sum + step.seconds, 0);

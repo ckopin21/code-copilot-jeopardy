@@ -1,7 +1,7 @@
 // The shared TV view. Host and Presentation both render this; neither ever receives secrets.
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { DealPlayer, DealSnapshot, OfferChoice, RoundState } from '../types';
-import { estimateMinutes } from '../types';
+import { estimateMinutes, totalRounds } from '../types';
 import { gameAwards, moneyLabel } from '../engine/scoring';
 import { ProductCard } from './ProductCard';
 import { StudioSet, CHAIR_SPOTS, PRESENTER_SPOT } from './StudioSet';
@@ -32,12 +32,15 @@ export function Stage16x9({ children }: { children: ReactNode }) {
   </div>;
 }
 
+/** How far below a chair's anchor a shark's body ends, in chair units: on the cushion, just above the arm rests' bottom (StudioSet's Chair). */
+const SEAT_DEPTH = 74;
+
 function SeatedShark({ player, score, spot, offerTag, highlight, dim, locked, out }: {
   player: DealPlayer; score: number; spot: { x: number; y: number; scale: number }; offerTag?: ReactNode; highlight?: boolean; dim?: boolean; locked?: boolean; out?: boolean;
 }) {
   const size = 150 * spot.scale;
   return <div className={`dod-seat ${highlight ? 'is-highlight' : ''} ${dim ? 'is-dim' : ''} ${out ? 'is-out' : ''} ${player.connected ? '' : 'is-offline'}`}
-    style={{ left: spot.x, top: spot.y, transform: `translate(-50%, -100%) scale(${1})` }} data-player={player.id}>
+    style={{ left: spot.x, top: spot.y + SEAT_DEPTH * spot.scale, transform: 'translate(-50%, -100%)' }} data-player={player.id}>
     {offerTag && <div className="dod-offer-tag">{offerTag}</div>}
     <div className="dod-seat-figure" style={{ width: size * 1.5 }}>
       <Avatar look={player.look} size={size} className="dod-seat-head"/>
@@ -99,8 +102,10 @@ function TopBar({ room, hostBar }: { room: DealSnapshot; hostBar?: ReactNode }) 
     <div className="dod-phase-box">
       <div className="dod-phase-row">
         {hostBar}
-        <div className="dod-phase">{room.round ? `Round ${room.round.index + 1} of 4 · ` : ''}{PHASE_LABEL[room.phase]}</div>
+        <div className="dod-phase">{room.round ? `Round ${room.round.index + 1} of ${totalRounds(room.settings)} · ` : ''}{PHASE_LABEL[room.phase]}</div>
       </div>
+      {/* Always on screen, so a phone that drops can rejoin from the home page with this key. */}
+      {room.phase !== 'lobby' && <div className="dod-room-badge">Room key <b>{room.code}</b></div>}
       {showClock && <div className={`dod-clock ${seconds <= 10 ? 'is-low' : ''} ${room.paused || frozen ? 'is-paused' : ''}`}>{formatClock(seconds)}{(room.paused || frozen) && <small>{room.paused ? 'PAUSED' : 'ON HOLD'}</small>}</div>}
     </div>
   </header>;
@@ -131,7 +136,7 @@ function PhaseOverlay({ room }: { room: DealSnapshot }) {
   if (!round) return null;
   return <>
     {room.phase === 'stage' && <StageBanner room={room} round={round}/>}
-    {room.phase === 'offers' && <Banner>Sharks: lock in a secret bid on your phone. Closest to the other two scores!</Banner>}
+    {room.phase === 'offers' && <Banner>Sharks: lock in a secret bid on your phone. Every $100K is a point for the presenter!</Banner>}
   </>;
 }
 
@@ -205,11 +210,12 @@ function RevealPanel({ room }: { room: DealSnapshot }) {
 
 function Standings({ room, title }: { room: DealSnapshot; title: string }) {
   const nextIndex = room.roundIndex + 1;
-  const next = room.phase === 'break' ? room.players[nextIndex] : null;
+  const next = room.phase === 'break' ? room.players[nextIndex % 4] : null;
+  const newBuild = room.phase === 'break' && nextIndex % 4 === 0 && nextIndex < totalRounds(room.settings);
   return <section className="dod-standings">
     <h2>{title}</h2>
     <ol>{standings(room).map((player) => <li key={player.id}><span className="rank">{rankOf(room, player)}</span><Avatar look={player.look} size={64}/><b>{player.name}</b><strong><CountUp value={player.score}/></strong></li>)}</ol>
-    {next && <p className="dod-next">Next presenter: <b>{next.name}</b></p>}
+    {newBuild ? <p className="dod-next">Next: everyone builds a brand new product!</p> : next && <p className="dod-next">Next presenter: <b>{next.name}</b></p>}
   </section>;
 }
 
@@ -254,7 +260,7 @@ function GameOver({ room }: { room: DealSnapshot }) {
 
 function LobbyMessage({ room }: { room: DealSnapshot }) {
   const ready = room.players.filter((player) => player.lookSet).length;
-  const { low, high } = estimateMinutes(room.settings.timers, room.settings.tutorial);
+  const { low, high } = estimateMinutes(room.settings.timers, room.settings.tutorial, room.settings.pitches);
   return <section className="dod-lobby-note">
     <p>{ready < 4 ? `Waiting for players… ${ready}/4 in the studio` : 'All four players are in the studio!'}</p>
     <p className="dod-sub">About {low}–{high} minutes</p>
@@ -262,15 +268,17 @@ function LobbyMessage({ room }: { room: DealSnapshot }) {
 }
 
 // ---------- tutorial ----------
-const DEMO_CARDS = [{ emoji: '🍞', step: 'Product', text: 'Toasters' }, { emoji: '🦜', step: 'Twist', text: 'Pirate-themed' }, { emoji: '👵', step: 'For', text: 'Grandmas' }];
-const DEMO_PREMISE = { headline: 'Pirate-themed toasters for grandmas', businessName: 'Toast Ahoy', mainProductId: 'demo', form: 'gadget' as const, emojis: ['🍞', '🦜', '👵'] };
+/** Where a bid tag clears each shark's head in the tutorial (the tutorial layer starts 90px down the stage). */
+const DEMO_BID_TOPS = [420, 372, 330];
+const DEMO_CARDS = [{ emoji: '🍣', step: 'Product', text: 'Gas station sushi' }, { emoji: '☢️', step: 'Twist', text: 'Radioactive' }, { emoji: '🧾', step: 'For', text: 'The IRS' }];
+const DEMO_PREMISE = { headline: 'Radioactive gas station sushi for the IRS', businessName: 'Sushi Crimes Inc.', mainProductId: 'demo', form: 'food' as const, emojis: ['🍣', '☢️', '🧾'] };
 
 function TutorialDemo({ focus }: { focus: TutorialFocus }) {
   switch (focus) {
     case 'build':
       return <div className="dod-demo-build">
+        <p>“Radioactive gas station sushi for the IRS”</p>
         {DEMO_CARDS.map((card) => <div key={card.step} className="dod-demo-card"><small>{card.step}</small><span><Emoji char={card.emoji}/></span><b>{card.text}</b></div>)}
-        <p>“Pirate-themed toasters for grandmas”</p>
       </div>;
     case 'pitch':
       return <>
@@ -283,12 +291,12 @@ function TutorialDemo({ focus }: { focus: TutorialFocus }) {
         <div className="dod-out-sting is-demo"><Emoji char="🚪"/> I'm out!</div>
       </>;
     case 'offers':
-      return <div className="dod-demo-offers"><span>$300K 🔒</span><span>$0 🔒</span><span>$500K 🔒</span></div>;
+      return <div className="dod-demo-offers">{['$300K', '$0', '$500K'].map((bid, index) => <span key={bid} style={{ left: CHAIR_SPOTS[index].x, top: DEMO_BID_TOPS[index] }}>{bid} 🔒</span>)}</div>;
     case 'reveal':
       return <div className="dod-demo-reveal">
         <p className="dod-total">$800K raised!</p>
-        <p>Presenter: <b>+8</b> (one point per $100K)</p>
-        <p>Shark closest to the other two: <b>+2</b></p>
+        <p>Presenter: <b>+8</b>, one point per $100K</p>
+        <p>Most money raised wins!</p>
       </div>;
     default:
       return null;

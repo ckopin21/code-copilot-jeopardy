@@ -1,14 +1,14 @@
 # Deal or Dud
 
-A four-player, same-room pitch game and the second game on the platform (`src/games/deal-or-dud/`, id `deal-or-dud`). Everyone builds a ridiculous product, then takes a turn pitching it while the other three players are the sharks: one minute of pitch, then questions, reactions and "I'm out!", then secret bids and a drumroll reveal. The presenter scores for the money raised; sharks score by reading the room. Everyone presents once in a four-round game.
+A four-player, same-room pitch game and the second game on the platform (`src/games/deal-or-dud/`, id `deal-or-dud`). Everyone builds a ridiculous product, then takes a turn pitching it while the other three players are the sharks: one minute of pitch, then questions, reactions and "I'm out!", then secret bids and a drumroll reveal. Only the presenter scores: a point for every $100K raised. Everyone presents once per pass; a game is one, two or three passes (4, 8 or 12 rounds).
 
-Start it from the game picker at `/`, or go straight to `/?game=deal-or-dud&mode=host` on the TV laptop. Phones join by QR code, the join link, or the room key typed at `/`.
+Start it from the game picker at `/`, or go straight to `/?game=deal-or-dud&mode=host` on the TV laptop. Phones join by QR code, the join link, or the room key typed at `/`. Join buttons stay greyed out until the typed key belongs to a running game (`src/platform/net/useRoomLookup.ts`, used by the picker and the Deal or Dud phone join), and the TV shows the room key in the top corner all game so anyone who drops can get back in from `/`.
 
 ## Screens
 
 | Screen | Where | Shows |
 | --- | --- | --- |
-| Host (TV) | `?game=deal-or-dud&mode=host` | In the lobby: the join card, "Settings & start", and a direct Start button once all four players are ready. Studio set, the product on stage (big during pitch time), the Pitch time / Questions open banner, floating reactions, "Ben is out!" stings, clock, the bid reveal, scores and end awards. Host controls, settings, and the soundtrack. |
+| Host (TV) | `?game=deal-or-dud&mode=host` | In the lobby: the join card and "Settings & start" (the game starts from the settings page; there is no separate start button). Studio set, the product on stage (big during pitch time), the Pitch time / Questions open banner, floating reactions, "Ben is out!" stings, clock, the bid reveal, scores and end awards. Host controls, settings, and the soundtrack. |
 | Presentation | Host's display link | The same TV view for a second screen, including the lobby's join card (QR code, room key, link, who is in, and who can start the game). It has no host controls. Plays sound by default, like the Host tab. |
 | Every phone, at the start | `?mode=player` | Three quick card picks (product, twist, audience) and the business name, then "Locked in" (the name can still change) until everyone is done. |
 | Presenter phone | `?mode=player` | Their product card and a big clock (pitch time, then the stage clock). Nothing else to read: they pitch. |
@@ -32,17 +32,16 @@ Then four rounds, each opening straight on stage:
 3. **The reveal** (10s). A drumroll, then the bids flip one at a time from lowest to highest, then the total ("$900K raised!"). The top bidder "makes the deal" ("Ava is in!") just for show; a tie at the top means "Ava and Ben both want in!". Then the points. The phones keep the total hidden until the TV shows it. The timings are `revealSchedule()` in `ui/labels.ts` (flips at 1.4, 3.0 and 4.6 s, the total at 6.2 s, squeezed on a shorter reveal timer), shared by the TV, the sound and the narrator.
 4. **Scores** (5s). Both the reveal and the scores are skippable, and both lengths are host timers.
 
-**Settings.** The main settings page has the stage clock only (Quick 2:00, Standard 3:00, Relaxed 4:00, or ± in 30s steps up to 10:00), the tutorial and captions checkboxes, and audio. **More timers…** opens a separate page for the flat timers: product builder 1:15, offer lock 45s, the bid reveal 10s, scores between rounds 5s, tiebreaker guess 20s, with a reset. There is no tone choice: every game deals from the full card set (clean, silly and mild bathroom humor; `GAME_TONE` in `types.ts`). "Replay tutorial" shows only between rounds; before the game the tutorial checkbox decides. There is no asking price (it was proposed and turned down).
+**Settings.** The main settings page has **Pitches per player** (1, 2 or 3: 4, 8 or 12 rounds; each extra pass starts with a fresh build where everyone makes a new product, `settings.pitches`, `totalRounds()`), the stage clock (Quick 2:00, Standard 3:00, Relaxed 4:00, or ± in 30s steps up to 10:00), the tutorial and captions checkboxes, and audio. **More timers…** opens a separate page for the flat timers: product builder 1:15, offer lock 45s, the bid reveal 10s, scores between rounds 5s, tiebreaker guess 20s, with a reset. There is no tone choice: every game deals from the whole deck (`GAME_TONE` in `types.ts`). "Replay tutorial" shows only between rounds; before the game the tutorial checkbox decides. There is no asking price (it was proposed and turned down).
 
-After four rounds a tie at the top goes to the **Final Forecast** tiebreaker: tied players guess a number privately; closest wins; one repeat with a new card; then a random draw.
+After the last round a tie at the top goes to the **Final Forecast** tiebreaker: tied players guess a number privately; closest wins; one repeat with a new card; then a random draw.
 
 **Scoring** lives in `engine/scoring.ts`:
 
-- **The presenter** scores 1 point per $100K raised in total (0 to 15).
-- **Read the room:** each shark's bid is compared with the average of the other two sharks' bids ("I'm out" counts as $0). The closest shark gets +2. Two tied for closest get +1 each, and all three tied get +1 each.
-- Example: bids of $100K, $300K and $500K raise $900K, so the presenter gets 9; the $300K shark sits exactly on the average of the others and gets 2.
+- **Only the presenter scores:** 1 point per $100K raised in total (0 to 15). Sharks earn nothing for their bids or for going out (the user's call; an earlier "read the room" bonus was removed).
+- Example: bids of $100K, $300K and $500K raise $900K, so the presenter gets 9.
 
-**End awards** (for fun, no points; `gameAwards()`), shown on the winner screen and the phones: **Silver Tongue** (most raised in one pitch), **Tightwad** (smallest bids in total), **Big Spender** (largest bids in total), **Mind Reader** (most read-the-room points). Ties share the title; an award nobody really earned (nothing raised, everyone bid the same) is left out.
+**End awards** (for fun, no points; `gameAwards()`), shown on the winner screen and the phones: **Silver Tongue** (most raised in one pitch), **Tightwad** (smallest bids in total), **Big Spender** (largest bids in total). Ties share the title; an award nobody really earned (nothing raised, everyone bid the same) is left out.
 
 ## Phone layout
 
@@ -64,7 +63,7 @@ Every phone screen fits the viewport without page scrolling: a header (name, sco
 
 ## Content (`src/games/deal-or-dud/content/`)
 
-- `words.ts`: the builder cards, each with an emoji and a tone: 84 products, 50 twists, 51 audiences (71, 38 and 40 of them Clean). Twists list the product forms they fit (food, gadget, goods, pet, service, rental, digital, event), and a twist hand only deals ones that fit the picked product, so headlines never break.
+- `words.ts`: the builder cards, each with an emoji: 83 products, 49 twists, 50 audiences. The deck is deliberately absurd, the kind of thing that would get you sued ("Radioactive gas station sushi for the IRS", "definitely-not-stolen raccoon butlers for your ex"), but never sexual. Business names are just as bad (`NAME_PATTERNS` in `cues.ts`: "Totally Legit Sushi LLC", "Dr. Toast (Not a Real Doctor)"). Twists list the product forms they fit (food, gadget, goods, pet, service, rental, digital, event), and a twist hand only deals ones that fit the picked product, so headlines never break.
 - `dealer.ts`: hands, headlines and business names.
 - `cues.ts`: business-name patterns, avatar presets, tiebreaker cards.
 - Products and headlines never repeat within a game.
@@ -72,9 +71,9 @@ Every phone screen fits the viewport without page scrolling: a header (name, sco
 
 `tests/deal-or-dud/content.test.ts` enforces the content rules:
 - ids are unique and every card has an emoji
-- every product has at least 8 twists that fit it, in every tone
-- Clean pools contain no crude, gross or creepy words
-- every tone has enough material for four rounds
+- every product has at least 8 twists that fit it
+- nothing in the deck, the names, the avatars or the tiebreaker cards is sexual
+- there is enough material for four rounds
 
 Run it after any content edit:
 
@@ -89,7 +88,7 @@ The tests can't check whether a headline reads naturally. Read new cards aloud w
 - **Music and stings** are Pixabay tracks the user picked (Pixabay Content License, no attribution required; `CREDITS.md` in the audio folder lists each track, artist and page). The untouched downloads are on the Windows PC in `C:\Users\caleb\code\tools\deal-or-dud-audio-backup\pixabay\`, and `C:\Users\caleb\code\tools\deal-or-dud-music\integrate_pixabay.sh` turns them into the game files (its `README.md` explains how the loop points were found). Everything is loudness-matched: loops −16 LUFS, stings −14 to −15.
   - **Loops** (MP3, 192 kbps): lobby (`lobby-loop.mp3`, 118 s), build and stage bed (`discussion-bed.mp3`, 76 s), bids (`offer-pulse.mp3`, 21.6 s), and the after-winner loop (`winner-loop.mp3`, 45 s). Each loop is a whole number of bars cut where the music matches itself, with a short crossfade. MP3 blurs the first and last milliseconds of a file, so each file carries half a second of wrapped audio on both ends, and `dealAudio.ts` loops between `loopStart` and `loopEnd` (the exact loop lengths are in `MUSIC_FILES`). Re-rendering a loop means updating its sample count there.
   - **Stings:** fanfare (the first 4 bars of Breaking News, game start and final scores), pitch intro (2 bars of the Breaking News logo, each round going on stage), the tada (`reveal-good.mp3`, when the total is up) and buzzer (`reveal-bad.mp3`, "I'm out!" and a $0 total), winner.
-  - **No overlap:** a loop change fades the old loop out in about half a second and brings the new one in just after. A phase that opens with a musical sting (the opening fanfare, the round sting on stage, the final-scores fanfare, the winner) plays the sting alone; the phase's loop starts when the sting ends (`useSoundtrack.ts`, timed from each sting's real length).
+  - **No overlap:** a loop change fades the old loop out in about half a second and brings the new one in just after. A phase change also fades out any musical sting still playing (`dealAudio.stopStings()`), so skipping the tutorial right after the opening fanfare doesn't leave it under the next loop. A phase that opens with a musical sting (the opening fanfare, the round sting on stage, the final-scores fanfare, the winner) plays the sting alone; the phase's loop starts when the sting ends (`useSoundtrack.ts`, timed from each sting's real length).
   - **Game over:** music stays off while the winner sting plays, then the after-winner loop starts (timed from the sting's real length) and runs until the host plays again (back to the lobby loop) or closes the screen. A screen opened on a finished game starts the loop at once.
   - Earlier sets are backed up in `tools\deal-or-dud-audio-backup\`: `music-v1\` (synthesized; its generator `scripts/deal-or-dud/render-music.ts` was removed and is in git history) and `music-v2-acestep\` (ACE-Step drafts, made by `tools\ace-step\`).
 - **Sound effects** `lock.mp3` (poker chips), `card.mp3` (card placed) and `tick.mp3` come from Kenney's CC0 packs (kenney.nl: Casino Audio, Interface Sounds). The tick counts down the last 5 seconds of the build, bid and tiebreaker clocks. `card.mp3` also plays as each bid flips at the reveal. `drumroll.mp3` (4.9 s, under the flips) is synthesized by `C:\Users\caleb\code\tools\deal-or-dud-music\drumroll.cjs` (a snare roll that swells), then loudness-matched with ffmpeg.
@@ -99,12 +98,12 @@ The tests can't check whether a headline reads naturally. Read new cards aloud w
 
 Two host voices, `adam` and `george`, take turns. They are cloned by Chatterbox (MIT, runs on the PC's GPU) from reference clips made with Kokoro-82M.
 
-- **Fixed lines** (phase calls, time warnings, "Questions open!", "All three sharks are out!", one "…dollars raised!" line for every total from $100K to $1.5M) are in `src/games/deal-or-dud/audio/narrationLines.ts` and recorded to `voice/<line>-<variant>-<voice>.mp3`. The tutorial script is `tutorialScript.ts`; its clips are `tut-*.mp3`, and `narrationDurations.ts` is generated with them.
+- **Fixed lines** (phase calls, "Round one!" to "Round eleven!" with "Final round!" on the last round whatever the count, time warnings, "Questions open!", "All three sharks are out!", one "…dollars raised!" line for every total from $100K to $1.5M) are in `src/games/deal-or-dud/audio/narrationLines.ts` and recorded to `voice/<line>-<variant>-<voice>.mp3`. The tutorial script is `tutorialScript.ts`; its clips are `tut-*.mp3`, and `narrationDurations.ts` is generated with them.
 - **Live lines** say player and business names (a lobby greeting such as "Ava is in the building!" or "Make some noise for Ava!", "Round two! Please welcome Ben, founder of …", "Cy is out!", "Ava is in!", "Ava and Ben both want in!"). The lobby has eight greetings (`JOIN_GREETINGS`); each seat gets a different one, starting at a point set by the room key, and the two voices alternate. Each round opens with the round call, the founder intro, then "The floor is yours. Sell it!" The reveal opens with "Let's see those offers." and, as the last bid flips (on a timer in `useNarration.ts`, `revealTotalPlan()`), the total and who is in, or "Not a single offer!" The TV asks `/api/deal-or-dud/voice`, which forwards to the narrator service on the same computer (`DEAL_VOICE_URL`, default `http://127.0.0.1:5123`).
 - **Rendered ahead** by the server (`voicePrep.ts`, from `onStateChange`): each player's name lines while the lobby fills (including "X is out!" and "X is in!"), every pitch intro as soon as its product locks during the build, and on stage "X and Y both want in!" for each pair of that round's sharks. Only the narrator's cache is filled, so a product stays secret until its pitch. This is what keeps a slower computer (a MacBook Air) on time: by round 2 the intros play instantly.
 - **Without the narrator service** (or if a line takes over 4 seconds) the TV plays a fixed fallback line instead ("Our next entrepreneur is in the hot seat!"), so the game never waits on it.
 - **What is said when** is decided in `audio/narrationPlan.ts` (pure, tested in `tests/deal-or-dud/narration.test.ts`) and played by `audio/narrator.ts`, one line at a time. A new phase cuts off the previous line. Stage warnings play at 60 s (on clocks of 2:00 or more), 30 s (55 s or more) and 10 s, and are dropped if they cannot start within 2.5 s.
-- **The tutorial** (`tutorialScript.ts`, 6 steps, about 35 s): four players and four rounds, the shared build, pitch time, questions open (reactions and "I'm out"), secret bids, and scoring (a point per $100K raised; sharks score by bidding close to the other two). The TV shows a demo for each step (`TutorialDemo` in `ui/TvStage.tsx`).
+- **The tutorial** (`tutorialScript.ts`, 6 steps, about 35 s): four players and four rounds, the shared build, pitch time, questions open (reactions and "I'm out"), secret bids, and scoring (a point per $100K raised; raise the most to win). The demos sit in empty parts of the set, clear of the sharks, the presenter and their nameplates, and the captions sit bottom left under the sharks. The TV shows a demo for each step (`TutorialDemo` in `ui/TvStage.tsx`).
 - **Names** are spoken with emoji and symbols removed. The host can set a pronunciation in the lobby list (🗣 → type it how it sounds → ▶ to hear it); it is stored on the player as `sayAs`. Product names are only spoken once their round makes them public.
 - **Captions** show the current line on the screen that plays the sound when Captions is on.
 

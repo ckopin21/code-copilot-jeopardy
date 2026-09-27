@@ -55,7 +55,7 @@
 @keyframes dod-glow { 50% { opacity: 0.35; } }
 
 .dod-app .dod-seat { position: absolute; z-index: 4; display: flex; flex-direction: column; align-items: center; transition: filter 0.4s, opacity 0.4s; }
-.dod-app .dod-seat { margin-top: 70px; }
+/* A seat's depth into its chair scales with the chair: see SEAT_DEPTH in TvStage.tsx. */
 .dod-app .dod-seat.is-dim { opacity: 0.35; }
 .dod-app .dod-seat.is-offline .dod-avatar { filter: grayscale(1) brightness(0.7); }
 .dod-app .dod-seat.is-highlight .dod-seat-head { box-shadow: 0 0 0 6px var(--dod-gold), 0 0 50px var(--dod-gold); }
@@ -509,7 +509,7 @@ html:has(.dod-app), body:has(.dod-app) { margin: 0; background: #05091a; }
 .dod-app .dod-big-clock b { font-family: var(--dod-display); font-size: 64px; line-height: 1; }
 .dod-app .dod-big-clock.is-pitch small, .dod-app .dod-big-clock.is-pitch b { color: var(--dod-gold); }
 .dod-app .dod-center { text-align: center; }
-.dod-app .dod-listen { display: grid; justify-items: center; text-align: center; gap: 6px; padding: 18px 8px; }
+.dod-app .dod-listen { display: grid; justify-items: center; text-align: center; gap: 6px; padding: 64px 8px 18px; }
 .dod-app .dod-listen > span { font-size: 64px; line-height: 1; animation: dod-bob 1.6s ease-in-out infinite; }
 .dod-app .dod-listen p { margin: 0; color: var(--dod-muted); }
 .dod-app .dod-listen b { color: white; font-family: var(--dod-display); }
@@ -526,3 +526,30 @@ html:has(.dod-app), body:has(.dod-app) { margin: 0; background: #05091a; }
 .dod-app .dod-awards-phone { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; }
 .dod-app .dod-awards-phone li { background: #ffffff10; border-radius: 10px; padding: 6px 10px; font-size: 15px; }
 .dod-app .dod-awards-phone b { color: var(--dod-gold); margin-right: 6px; }
+
+/* The room key stays on the TV all game, for anyone who needs to rejoin from the home page. */
+.dod-app .dod-room-badge { font-size: 22px; font-weight: 700; color: var(--dod-muted); background: #0b1530d8; border: 1px solid #ffffff30; padding: 4px 14px; border-radius: 999px; white-space: nowrap; }
+.dod-app .dod-room-badge b { font-family: var(--dod-display); color: var(--dod-gold); letter-spacing: 0.12em; margin-left: 6px; }
+
+/* ---------- Tutorial layout: every demo sits in empty space, clear of the sharks, the presenter and their nameplates ---------- */
+/* Captions on the left under the sharks, so they never cover the presenter's nameplate on the right. */
+.dod-app .dod-tutorial .dod-captions { left: 40px; transform: none; width: 1120px; bottom: 12px; font-size: 32px; padding: 12px 22px; }
+/* Build: the example headline on a dark strip on top, the three cards below it, all above the sharks' heads. */
+.dod-app .dod-demo-build { left: 60px; top: 30px; transform: none; width: 1100px; gap: 26px; }
+.dod-app .dod-demo-build p { width: auto; flex-basis: 100%; font-size: 36px; background: #0b1530ee; border: 2px solid var(--dod-gold); border-radius: 16px; padding: 8px 20px; text-shadow: none; animation: dod-pop 0.5s both; }
+.dod-app .dod-demo-card { width: 210px; height: 200px; }
+.dod-app .dod-demo-card span { font-size: 80px; }
+.dod-app .dod-demo-card b { font-size: 28px; }
+/* Pitch: the product card is smaller, and its banner sits top right above the presenter. */
+.dod-app .dod-tutorial .dod-product-card.is-stage-big { top: 20px; width: 1050px; padding: 16px 30px 20px; }
+.dod-app .dod-tutorial .dod-product-card.is-stage-big .dod-product-emojis { font-size: 90px; }
+.dod-app .dod-tutorial .dod-product-card.is-stage-big b { font-size: 44px; }
+.dod-app .dod-tutorial .dod-banner { left: auto; right: 40px; top: 150px; bottom: auto; transform: none; animation: dod-pop 0.4s both; }
+/* Questions: the reactions float in the open sky; "I'm out!" goes top right, above the presenter. */
+.dod-app .dod-demo-reactions { top: 110px; }
+.dod-app .dod-out-sting.is-demo { left: 1460px; top: 140px; font-size: 64px; }
+/* Bids: one tag above each shark. */
+.dod-app .dod-demo-offers { left: 0; top: 0; display: block; gap: 0; }
+.dod-app .dod-demo-offers span { position: absolute; transform: translateX(-50%); white-space: nowrap; font-size: 36px; }
+/* The reveal: top right, above the presenter. */
+.dod-app .dod-tutorial .dod-demo-reveal { left: 1220px; top: 70px; width: 640px; font-size: 28px; }

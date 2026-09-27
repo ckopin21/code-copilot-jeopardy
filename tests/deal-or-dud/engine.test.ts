@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { DealEngine } from '../../src/games/deal-or-dud/engine/DealEngine';
 import { sanitizeDealSnapshot } from '../../src/games/deal-or-dud/engine/sanitize';
-import { gameAwards, readTheRoom, revealOrder, scoreRound, topBidders } from '../../src/games/deal-or-dud/engine/scoring';
+import { gameAwards, revealOrder, scoreRound, topBidders } from '../../src/games/deal-or-dud/engine/scoring';
 import { buildHeadline, modifierById, productById } from '../../src/games/deal-or-dud/content/dealer';
 import { pitchSeconds, type DealPlayer, type DealSnapshot, type RoundResult } from '../../src/games/deal-or-dud/types';
 
@@ -30,16 +30,9 @@ describe('scoring', () => {
     expect(scoreRound('p', ['a', 'b', 'c'], { a: 300, b: 0, c: 100 }).scores[0].delta).toBe(4);
   });
 
-  it('reads the room: +2 for the one bid closest to the average of the other two', () => {
-    // a vs avg(b, c) = 200: 200 off; b vs avg(a, c) = 100: 100 off; c the same. b and c tie.
-    expect(readTheRoom({ a: 0, b: 200, c: 200 })).toEqual({ a: 0, b: 1, c: 1 });
-    // b sits right between the others.
-    expect(readTheRoom({ a: 100, b: 300, c: 500 })).toEqual({ a: 0, b: 2, c: 0 });
-    // b is 150 off avg(0, 500); c is 300 off avg(0, 400).
-    expect(readTheRoom({ a: 0, b: 400, c: 500 })).toEqual({ a: 0, b: 2, c: 0 });
-    // All three equal (all out counts as $0 each): +1 each.
-    expect(readTheRoom({ a: 0, b: 0, c: 0 })).toEqual({ a: 1, b: 1, c: 1 });
-    expect(readTheRoom({ a: 300, b: 300, c: 300 })).toEqual({ a: 1, b: 1, c: 1 });
+  it('gives the sharks nothing, whatever they bid', () => {
+    const outcome = scoreRound('p', ['a', 'b', 'c'], { a: 100, b: 300, c: 500 });
+    expect(outcome.scores).toEqual([{ playerId: 'p', delta: 9, reason: 'Raised $900K' }]);
   });
 
   it('flips lowest first and names the top bidders', () => {
@@ -64,9 +57,8 @@ describe('scoring', () => {
     expect(awards.find((award) => award.id === 'tightwad')).toMatchObject({ playerIds: ['p'] });
     // a bid $500K once; c bid $300K and $200K. They share it.
     expect(awards.find((award) => award.id === 'big-spender')).toMatchObject({ playerIds: ['a', 'c'], detail: '$500K in bids all game' });
-    // Round 1: b is closest (+2). Round 2: p is closest to avg(0, 200) = 100 (+2). b and p tie at 2.
-    expect(awards.find((award) => award.id === 'mind-reader')).toMatchObject({ playerIds: ['p', 'b'] });
-    expect(gameAwards([round('p', 'Nope', { a: 0, b: 0, c: 0 })], players).map((award) => award.id)).toEqual(['mind-reader']);
+    // Nothing raised and everyone bid the same: no awards.
+    expect(gameAwards([round('p', 'Nope', { a: 0, b: 0, c: 0 })], players)).toEqual([]);
   });
 });
 
@@ -156,8 +148,8 @@ describe('DealEngine', () => {
     expect(result.revealOrder).toEqual([s3, s1, s2]);
     expect(result.dealSharkIds).toEqual([s2]);
     const score = (id: string) => state.players.find((player) => player.id === id)!.score;
-    // s1 bid 300, the average of the other two: closest.
-    expect([score(presenter), score(s1), score(s2), score(s3)]).toEqual([9, 2, 0, 0]);
+    // Only the presenter scores.
+    expect([score(presenter), score(s1), score(s2), score(s3)]).toEqual([9, 0, 0, 0]);
     expect(state.history).toHaveLength(1);
   });
 
@@ -245,8 +237,7 @@ describe('DealEngine', () => {
     expect(state.phase).toBe('reveal');
     expect(state.round!.result!.total).toBe(0);
     expect(state.round!.result!.dealSharkIds).toEqual([]);
-    // All three bid $0: they all read the room equally.
-    expect(state.players.map((player) => player.score)).toEqual([0, 1, 1, 1]);
+    expect(state.players.map((player) => player.score)).toEqual([0, 0, 0, 0]);
     expect(state.players.find((player) => player.id === presenter)!.score).toBe(0);
   });
 
@@ -445,6 +436,41 @@ describe('DealEngine', () => {
     }
     expect(snap().phase).toBe('gameover');
     expect(snap().winnerIds).toHaveLength(1);
+  });
+
+  it('plays two pitches per player: a fresh build after round 4, then rounds 5 to 8', () => {
+    engine.updateSettings(code, host, { pitches: 2 });
+    expect(snap().settings.pitches).toBe(2);
+    engine.updateSettings(code, host, { pitches: 9 });
+    expect(snap().settings.pitches).toBe(3);
+    engine.updateSettings(code, host, { pitches: 2 });
+    engine.startGame(code, host);
+    expect(() => engine.updateSettings(code, host, { pitches: 1 })).toThrow(/between games/);
+    const presenters: string[] = [];
+    const headlines: string[] = [];
+    buildAll();
+    for (let round = 0; round < 8; round += 1) {
+      if (round === 4) {
+        // After everyone has pitched once: the scores, then everyone builds a new product.
+        expect(snap().phase).toBe('build');
+        expect(snap().upcoming.map((item) => item.index)).toEqual([4, 5, 6, 7]);
+        buildAll();
+      }
+      expect(snap().phase).toBe('stage');
+      expect(snap().round!.index).toBe(round);
+      presenters.push(snap().round!.presenterId);
+      headlines.push(snap().round!.premise!.headline);
+      engine.continue(code, host);
+      engine.continue(code, host);
+      for (const id of snap().round!.sharkIds) engine.lockOffer(code, id, 100);
+      engine.continue(code, host);
+      if (round < 7) { expect(snap().phase).toBe('break'); engine.continue(code, host); }
+    }
+    expect(snap().phase).toBe('final');
+    expect(presenters).toEqual([...ids, ...ids]);
+    expect(new Set(headlines).size).toBe(8);
+    expect(snap().history).toHaveLength(8);
+    expect(snap().players.every((player) => player.score === 6)).toBe(true);
   });
 
   it('never repeats a product or headline within a game', () => {

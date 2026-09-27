@@ -31,6 +31,8 @@ const DUCKED = 0.3;
 /** The long musical stings play while the hosts talk ("Round two!", the welcome, the winner), so they dip under speech too. */
 const DUCKED_STINGS: ReadonlySet<Sting> = new Set(['fanfare', 'pitch', 'winner']);
 const STING_DUCKED = 0.5;
+/** Stings that are music, not effects. A phase change fades out any still playing, so they never run under the next loop. */
+const MUSICAL_STINGS: ReadonlySet<Sting> = new Set(['fanfare', 'pitch', 'winner', 'drumroll']);
 
 class DealAudio {
   private context: AudioContext | null = null;
@@ -44,6 +46,7 @@ class DealAudio {
   private currentTrack: MusicTrack = null;
   private currentSource: { source: AudioBufferSourceNode; gain: GainNode } | null = null;
   private narration: AudioBufferSourceNode | null = null;
+  private playingStings = new Set<{ source: AudioBufferSourceNode; gain: GainNode }>();
   private settings: AudioSettings = { music: 55, effects: 75, narration: 90, muted: false };
   private listeners = new Set<() => void>();
   unlocked = false;
@@ -160,8 +163,25 @@ class DealAudio {
     const gain = this.context.createGain();
     gain.gain.value = level;
     source.connect(gain).connect(DUCKED_STINGS.has(name) ? this.stingDuckBus! : this.effectsBus!);
+    if (MUSICAL_STINGS.has(name)) {
+      const playing = { source, gain };
+      this.playingStings.add(playing);
+      source.onended = () => { this.playingStings.delete(playing); };
+    }
     source.start();
     return buffer.duration;
+  }
+
+  /** Fades out the musical stings still playing (the fanfare after a quick skip, the winner after Play again). */
+  stopStings(): void {
+    if (!this.context) return;
+    const now = this.context.currentTime;
+    for (const { source, gain } of this.playingStings) {
+      gain.gain.setValueAtTime(gain.gain.value, now);
+      gain.gain.linearRampToValueAtTime(0, now + 0.35);
+      try { source.stop(now + 0.4); } catch { /* already stopped */ }
+    }
+    this.playingStings.clear();
   }
 
   /** Plays a narration file and ducks the music under it. Resolves when it ends (or at once if it cannot play). */

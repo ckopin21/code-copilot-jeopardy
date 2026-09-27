@@ -5,21 +5,29 @@ export interface ToneLine { id: string; text: string; tone?: Tone }
 
 /** Suffixes for generated business names. */
 export const NAME_PATTERNS: readonly ToneLine[] = [
-  { id: 'np-ly', text: '{root}ly' },
-  { id: 'np-co', text: '{root} & Co.' },
-  { id: 'np-lab', text: 'The {root} Lab' },
-  { id: 'np-hub', text: '{root}Hub' },
-  { id: 'np-works', text: '{root} Works' },
-  { id: 'np-ify', text: '{root}ify' },
-  { id: 'np-express', text: '{root} Express' },
-  { id: 'np-bros', text: '{root} Bros.' },
-  { id: 'np-supreme', text: '{root} Supreme' },
-  { id: 'np-pal', text: '{root}Pal' },
-  { id: 'np-nation', text: '{root} Nation' },
-  { id: 'np-duo', text: '{mod}{root}' },
-  { id: 'np-duo2', text: '{mod} {root} Co.' },
-  { id: 'np-legend', text: 'Legendary {root}', tone: 'silly' },
-  { id: 'np-maybe', text: '{root} (Probably Fine)', tone: 'silly' }
+  { id: 'np-sons-lawyers', text: '{root} & Sons & Lawyers' },
+  { id: 'np-legit', text: 'Totally Legit {root} LLC' },
+  { id: 'np-not', text: 'Definitely Not {root}' },
+  { id: 'np-tron', text: '{root}-Tron 3000' },
+  { id: 'np-energy', text: 'Big {root} Energy' },
+  { id: 'np-recalled', text: '{root}ify (Recalled)' },
+  { id: 'np-syndicate', text: 'The {root} Syndicate' },
+  { id: 'np-no-license', text: '{root} Without a License' },
+  { id: 'np-zilla', text: '{root}zilla' },
+  { id: 'np-basement', text: "Uncle {root}'s Basement Emporium" },
+  { id: 'np-crimes', text: '{root} Crimes Inc.' },
+  { id: 'np-google', text: '{root} (Do Not Google)' },
+  { id: 'np-doctor', text: 'Dr. {root} (Not a Real Doctor)' },
+  { id: 'np-bootleg', text: 'Bootleg {root}' },
+  { id: 'np-o-matic', text: '{root}-O-Matic' },
+  { id: 'np-unregulated', text: 'Unregulated {root}' },
+  { id: 'np-tax-shelter', text: '{root} Tax Shelter' },
+  { id: 'np-fire-sale', text: '{root} Warehouse Fire Sale' },
+  { id: 'np-dungeon', text: "Lord {root}'s Discount Dungeon" },
+  { id: 'np-allegedly', text: '{root} (Allegedly)' },
+  { id: 'np-industries', text: '{mod}{root} Industries' },
+  { id: 'np-cult', text: 'The {mod} {root} Cult' },
+  { id: 'np-duo', text: '{mod}{root}' }
 ];
 
 export interface AvatarPreset { id: string; label: string; emoji: string; prop?: string; bg: string; tone?: Tone }

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { ClientGame } from './games/registry';
 import { emitAck } from './platform/net/socket';
 import { navigateInApp, pickerUrl } from './platform/session/resetInstance';
+import { useRoomLookup } from './platform/net/useRoomLookup';
 
 /**
  * The launcher at `/`: pick a game, or type a room key to join whichever game owns it.
@@ -11,10 +12,12 @@ export function GamePicker({ games }: { games: readonly ClientGame[] }) {
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  // Join stays greyed out until the key belongs to a running game.
+  const lookup = useRoomLookup(code);
 
   const join = async () => {
     const roomCode = code.trim().toUpperCase();
-    if (roomCode.length < 4) return;
+    if (lookup.status !== 'found') return;
     setBusy(true);
     setError('');
     try {
@@ -35,9 +38,9 @@ export function GamePicker({ games }: { games: readonly ClientGame[] }) {
       <label htmlFor="picker-room">Joining a game? Enter the room key</label>
       <div>
         <input id="picker-room" value={code} onChange={(event) => setCode(event.target.value.toUpperCase())} maxLength={8} autoCapitalize="characters" autoComplete="off" placeholder="ABCD"/>
-        <button disabled={busy || code.trim().length < 4}>{busy ? '…' : 'Join'}</button>
+        <button disabled={busy || lookup.status !== 'found'}>{busy ? '…' : 'Join'}</button>
       </div>
-      {error && <p role="alert">{error}</p>}
+      {(error || lookup.status === 'missing') && <p role="alert">{error || 'No game with that room key is running. Check the key on the TV.'}</p>}
     </form>
     <h2>Or pick a game to host</h2>
     <ul>
