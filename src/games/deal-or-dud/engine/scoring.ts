@@ -88,7 +88,7 @@ export function gameAwards(history: readonly RoundResult[], players: readonly De
     const winners = rounds.filter((round) => round.total === best);
     const ids = [...new Set(winners.map((round) => round.presenterId))];
     awards.push({ id: 'silver-tongue', title: 'Silver Tongue', emoji: '👅', playerIds: ids,
-      detail: winners.length === 1 ? `Raised ${moneyLabel(best)} for ${winners[0].businessName}` : `Raised ${moneyLabel(best)}` });
+      detail: `Raised ${moneyLabel(best)} in one pitch` });
   }
   const bids = new Map(players.map((player) => [player.id, 0]));
   for (const round of rounds) {

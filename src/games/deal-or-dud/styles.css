@@ -633,4 +633,4 @@ html:has(.dod-app), body:has(.dod-app) { margin: 0; background: #05091a; }
 .dod-app .dod-product-card.is-stage-corner.is-xlong b { font-size: 17px; }
 .dod-app.dod-phone .dod-product-card.is-xlong:not(.is-small) b { font-size: 17px; }
 .dod-app .dod-demo-card:nth-child(5) { animation-delay: 1.8s; }
-.dod-app .dod-step-grid { grid-template-columns: repeat(3, 1fr); gap: 8px 20px; }
+.dod-app .dod-demo-card { padding: 0 12px; text-align: center; }

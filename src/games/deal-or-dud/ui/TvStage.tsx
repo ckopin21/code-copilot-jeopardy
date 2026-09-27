@@ -96,7 +96,7 @@ function TopBar({ room, hostBar }: { room: DealSnapshot; hostBar?: ReactNode }) 
   return <header className={`dod-topbar ${hostBar ? 'has-hostbar' : ''}`}>
     <div className="dod-headline">
       {premise ? <>
-        <div className="dod-business-name">{premise.businessName}</div>
+        <div className="dod-business-name">{playerById(room, room.round?.presenterId ?? '')?.name ?? 'Deal or Dud'}'s pitch</div>
         {/* Long headlines step down in size so they stay clear of the scoreboard. */}
         <h1 key={premise.headline} className={headlineSize(premise.headline)}>{premise.headline}</h1>
       </> : <>
@@ -191,7 +191,7 @@ function RevealPanel({ room }: { room: DealSnapshot }) {
   const { flipped, totalShown } = useRevealProgress(room);
   if (!result) return null;
   return <section className={`dod-reveal ${totalShown ? (result.total ? 'is-raised' : 'is-empty') : ''}`}>
-    <div className="dod-kicker">{totalShown ? result.businessName : <><Emoji char="🥁"/> The bids are in…</>}</div>
+    <div className="dod-kicker">{totalShown ? `${playerById(room, result.presenterId)?.name ?? ''}'s pitch` : <><Emoji char="🥁"/> The bids are in…</>}</div>
     <ol className="dod-bid-flips">{result.revealOrder.map((id, index) => {
       const player = playerById(room, id);
       const offer = result.offers[id] as OfferChoice;
@@ -249,22 +249,19 @@ function ForecastPanel({ room }: { room: DealSnapshot }) {
 function VotePanel({ room }: { room: DealSnapshot }) {
   const votes = room.votes;
   if (!votes) return null;
-  const { nameVote, pitchVote } = room.settings.bonuses;
   const counted = room.phase === 'vote-result';
   const who = (index: number) => playerById(room, room.history[index]?.presenterId)?.name ?? '';
   const list = (winners: number[], label: (index: number) => ReactNode) => <ul>{room.history.map((result, index) => {
     const won = winners.includes(index);
     if (counted && !won) return null;
-    return <li key={index} className={won ? 'is-winner' : ''}>{label(index)}{won && <strong>+{result && winners === votes.nameWinners ? BONUS_POINTS.nameVote : BONUS_POINTS.pitchVote}</strong>}</li>;
+    return <li key={index} className={won ? 'is-winner' : ''}>{label(index)}{won && <strong>+{BONUS_POINTS.pitchVote}</strong>}</li>;
   })}</ul>;
   return <section className="dod-votes">
     <h2>{counted ? 'The votes are in!' : 'Time to vote!'}</h2>
     {!counted && <p className="dod-sub">Vote on your phones. You can't vote for your own. <span className="dod-banner-count">Voted {votes.submitted.length}/{room.players.length}</span></p>}
     <div className="dod-vote-columns">
-      {nameVote && <div><h3><Emoji char="🏷️"/> Best business name</h3>
-        {counted && !votes.nameWinners.length ? <p>No votes.</p> : list(votes.nameWinners, (index) => <><b>{room.history[index].businessName}</b> <small>{who(index)}</small></>)}</div>}
-      {pitchVote && <div><h3><Emoji char="🎤"/> Pitch of the night</h3>
-        {counted && !votes.pitchWinners.length ? <p>No votes.</p> : list(votes.pitchWinners, (index) => <><b>{who(index)}</b> <small>{room.history[index].headline}</small></>)}</div>}
+      <div><h3><Emoji char="🎤"/> Pitch of the night</h3>
+        {counted && !votes.pitchWinners.length ? <p>No votes.</p> : list(votes.pitchWinners, (index) => <><b>{who(index)}</b> <small>{room.history[index].headline}</small></>)}</div>
     </div>
   </section>;
 }
@@ -308,7 +305,7 @@ const DEMO_CARDS = [
   { emoji: '😈', step: 'Made by', text: 'Satan' },
   { emoji: '🚿', step: 'Feature', text: 'Built-in bidet' }
 ];
-const DEMO_PREMISE = { headline: DEMO_HEADLINE, businessName: 'Sushi Crimes Inc.', mainProductId: 'demo', form: 'food' as const, emojis: DEMO_CARDS.map((card) => card.emoji) };
+const DEMO_PREMISE = { headline: DEMO_HEADLINE, mainProductId: 'demo', form: 'food' as const, emojis: DEMO_CARDS.map((card) => card.emoji) };
 
 function TutorialDemo({ focus }: { focus: TutorialFocus }) {
   switch (focus) {

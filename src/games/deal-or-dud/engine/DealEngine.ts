@@ -4,13 +4,13 @@ import type { PlayerJoinInput } from '../../../platform/players/playerJoin';
 import { ROOM_CODE_ALPHABET, randomToken, secureEqual } from '../../../platform/rooms/tokens';
 import { mergeStoredRooms, serializeStoredRooms } from '../../../platform/rooms/roomStorageRecovery';
 import {
-  BONUS_POINTS, DEFAULT_BONUSES, DEFAULT_BUILDER_STEPS, DEFAULT_SETTINGS, DEFAULT_TIMERS, GAME_ID, GAME_TONE, STAGE_PRESETS, OFFER_CHOICES, PLAYER_COUNT, REACTIONS, REACTION_GAP_MS,
+  BONUS_POINTS, DEFAULT_BONUSES, DEFAULT_SETTINGS, DEFAULT_TIMERS, GAME_ID, GAME_TONE, STAGE_PRESETS, OFFER_CHOICES, PLAYER_COUNT, REACTIONS, REACTION_GAP_MS,
   PITCH_LIMITS, ROUND_COUNT, RULE_TIMINGS, TIMER_LIMITS, pitchSeconds, toneAllows, totalRounds,
-  type AudioSettings, type BonusSettings, type BuilderColumn, type BuilderStepSettings, type ClockState, type DealPlayer, type DealSettings, type DealSnapshot,
+  type AudioSettings, type BonusSettings, type BuilderColumn, type ClockState, type DealPlayer, type DealSettings, type DealSnapshot,
   type OfferChoice, type Phase, type ReactionEmoji, type RoundState, type TimerSettings
 } from '../types';
 import {
-  COLUMNS, CUSTOM_EMOJI, OPTIONAL_COLUMNS, PICK_KEY, activeColumns, audienceById, buildHeadline, businessNames, cleanCustom, columnPool, dealHand, emptyBuilder,
+  COLUMNS, CUSTOM_EMOJI, PICK_KEY, audienceById, buildHeadline, cleanCustom, columnPool, dealHand, emptyBuilder,
   featureById, modifierById, modifierFits, pick, productById, stepText, tonePool, type Rng
 } from '../content/dealer';
 import { CONNECTORS } from '../content/words';
@@ -102,6 +102,7 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
         || room.state.history.some((result) => typeof result.total !== 'number');
       room.state.upcoming ??= [];
       room.state.votes ??= null;
+      if (room.state.votes) { room.state.votes.pitches ??= {}; room.state.votes.pitchWinners ??= []; }
       for (const round of [room.state.round, ...room.state.upcoming]) {
         if (!round) continue;
         const builder = round.builder;
@@ -477,8 +478,7 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
       if (typeof updates.tutorial === 'boolean') settings.tutorial = updates.tutorial;
       if (updates.pitches !== undefined) settings.pitches = clamp(updates.pitches, PITCH_LIMITS.min, PITCH_LIMITS.max, settings.pitches);
       if (updates.bonuses) settings.bonuses = cleanBonuses({ ...settings.bonuses, ...updates.bonuses });
-      if (updates.builderSteps) settings.builderSteps = cleanBuilderSteps({ ...settings.builderSteps, ...updates.builderSteps });
-    } else if (updates.timers || updates.timerSteps || updates.timerPreset || updates.tutorial !== undefined || updates.pitches !== undefined || updates.bonuses || updates.builderSteps) {
+    } else if (updates.timers || updates.timerSteps || updates.timerPreset || updates.tutorial !== undefined || updates.pitches !== undefined || updates.bonuses) {
       throw new Error('Game settings can only change between games');
     }
     return this.commit(room);
@@ -568,8 +568,6 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
       presenterId,
       sharkIds: state.players.filter((player) => player.id !== presenterId).map((player) => player.id),
       builder: emptyBuilder(),
-      nameOptions: [],
-      typedName: null,
       premise: null,
       lockedAt: null,
       questionsOpen: false,
@@ -618,14 +616,8 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
     if (round.premise) throw new Error('Your product is already locked in');
     return round;
   }
-  private refreshNames(room: Room, round: RoundState): void {
-    round.nameOptions = businessNames(round.builder, room.state.settings.tone, this.rng);
-  }
-
-  /** A builder step this game uses (the host can switch off the twist, the who and the feature). */
-  private builderStep(room: Room, column: unknown): BuilderColumn {
+  private builderStep(column: unknown): BuilderColumn {
     if (!COLUMNS.includes(column as BuilderColumn)) throw new Error('Unknown step');
-    if (!activeColumns(room.state.settings.builderSteps).includes(column as BuilderColumn)) throw new Error('That step is switched off in this game');
     return column as BuilderColumn;
   }
   private unskip(round: RoundState, step: BuilderColumn): void {
@@ -637,7 +629,7 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
   builderPick(code: string, playerId: string, column: unknown, id: unknown): DealSnapshot {
     const room = this.room(code);
     const round = this.openBuild(room, playerId);
-    const step = this.builderStep(room, column);
+    const step = this.builderStep(column);
     const picks = round.builder;
     const cardId = String(id ?? '');
     if (!picks.hands[step]?.includes(cardId)) throw new Error('That card is not in your hand');
@@ -647,40 +639,37 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
     picks[PICK_KEY[step]] = cardId;
     if (step === 'modifiers') this.fitOther(room, round, 'products');
     if (step === 'products') this.fitOther(room, round, 'modifiers');
-    if (step === 'modifiers' || step === 'products') this.refreshNames(room, round);
     return this.commit(room);
   }
-  /** "✏️ Write your own" for one step. The text replaces that step's card; an empty text goes back to picking a card. */
+  /** "✏️ Write your own" for one step (not the product: that one is always a card). The text replaces that step's card; an empty text goes back to picking a card. */
   builderCustom(code: string, playerId: string, column: unknown, value: unknown): DealSnapshot {
     const room = this.room(code);
     const round = this.openBuild(room, playerId);
-    const step = this.builderStep(room, column);
+    const step = this.builderStep(column);
+    if (step === 'products') throw new Error('Pick a product card');
     const picks = round.builder;
     const text = cleanCustom(value);
     picks.custom = { ...picks.custom };
     if (text) { picks.custom[step] = text; picks[PICK_KEY[step]] = null; this.unskip(round, step); } else delete picks.custom[step];
-    if (step === 'modifiers' || step === 'products') this.refreshNames(room, round);
     return this.commit(room);
   }
   /** "No twist" (or who, or feature): the step is left out of the headline. Picking a card or writing one brings it back. */
   builderSkip(code: string, playerId: string, column: unknown): DealSnapshot {
     const room = this.room(code);
     const round = this.openBuild(room, playerId);
-    const step = this.builderStep(room, column);
+    const step = this.builderStep(column);
     if (step === 'products') throw new Error('Every business needs a product');
     const picks = round.builder;
     picks.skipped = { ...picks.skipped, [step]: true };
     picks[PICK_KEY[step]] = null;
     picks.custom = { ...picks.custom };
     delete picks.custom[step];
-    if (step === 'modifiers') this.refreshNames(room, round);
     return this.commit(room);
   }
   /** The word before the who: "for", "made by", "tested on"… */
   builderConnector(code: string, playerId: string, connector: unknown): DealSnapshot {
     const room = this.room(code);
     const round = this.openBuild(room, playerId);
-    this.builderStep(room, 'audiences');
     if (!CONNECTORS.some((item) => item.id === connector)) throw new Error('Unknown connector');
     round.builder.connector = String(connector);
     return this.commit(room);
@@ -705,25 +694,8 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
   builderReroll(code: string, playerId: string, column: unknown): DealSnapshot {
     const room = this.room(code);
     const round = this.openBuild(room, playerId);
-    const step = this.builderStep(room, column);
+    const step = this.builderStep(column);
     round.builder.hands[step] = dealHand(step, round.builder, room.state.settings.tone, this.rng, this.cardsInPlay(room, round, step));
-    return this.commit(room);
-  }
-  reshuffleNames(code: string, playerId: string): DealSnapshot {
-    const room = this.room(code);
-    const round = this.ownBuild(room, playerId);
-    if (!stepText(round.builder, 'products')) throw new Error('Pick a product first');
-    this.refreshNames(room, round);
-    if (round.premise && !round.typedName) round.premise.businessName = round.nameOptions[0] ?? round.premise.businessName;
-    return this.commit(room);
-  }
-  /** The player types their own business name (it can still change after locking, until the build ends). Empty goes back to the generated one. */
-  setBusinessName(code: string, playerId: string, value: unknown): DealSnapshot {
-    const room = this.room(code);
-    const round = this.ownBuild(room, playerId);
-    const name = typeof value === 'string' ? value.replace(/\s+/g, ' ').trim().slice(0, 32) : '';
-    round.typedName = name || null;
-    if (round.premise) round.premise.businessName = name || (round.nameOptions[0] ?? round.premise.businessName);
     return this.commit(room);
   }
   lockPremiseRequest(code: string, playerId: string): DealSnapshot {
@@ -739,7 +711,7 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
   private fillPicks(room: Room, round: RoundState): void {
     const tone = room.state.settings.tone;
     const picks = round.builder;
-    for (const column of activeColumns(room.state.settings.builderSteps)) {
+    for (const column of COLUMNS) {
       if (stepText(picks, column) || (column !== 'products' && picks.skipped?.[column])) continue;
       const fitting = new Set(columnPool(column, picks, tone).map((item) => item.id));
       let hand = picks.hands[column].filter((id) => fitting.has(id));
@@ -763,18 +735,14 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
       }
       this.fillPicks(room, round);
       headline = buildHeadline(picks);
-      round.nameOptions = [];
     }
     const product = productById(picks.product);
-    if (!round.nameOptions.length) this.refreshNames(room, round);
     // In reading order, like the headline: twist, product, who, feature. A written-in step shows a pencil; a skipped one nothing.
-    const steps = activeColumns(room.state.settings.builderSteps);
     const emojiFor = (column: BuilderColumn, card: { emoji: string } | undefined) =>
-      !steps.includes(column) || (column !== 'products' && picks.skipped?.[column]) ? undefined : picks.custom?.[column] ? CUSTOM_EMOJI : card?.emoji;
+      column !== 'products' && picks.skipped?.[column] ? undefined : picks.custom?.[column] ? CUSTOM_EMOJI : card?.emoji;
     const emojis = [emojiFor('modifiers', modifierById(picks.modifier)), emojiFor('products', product), emojiFor('audiences', audienceById(picks.audience)), emojiFor('features', featureById(picks.feature))]
       .filter((item): item is string => Boolean(item));
-    const fallbackName = round.nameOptions[0] ?? product?.roots[0] ?? 'Mystery Co.';
-    round.premise = { headline, mainProductId: product?.id ?? 'custom', businessName: round.typedName || fallbackName, form: product?.form ?? 'goods', emojis };
+    round.premise = { headline, mainProductId: product?.id ?? 'custom', form: product?.form ?? 'goods', emojis };
     room.usedHeadlines.push(headline);
     if (product && !picks.custom?.products) room.usedProductIds.push(product.id);
     this.recent.headlines = [headline, ...this.recent.headlines].slice(0, 40);
@@ -900,7 +868,6 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
     round.offers = offers;
     round.result = {
       presenterId: round.presenterId,
-      businessName: round.premise?.businessName ?? '',
       headline: round.premise?.headline ?? '',
       bonuses: outcome.bonuses,
       offers,
@@ -929,51 +896,41 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
     const best = Math.max(...room.state.players.map((player) => player.score));
     return room.state.players.filter((player) => player.score === best).map((player) => player.id);
   }
-  /** After the last round: the end-of-game votes if either is switched on, then the final scores. */
+  /** After the last round: the pitch-of-the-night vote if it's switched on, then the final scores. */
   private afterLastRound(room: Room): void {
-    const { nameVote, pitchVote } = room.state.settings.bonuses;
-    if (!nameVote && !pitchVote) { this.startFinal(room); return; }
+    if (!room.state.settings.bonuses.pitchVote) { this.startFinal(room); return; }
     const state = room.state;
     const ids = state.players.map((player) => player.id);
-    state.votes = {
-      names: Object.fromEntries(ids.map((id) => [id, null])),
-      pitches: Object.fromEntries(ids.map((id) => [id, null])),
-      submitted: [], nameWinners: [], pitchWinners: []
-    };
+    state.votes = { pitches: Object.fromEntries(ids.map((id) => [id, null])), submitted: [], pitchWinners: [] };
     state.round = null;
     state.phase = 'vote';
     this.startClock(room, RULE_TIMINGS.vote);
   }
-  /** A player's votes, sent together: a round index for each vote that is on. Nobody can vote for their own round. */
-  submitVotes(code: string, playerId: string, names: unknown, pitches: unknown): DealSnapshot {
+  /** A player's vote for the pitch of the night: a round index. Nobody can vote for their own round. */
+  submitVotes(code: string, playerId: string, pitches: unknown): DealSnapshot {
     const room = this.room(code);
     this.requirePhase(room, 'vote');
     this.requireNotPaused(room);
     const votes = room.state.votes!;
     this.player(room, playerId);
     if (votes.submitted.includes(playerId)) throw new Error('Your votes are in');
-    const { nameVote, pitchVote } = room.state.settings.bonuses;
-    const pickFor = (value: unknown, on: boolean): number | null => {
-      if (!on) return null;
+    const pickFor = (value: unknown): number => {
       const index = Number(value);
       const result = room.state.history[index];
       if (!Number.isInteger(index) || !result) throw new Error('Pick one of the pitches');
       if (result.presenterId === playerId) throw new Error('You cannot vote for your own');
       return index;
     };
-    votes.names[playerId] = pickFor(names, nameVote);
-    votes.pitches[playerId] = pickFor(pitches, pitchVote);
+    votes.pitches[playerId] = pickFor(pitches);
     votes.submitted.push(playerId);
     if (room.state.players.every((player) => votes.submitted.includes(player.id))) this.countVotes(room);
     return this.commit(room);
   }
-  /** Counts the votes and adds the points: +3 for the best name, +5 for the pitch of the night (ties share). */
+  /** Counts the votes and adds the points: +5 for the pitch of the night (ties share). */
   private countVotes(room: Room): void {
     const state = room.state;
     const votes = state.votes!;
-    votes.nameWinners = state.settings.bonuses.nameVote ? voteWinners(votes.names) : [];
-    votes.pitchWinners = state.settings.bonuses.pitchVote ? voteWinners(votes.pitches) : [];
-    for (const index of votes.nameWinners) this.player(room, state.history[index].presenterId).score += BONUS_POINTS.nameVote;
+    votes.pitchWinners = voteWinners(votes.pitches);
     for (const index of votes.pitchWinners) this.player(room, state.history[index].presenterId).score += BONUS_POINTS.pitchVote;
     state.phase = 'vote-result';
     this.startClock(room, RULE_TIMINGS.voteResult);
@@ -1163,15 +1120,8 @@ function migrateSettings(settings: DealSettings): void {
   settings.tone = GAME_TONE;
   settings.pitches = clamp(settings.pitches, PITCH_LIMITS.min, PITCH_LIMITS.max, 1);
   settings.bonuses = cleanBonuses(settings.bonuses);
-  settings.builderSteps = cleanBuilderSteps(settings.builderSteps);
-  delete (settings as Partial<DealSettings> & { complexity?: unknown }).complexity;
-}
-
-/** Every optional builder step as a boolean, with the default (on) for any a save doesn't have. */
-function cleanBuilderSteps(steps: Partial<BuilderStepSettings> | undefined): BuilderStepSettings {
-  const next = { ...DEFAULT_BUILDER_STEPS };
-  for (const key of OPTIONAL_COLUMNS) if (typeof steps?.[key] === 'boolean') next[key] = steps[key]!;
-  return next;
+  delete (settings as Partial<DealSettings> & { complexity?: unknown; builderSteps?: unknown }).complexity;
+  delete (settings as Partial<DealSettings> & { builderSteps?: unknown }).builderSteps;
 }
 
 /** Every bonus switch as a boolean, with the default for any a save doesn't have. */

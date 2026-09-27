@@ -1,4 +1,4 @@
-// The product on stage: its cards, the business name and the headline. The TV shows it big during the pitch;
+// The product on stage: its cards and the headline. The TV shows it big during the pitch;
 // the presenter's phone shows it all round.
 import type { LockedPremise } from '../types';
 import { Emoji } from './Emoji';
@@ -8,7 +8,6 @@ export function ProductCard({ premise, className = '' }: { premise: LockedPremis
   const size = premise.headline.length > 100 ? 'is-xlong' : premise.headline.length > 65 ? 'is-long' : '';
   return <div className={`dod-product-card ${size} ${className}`}>
     <div className="dod-product-emojis" aria-hidden="true">{premise.emojis.map((emoji, index) => <span key={`${emoji}${index}`}><Emoji char={emoji}/></span>)}</div>
-    <small>{premise.businessName}</small>
     <b>{premise.headline}</b>
   </div>;
 }

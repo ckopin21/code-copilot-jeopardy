@@ -97,7 +97,7 @@ describe('narration plan', () => {
     expect(spoken(plan)).toEqual(['round-1', intro, 'pitch-go']);
     // Just the presenter: never the product or the company.
     expect(intro).toContain('Ava');
-    expect(intro).not.toContain(premise.businessName);
+    expect(intro).not.toContain(premise.headline);
     expect(intro.toLowerCase()).not.toContain(premise.headline.toLowerCase());
   });
 

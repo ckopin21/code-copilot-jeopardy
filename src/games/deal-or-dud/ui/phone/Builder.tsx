@@ -1,20 +1,20 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import type { BuilderColumn, BuilderPicks, DealSnapshot, RoundState } from '../../types';
-import { CUSTOM_EMOJI, CUSTOM_MAX, activeColumns, audienceById, connectorText, featureById, modifierById, pickedId, productById, stepDone, stepText } from '../../content/dealer';
+import { COLUMNS, CUSTOM_EMOJI, CUSTOM_MAX, audienceById, connectorText, featureById, modifierById, pickedId, productById, stepDone, stepText } from '../../content/dealer';
 import { CONNECTORS } from '../../content/words';
 import { useClockSeconds } from '../net';
 import { Emoji } from '../Emoji';
 
 type Send = (event: string, payload?: Record<string, unknown>) => Promise<boolean>;
-type Step = BuilderColumn | 'name';
+type Step = BuilderColumn | 'done';
 
 type StepInfo = { id: BuilderColumn; label: string; title: string; where: string; placeholder: string; example: string; skip?: string };
 /** Every step in reading order, so each pick lands left to right: "[twist] [product] for [who], [feature]". */
 const ALL_STEPS: StepInfo[] = [
-  { id: 'modifiers', label: 'Twist', title: 'Pick a twist', where: 'the first word: what makes it special', placeholder: '[twist]', example: 'haunted', skip: 'No twist' },
-  { id: 'products', label: 'Product', title: 'Pick a product', where: 'the thing you sell', placeholder: '[product]', example: 'hot tubs' },
-  { id: 'audiences', label: 'Who', title: 'Who is it for?', where: 'pick the word first, then the who', placeholder: '[who]', example: 'bored astronauts', skip: 'Skip the who' },
-  { id: 'features', label: 'Feature', title: 'Add a feature', where: 'the end: the killer selling point', placeholder: '[feature]', example: 'with a built-in bidet', skip: 'No feature' }
+  { id: 'modifiers', label: 'Twist', title: 'Pick a twist', where: 'Optional: the word in front', placeholder: '[twist]', example: 'haunted', skip: 'No twist' },
+  { id: 'products', label: 'Product', title: 'Pick a product', where: 'The thing you sell (the only must-have)', placeholder: '[product]', example: 'hot tubs' },
+  { id: 'audiences', label: 'Who', title: 'Who is it for?', where: 'Optional: pick the word, then the who', placeholder: '[who]', example: 'bored astronauts', skip: 'No who' },
+  { id: 'features', label: 'Feature', title: 'Add a feature', where: 'Optional: the killer selling point', placeholder: '[feature]', example: 'with a built-in bidet', skip: 'No feature' }
 ];
 
 /**
@@ -44,7 +44,7 @@ function card(column: BuilderColumn, id: string | null): { emoji: string; text: 
 }
 /** Where a phone that just (re)opened the builder should be: the first step not done yet. */
 function firstOpenStep(picks: BuilderPicks, steps: StepInfo[]): Step {
-  return steps.find((step) => !stepDone(picks, step.id))?.id ?? 'name';
+  return steps.find((step) => !stepDone(picks, step.id))?.id ?? 'done';
 }
 
 /** "✏️ Write your own" for a step: a small form in place of the cards. */
@@ -64,47 +64,12 @@ function WriteOwn({ step, picks, send, onDone }: { step: StepInfo; picks: Builde
   </form>;
 }
 
-/**
- * The business name: type anything. The generated name shows as the placeholder and is used if the box is left empty;
- * 🎲 drops in a generated idea. Sent as you type (and when the box loses focus, so a quick "Lock it in" keeps it).
- */
-export function NameChoice({ round, send }: { round: RoundState; send: Send }) {
-  const [draft, setDraft] = useState(round.typedName ?? '');
-  const sent = useRef(round.typedName ?? '');
-  const idea = useRef(0);
-  const flush = (value: string) => {
-    if (value.trim() === sent.current.trim()) return;
-    sent.current = value;
-    void send('player:business-name', { name: value });
-  };
-  // Only a change to the text restarts the wait; the builder re-renders every clock tick.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { const id = window.setTimeout(() => flush(draft), 400); return () => window.clearTimeout(id); }, [draft]);
-  const suggest = () => {
-    const options = round.nameOptions.filter((name) => name !== draft);
-    if (idea.current >= options.length) { idea.current = 0; void send('player:names-reshuffle'); }
-    const next = options[idea.current++ % Math.max(1, options.length)];
-    if (next) { setDraft(next); flush(next); }
-  };
-  return <div className="dod-name-choice">
-    <small>Business name</small>
-    <div className="dod-name-field">
-      <input value={draft} maxLength={32} placeholder={round.nameOptions[0] ?? 'Name your business'} aria-label="Business name"
-        onChange={(event) => setDraft(event.target.value)} onBlur={() => flush(draft)} autoComplete="off" enterKeyHint="done"
-        onKeyDown={(event) => { if (event.key === 'Enter') (event.target as HTMLInputElement).blur(); }}/>
-      <button type="button" className="dod-ghost" aria-label="Give me a name idea" onClick={suggest}>🎲</button>
-    </div>
-    {!draft.trim() && round.nameOptions[0] && <p className="dod-hint">Leave it empty to use “{round.nameOptions[0]}”.</p>}
-  </div>;
-}
-
-/** After locking: the product is set, the name can still change, and the phone waits for everyone else. */
-export function BuildLocked({ room, round, send }: { room: DealSnapshot; round: RoundState; send: Send }) {
+/** After locking: the product is set and the phone waits for everyone else. */
+export function BuildLocked({ room, round }: { room: DealSnapshot; round: RoundState }) {
   const lockSeconds = useClockSeconds(room);
   const locked = room.upcoming.filter((item) => item.lockedAt).length;
   return <section className="dod-screen dod-builder"><div className="dod-screen-main">
     <div className="dod-headline-preview"><small>Locked in 🔒 · you pitch in round {round.index + 1}</small><b>{round.premise?.headline}</b></div>
-    <NameChoice round={round} send={send}/>
     <p className="dod-hint">On your turn you get pitch time to sell it, then the sharks ask questions. Think of a killer line!</p>
   </div>
     <div className="dod-screen-action"><p className="dod-hint">{locked}/{room.players.length} locked in · round 1 starts when everyone is ready, or in {lockSeconds}s</p></div>
@@ -119,14 +84,13 @@ export function BuildLocked({ room, round, send }: { room: DealSnapshot; round: 
  */
 export function Builder({ room, round, send }: { room: DealSnapshot; round: RoundState; send: Send }) {
   const picks = round.builder;
-  const active = activeColumns(room.settings.builderSteps);
-  const STEPS = ALL_STEPS.filter((item) => active.includes(item.id));
+  const STEPS = ALL_STEPS.filter((item) => COLUMNS.includes(item.id));
   const [step, setStep] = useState<Step>(() => firstOpenStep(picks, STEPS));
   const [writing, setWriting] = useState(false);
   const lockSeconds = useClockSeconds(room);
   const at = STEPS.findIndex((item) => item.id === step);
   const current = STEPS[at];
-  const next = () => { setWriting(false); setStep(STEPS[at + 1]?.id ?? 'name'); };
+  const next = () => { setWriting(false); setStep(STEPS[at + 1]?.id ?? 'done'); };
   const choose = (column: BuilderColumn, id: string) => {
     void send('player:builder-pick', { column, id });
     next();
@@ -173,17 +137,17 @@ export function Builder({ room, round, send }: { room: DealSnapshot; round: Roun
         <div className="dod-row dod-hand-tools">
           {at > 0 ? <button className="dod-ghost" onClick={() => setStep(STEPS[at - 1].id)}>← Back</button> : <span/>}
           <button className="dod-ghost" onClick={() => void send('player:builder-reroll', { column: current.id })}>🔀 New cards</button>
-          <button className={`dod-ghost ${picks.custom?.[current.id] ? 'is-on' : ''}`} onClick={() => setWriting(true)}>✏️ {picks.custom?.[current.id] ? 'Edit mine' : 'Write your own'}</button>
+          {current.id !== 'products' && <button className={`dod-ghost ${picks.custom?.[current.id] ? 'is-on' : ''}`} onClick={() => setWriting(true)}>✏️ {picks.custom?.[current.id] ? 'Edit mine' : 'Write your own'}</button>}
           {stepDone(picks, current.id) && <button className="dod-ghost" onClick={next}>Next →</button>}
         </div>
       </>}
     </> : <>
-      <NameChoice round={round} send={send}/>
-      <p className="dod-hint">Tap a pick above to change it.</p>
+      <h2 className="dod-step-title">Ready to pitch it?</h2>
+      <p className="dod-hint">Tap a pick above to change it, or lock it in.</p>
     </>}
   </div>
     <div className="dod-screen-action">
-      {step === 'name'
+      {step === 'done'
         ? <button className="dod-primary big" onClick={() => void send('player:builder-lock')}>Lock it in · auto in {lockSeconds}s</button>
         : <p className="dod-hint">Auto-locks in {lockSeconds}s (empty picks get a random card)</p>}
     </div>

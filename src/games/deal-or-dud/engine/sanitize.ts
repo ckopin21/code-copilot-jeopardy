@@ -21,8 +21,6 @@ export function sanitizeDealSnapshot(snapshot: DealSnapshot, role: RoomRole, pla
     if (!presenter) {
       round.builder = emptyBuilder();
       if (!PREMISE_PUBLIC.includes(copy.phase)) {
-        round.nameOptions = [];
-        round.typedName = null;
         round.premise = null;
       }
     }
@@ -42,16 +40,12 @@ export function sanitizeDealSnapshot(snapshot: DealSnapshot, role: RoomRole, pla
     return {
       ...item,
       builder: own ? item.builder : emptyBuilder(),
-      nameOptions: own ? item.nameOptions : [],
-      typedName: own ? item.typedName ?? null : null,
       premise: own ? item.premise : null
     };
   });
   const votes = copy.votes;
   if (votes && copy.phase === 'vote') {
-    for (const bucket of [votes.names, votes.pitches]) {
-      for (const id of Object.keys(bucket)) if (!(role === 'player' && id === playerId)) bucket[id] = null;
-    }
+    for (const id of Object.keys(votes.pitches)) if (!(role === 'player' && id === playerId)) votes.pitches[id] = null;
   }
   const forecast = copy.forecast;
   if (forecast && copy.phase === 'forecast') {

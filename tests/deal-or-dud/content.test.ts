@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { HAND_SIZE, buildHeadline, businessNames, columnPool, dealHand, emptyBuilder, tonePool } from '../../src/games/deal-or-dud/content/dealer';
+import { HAND_SIZE, buildHeadline, columnPool, dealHand, emptyBuilder, tonePool } from '../../src/games/deal-or-dud/content/dealer';
 import { AUDIENCES, CONNECTORS, FEATURES, MODIFIERS, PRODUCTS } from '../../src/games/deal-or-dud/content/words';
-import { AVATAR_PRESETS, FORECAST_CARDS, NAME_PATTERNS } from '../../src/games/deal-or-dud/content/cues';
+import { AVATAR_PRESETS, FORECAST_CARDS } from '../../src/games/deal-or-dud/content/cues';
 import type { ProductForm, Tone } from '../../src/games/deal-or-dud/types';
 
 const TONES: Tone[] = ['clean', 'silly', 'crude'];
@@ -18,7 +18,7 @@ function seeded(seed: number) {
 
 describe('deal-or-dud content ids', () => {
   it('keeps ids unique', () => {
-    for (const pool of [MODIFIERS, PRODUCTS, AUDIENCES, FEATURES, CONNECTORS, AVATAR_PRESETS, FORECAST_CARDS, NAME_PATTERNS]) {
+    for (const pool of [MODIFIERS, PRODUCTS, AUDIENCES, FEATURES, CONNECTORS, AVATAR_PRESETS, FORECAST_CARDS]) {
       const ids = pool.map((item) => item.id);
       expect(new Set(ids).size).toBe(ids.length);
     }
@@ -40,12 +40,11 @@ describe('deal-or-dud card builder', () => {
 
   it('keeps sex out of the whole deck, names included', () => {
     const texts = [
-      ...MODIFIERS.flatMap((item) => [item.text, item.root ?? '']),
-      ...PRODUCTS.flatMap((item) => [item.text, item.short, ...item.roots]),
+      ...MODIFIERS.map((item) => item.text),
+      ...PRODUCTS.map((item) => item.text),
       ...AUDIENCES.map((item) => item.text),
       ...FEATURES.map((item) => item.text),
       ...AVATAR_PRESETS.map((item) => item.label),
-      ...NAME_PATTERNS.map((item) => item.text),
       ...FORECAST_CARDS.flatMap((item) => [item.title, item.question, ...item.clues])
     ];
     expect(texts.filter((text) => SEX.test(text))).toEqual([]);
@@ -74,9 +73,9 @@ describe('deal-or-dud card builder', () => {
     picks.hands.products = dealHand('products', picks, 'silly', rng);
     expect(picks.hands.products).toHaveLength(6);
     expect(new Set(picks.hands.products.map((id) => PRODUCTS.find((item) => item.id === id)!.form)).size).toBe(6);
-    const again = dealHand('products', picks, 'silly', rng, ['snitch-toasters']);
+    const again = dealHand('products', picks, 'silly', rng, ['toasters']);
     expect(again.some((id) => picks.hands.products.includes(id))).toBe(false);
-    expect(again).not.toContain('snitch-toasters');
+    expect(again).not.toContain('toasters');
   });
 
   it('never deals a Crude card in a Clean game', () => {
@@ -102,10 +101,12 @@ describe('deal-or-dud card builder', () => {
 });
 
 describe('deal-or-dud headlines', () => {
-  it('uses written-in steps as typed, and any twist fits a written-in product', () => {
-    expect(buildHeadline({ product: null, modifier: 'edible', audience: 'the-irs', custom: { products: 'flying hot tubs' } })).toBe('Edible flying hot tubs for the IRS');
-    expect(buildHeadline({ product: 'wifi-stealers', modifier: null, audience: null, custom: { modifiers: 'extremely haunted', audiences: 'my cousin Greg' } })).toBe('Extremely haunted apps that steal wifi passwords for my cousin Greg');
-    expect(businessNames({ product: null, modifier: null, custom: { products: 'flying hot tubs' } }, 'crude', seeded(3)).some((name) => name.includes('Flying'))).toBe(true);
+  it('keeps every product short and general, so it works on its own (the only required card)', () => {
+    for (const product of PRODUCTS) expect(product.text.split(' ').length, product.id).toBeLessThanOrEqual(3);
+  });
+
+  it('uses written-in steps as typed', () => {
+    expect(buildHeadline({ product: 'toasters', modifier: null, audience: null, custom: { modifiers: 'extremely haunted', audiences: 'my cousin Greg' } })).toBe('Extremely haunted toasters for my cousin Greg');
   });
 
   it('adds the word before the who, a feature, and leaves skipped steps out', () => {
@@ -113,19 +114,14 @@ describe('deal-or-dud headlines', () => {
       .toBe('Radioactive gas station sushi made by the IRS, with a built-in bidet');
     expect(buildHeadline({ product: 'gas-station-sushi', modifier: 'radioactive', audience: 'the-irs', feature: 'bidet', skipped: { audiences: true, modifiers: true } }))
       .toBe('Gas station sushi with a built-in bidet');
-    expect(buildHeadline({ product: 'raccoon-butlers', modifier: null, audience: 'your-ex', connector: 'nonsense', custom: { features: 'plus a tiny hat' } })).toBe('Raccoon butlers for your ex, plus a tiny hat');
+    expect(buildHeadline({ product: 'raccoons', modifier: null, audience: 'your-ex', connector: 'nonsense', custom: { features: 'plus a tiny hat' } })).toBe('Raccoons for your ex, plus a tiny hat');
   });
 
   it('builds "twist product for audience" headlines', () => {
     expect(buildHeadline({ product: 'gas-station-sushi', modifier: 'radioactive', audience: 'the-irs' })).toBe('Radioactive gas station sushi for the IRS');
-    expect(buildHeadline({ product: 'raccoon-butlers', modifier: null, audience: 'your-ex' })).toBe('Raccoon butlers for your ex');
+    expect(buildHeadline({ product: 'raccoons', modifier: null, audience: 'your-ex' })).toBe('Raccoons for your ex');
     expect(buildHeadline({ product: null, modifier: 'cursed', audience: 'pirates' })).toBe('');
     // A twist that doesn't fit the product is left out rather than breaking the headline.
-    expect(buildHeadline({ product: 'wifi-stealers', modifier: 'edible', audience: null })).toBe('Apps that steal wifi passwords');
-  });
-
-  it('makes three distinct business names', () => {
-    const names = businessNames({ product: 'snitch-toasters', modifier: 'radioactive' }, 'crude', seeded(7));
-    expect(new Set(names).size).toBe(3);
+    expect(buildHeadline({ product: 'dating-apps', modifier: 'edible', audience: null })).toBe('Dating apps');
   });
 });

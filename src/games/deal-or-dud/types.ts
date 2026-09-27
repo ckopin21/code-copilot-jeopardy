@@ -43,16 +43,14 @@ export interface BonusSettings {
   noWalkout: boolean;
   /** +3 when all three sharks bid $300K or more. */
   ovation: boolean;
-  /** A vote at the end: best business name, +3. */
-  nameVote: boolean;
   /** A vote at the end: pitch of the night, +5. */
   pitchVote: boolean;
 }
 
-export const BONUS_POINTS = { noWalkout: 2, ovation: 3, nameVote: 3, pitchVote: 5 } as const;
+export const BONUS_POINTS = { noWalkout: 2, ovation: 3, pitchVote: 5 } as const;
 /** The smallest bid from every shark that counts as a standing ovation, in $K. */
 export const OVATION_MIN_BID = 300;
-export const DEFAULT_BONUSES: BonusSettings = { noWalkout: true, ovation: true, nameVote: true, pitchVote: true };
+export const DEFAULT_BONUSES: BonusSettings = { noWalkout: true, ovation: true, pitchVote: true };
 
 export interface DealSettings {
   timerPreset: TimerPreset;
@@ -64,13 +62,9 @@ export interface DealSettings {
   captions: boolean;
   /** Extra ways for a presenter to score, each switchable in the settings. */
   bonuses: BonusSettings;
-  /** Which optional builder steps are in the game (the product always is). */
-  builderSteps: BuilderStepSettings;
   audio: AudioSettings;
 }
 
-export type BuilderStepSettings = Record<OptionalColumn, boolean>;
-export const DEFAULT_BUILDER_STEPS: BuilderStepSettings = { modifiers: true, audiences: true, features: true };
 
 export type Phase =
   | 'lobby'
@@ -121,7 +115,7 @@ export interface SharkOut {
 }
 
 export type BuilderColumn = 'products' | 'modifiers' | 'audiences' | 'features';
-/** The steps a host can switch off, or a player can skip. The product is always there. */
+/** The steps a player can skip. The product is always there. */
 export type OptionalColumn = Exclude<BuilderColumn, 'products'>;
 
 /** A player's picks in the card builder. Ids refer to the content pools. */
@@ -136,14 +130,13 @@ export interface BuilderPicks {
   skipped?: Partial<Record<OptionalColumn, true>>;
   /** The cards currently offered in each step (🔀 deals new ones). */
   hands: Record<BuilderColumn, string[]>;
-  /** A step the player wrote themselves ("✏️ Write your own"), instead of a card. Its card pick is then null. */
+  /** A step the player wrote themselves ("✏️ Write your own"; not the product), instead of a card. Its card pick is then null. */
   custom?: Partial<Record<BuilderColumn, string>>;
 }
 
 export interface LockedPremise {
   headline: string;
   mainProductId: string;
-  businessName: string;
   form: ProductForm;
   /** The picked cards' emoji in reading order (twist, product, who, feature), for the product card on the TV and phones. */
   emojis: string[];
@@ -168,7 +161,6 @@ export interface RoundScore {
 
 export interface RoundResult {
   presenterId: string;
-  businessName: string;
   headline: string;
   /** Presenter bonuses this round, already included in their score line. */
   bonuses: { id: 'noWalkout' | 'ovation'; points: number }[];
@@ -188,10 +180,6 @@ export interface RoundState {
   presenterId: string;
   sharkIds: string[];
   builder: BuilderPicks;
-  /** Generated business names: the first is the placeholder and the name used when the player types none. */
-  nameOptions: string[];
-  /** The business name the player typed (free text). Empty or missing means the first generated name. */
-  typedName?: string | null;
   premise: LockedPremise | null;
   /** When the presenter locked their product during the build. */
   lockedAt?: number | null;
@@ -220,11 +208,9 @@ export interface ForecastCardPublic {
  * votes for their own. Votes stay secret until the result.
  */
 export interface VoteState {
-  names: Record<string, number | null>;
   pitches: Record<string, number | null>;
   submitted: string[];
   /** Winning rounds (ties share), filled in when the votes are counted. */
-  nameWinners: number[];
   pitchWinners: number[];
 }
 
@@ -305,7 +291,6 @@ export const DEFAULT_SETTINGS: DealSettings = {
   tone: GAME_TONE,
   tutorial: true,
   bonuses: { ...DEFAULT_BONUSES },
-  builderSteps: { ...DEFAULT_BUILDER_STEPS },
   captions: true,
   audio: { music: 55, effects: 75, narration: 90, muted: false }
 };

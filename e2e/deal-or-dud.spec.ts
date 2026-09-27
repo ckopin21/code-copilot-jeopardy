@@ -50,6 +50,8 @@ test('Deal or Dud: four phones join by room key and the host starts round one', 
   await builder.locator('.dod-pick-card').first().click();
   await expect(builder.getByRole('heading', { name: 'Pick a product' })).toBeVisible();
   await expect(builder.locator('.dod-pick-card')).toHaveCount(6);
+  // The product is always a card: no write-your-own on that step.
+  await expect(builder.getByRole('button', { name: /Write your own/ })).toHaveCount(0);
   await builder.getByRole('button', { name: '🔀 New cards' }).click();
   await builder.locator('.dod-pick-card').nth(1).click();
   await expect(builder.getByRole('heading', { name: 'Who is it for?' })).toBeVisible();
@@ -62,7 +64,7 @@ test('Deal or Dud: four phones join by room key and the host starts round one', 
   await noScroll(builder);
   // Every step but the product can be skipped.
   await builder.getByRole('button', { name: /No feature/ }).click();
-  await expect(builder.getByText('Business name')).toBeVisible();
+  await expect(builder.getByRole('heading', { name: 'Ready to pitch it?' })).toBeVisible();
   await expect(builder.locator('.dod-headline-preview b')).toHaveText(/ made by /);
   await expect(builder.locator('.dod-build-steps li').nth(3)).toContainText('Skipped');
   await noScroll(builder);

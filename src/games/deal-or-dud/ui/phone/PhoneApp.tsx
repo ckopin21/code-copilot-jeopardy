@@ -225,24 +225,20 @@ function ForecastView({ room, me, send }: { room: DealSnapshot; me: DealPlayer; 
   </section>;
 }
 
-/** The end-of-game votes: pick a business name and a pitch (never your own), then lock both at once. */
+/** The end-of-game vote: pick the pitch of the night (never your own), then lock it. */
 function VoteView({ room, me, send }: { room: DealSnapshot; me: DealPlayer; send: Send }) {
   const votes = room.votes!;
-  const { nameVote, pitchVote } = room.settings.bonuses;
-  const [name, setName] = useState<number | null>(null);
   const [pitch, setPitch] = useState<number | null>(null);
   if (room.phase === 'vote-result' || votes.submitted.includes(me.id)) {
     return <Screen><div className="dod-wait"><h2>{room.phase === 'vote-result' ? 'The votes are in!' : 'Votes locked 🔒'}</h2><p>Watch the TV.</p></div></Screen>;
   }
   const options = room.history.map((result, index) => ({ result, index })).filter((item) => item.result.presenterId !== me.id);
   const who = (id: string) => playerById(room, id)?.name ?? '';
-  const ready = (!nameVote || name !== null) && (!pitchVote || pitch !== null);
-  return <Screen action={<button className="dod-primary big" disabled={!ready} onClick={() => void send('player:votes', { name, pitch })}>{ready ? 'Lock my votes' : 'Pick your favorites'}</button>}>
+  const ready = pitch !== null;
+  return <Screen action={<button className="dod-primary big" disabled={!ready} onClick={() => void send('player:votes', { pitch })}>{ready ? 'Lock my vote' : 'Pick your favorite'}</button>}>
     <h2>Time to vote!</h2>
-    {nameVote && <><h3>🏷️ Best business name <small>+{BONUS_POINTS.nameVote}</small></h3>
-      <div className="dod-vote-list">{options.map(({ result, index }) => <button key={index} className={name === index ? 'is-on' : ''} aria-pressed={name === index} onClick={() => setName(index)}><b>{result.businessName}</b><small>{who(result.presenterId)}</small></button>)}</div></>}
-    {pitchVote && <><h3>🎤 Pitch of the night <small>+{BONUS_POINTS.pitchVote}</small></h3>
-      <div className="dod-vote-list">{options.map(({ result, index }) => <button key={index} className={pitch === index ? 'is-on' : ''} aria-pressed={pitch === index} onClick={() => setPitch(index)}><b>{who(result.presenterId)}</b><small>{result.headline}</small></button>)}</div></>}
+    <h3>🎤 Pitch of the night <small>+{BONUS_POINTS.pitchVote}</small></h3>
+    <div className="dod-vote-list">{options.map(({ result, index }) => <button key={index} className={pitch === index ? 'is-on' : ''} aria-pressed={pitch === index} onClick={() => setPitch(index)}><b>{who(result.presenterId)}</b><small>{result.headline}</small></button>)}</div>
   </Screen>;
 }
 
@@ -337,7 +333,7 @@ export function PhoneApp({ urlRoomCode }: { urlRoomCode: string }) {
   } else if (room.phase === 'build') {
     const mine = room.upcoming.find((item) => item.presenterId === me.id);
     body = !mine ? <section className="dod-wait"><h2>Everyone is building</h2></section>
-      : mine.premise ? <BuildLocked room={room} round={mine} send={send}/> : <Builder room={room} round={mine} send={send}/>;
+      : mine.premise ? <BuildLocked room={room} round={mine}/> : <Builder room={room} round={mine} send={send}/>;
   } else if (round && ['reveal'].includes(room.phase)) {
     body = <RevealView room={room} round={round} me={me}/>;
   } else if (round && round.presenterId === me.id && room.phase !== 'break') {

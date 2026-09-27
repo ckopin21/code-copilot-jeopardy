@@ -2,7 +2,7 @@
 import type { BuilderColumn, BuilderPicks, OptionalColumn, ProductForm, Tone } from '../types';
 import { toneAllows } from '../types';
 import { AUDIENCES, CONNECTORS, FEATURES, MODIFIERS, PRODUCTS, type ModifierWord, type ProductWord } from './words';
-import { NAME_PATTERNS, type ToneLine } from './cues';
+import type { ToneLine } from './cues';
 
 export type Rng = () => number;
 
@@ -34,7 +34,7 @@ export const featureById = (id: string | null | undefined) => FEATURES.find((ite
 /** The word before the who ("made by"); an unknown or missing id is "for". */
 export const connectorText = (id: string | null | undefined) => (CONNECTORS.find((item) => item.id === id) ?? CONNECTORS[0]).text;
 
-/** Every builder step in reading order: "[twist] [product] for [who], [feature]". */
+/** Every builder step in reading order: "[twist] [product] for [who], [feature]". Only the product is required. */
 export const COLUMNS: readonly BuilderColumn[] = ['modifiers', 'products', 'audiences', 'features'];
 export const OPTIONAL_COLUMNS: readonly OptionalColumn[] = ['modifiers', 'audiences', 'features'];
 /** Where each step's card pick lives on `BuilderPicks`. */
@@ -132,33 +132,7 @@ export function buildHeadline(picks: HeadlinePicks): string {
   return capitalize(text);
 }
 
-/** Name roots from a written-in step: its longest word, capitalized ("flying hot tubs" gives "Flying"). */
-function customRoot(text: string | undefined): string | undefined {
-  const word = (text ?? '').replace(/[^\p{L}\p{N}\s-]/gu, ' ').split(/\s+/).filter(Boolean).sort((a, b) => b.length - a.length)[0];
-  return word ? capitalize(word.toLowerCase()) : undefined;
-}
-
-export function businessNames(picks: Pick<BuilderPicks, 'product' | 'modifier'> & { custom?: BuilderPicks['custom'] }, tone: Tone, rng: Rng, count = 3): string[] {
-  const card = productById(picks.product);
-  const writtenRoot = customRoot(picks.custom?.products);
-  const product = picks.custom?.products ? (writtenRoot ? { roots: [writtenRoot] } : null) : card;
-  if (!product) return [];
-  const modifierRoot = picks.custom?.modifiers ? customRoot(picks.custom.modifiers) : modifierById(picks.modifier)?.root;
-  const patterns = shuffle(tonePool(NAME_PATTERNS, tone), rng);
-  const names = new Set<string>();
-  for (const pattern of patterns) {
-    if (names.size >= count) break;
-    if (pattern.text.includes('{mod}') && !modifierRoot) continue;
-    names.add(pattern.text.replace('{root}', pick(product.roots, rng)).replace('{mod}', modifierRoot ?? ''));
-  }
-  return [...names];
-}
-
 export function toneLine(pool: readonly ToneLine[], tone: Tone, rng: Rng): ToneLine {
   return pick(tonePool(pool, tone), rng);
 }
 
-/** The steps in this game, in reading order: the product always, the others unless the host switched them off. */
-export function activeColumns(steps: Partial<Record<OptionalColumn, boolean>> | undefined): BuilderColumn[] {
-  return COLUMNS.filter((column) => column === 'products' || steps?.[column] !== false);
-}
