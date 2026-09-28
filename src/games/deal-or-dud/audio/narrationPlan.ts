@@ -2,7 +2,7 @@
 // narrator.ts does the playing.
 import type { DealSnapshot, Phase, RoundState } from '../types';
 import { totalRounds } from '../types';
-import { LIVE_LINES, PER_PLAYER_LINES, raisedLine, speakable, type FixedLineId, type LiveLine } from './narrationLines';
+import { LIVE_LINES, MAX_LIVE_TEXT, PER_PLAYER_LINES, raisedLine, speakable, type FixedLineId, type LiveLine } from './narrationLines';
 
 export type Utterance = { fixed: FixedLineId } | { live: LiveLine };
 
@@ -59,12 +59,22 @@ export function introVariant(room: DealSnapshot, round: RoundState): number {
 }
 
 /**
- * "Hold on to your wallets. It's Ava!" Just the presenter: the product and company are theirs to reveal. The TV says it
- * when the stage opens; the server builds the same line as soon as the product locks and renders it ahead (voicePrep.ts).
+ * "Hold on to your wallets. It's Ava!" Just the presenter; productLine reads the product next. The TV says it when the
+ * stage opens; the server builds the same line as soon as the product locks and renders it ahead (voicePrep.ts).
  */
 export function pitchLine(room: DealSnapshot, round: RoundState): LiveLine | null {
   if (!round.premise) return null;
   return nameLine(room, round.presenterId, (name) => LIVE_LINES.pitch(name, introVariant(room, round)));
+}
+
+/** "Today's pitch: haunted toasters for pirates!" read by the other host after the intro; rendered ahead like the intro. */
+export function productLine(room: DealSnapshot, round: RoundState): LiveLine | null {
+  const headline = round.premise?.headline ?? '';
+  const spoken = speakable(headline);
+  if (!spoken) return null;
+  const line = LIVE_LINES.product(spoken, introVariant(room, round));
+  if (line.text.length > MAX_LIVE_TEXT) return null;
+  return spoken === headline ? line : { ...line, caption: LIVE_LINES.product(headline, introVariant(room, round)).text };
 }
 
 /** Unique leader by score, or null on a tie at the top. */
@@ -102,8 +112,12 @@ function phasePlan(before: DealSnapshot, room: DealSnapshot): NarrationPlan | nu
       return { items, interrupt: true };
     }
     case 'stage': {
-      // Each round opens on stage: "Round two! Please welcome Ben, founder of… The floor is yours!"
-      return { items: [{ fixed: roundLine(room) }, say(round ? pitchLine(room, round) : null, 'pitch'), { fixed: 'pitch-go' }], interrupt: true, delayMs: 2_200 };
+      // Each round opens on stage: "Round two! Please welcome Ben! Today's pitch: haunted toasters! The floor is yours!"
+      const product = round ? productLine(room, round) : null;
+      const items: Utterance[] = [{ fixed: roundLine(room) }, say(round ? pitchLine(room, round) : null, 'pitch')];
+      if (product) items.push({ live: product });
+      items.push({ fixed: 'pitch-go' });
+      return { items, interrupt: true, delayMs: 2_200 };
     }
     case 'offers': return { items: [{ fixed: 'bids' }], interrupt: true };
     case 'reveal': {

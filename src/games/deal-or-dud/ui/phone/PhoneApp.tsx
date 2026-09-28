@@ -111,14 +111,18 @@ function Screen({ children, action }: { children: ReactNode; action?: ReactNode 
 }
 
 // ---------- presenter ----------
-/** The presenter's phone: their product and a big clock (pitch time first, then the stage clock). */
-function PresenterView({ room, round }: { room: DealSnapshot; round: RoundState }) {
+/**
+ * The presenter's phone: their product and a big clock (pitch time first, then the stage clock). During pitch time,
+ * "Ready for questions" ends it early.
+ */
+function PresenterView({ room, round, send }: { room: DealSnapshot; round: RoundState; send: Send }) {
   const seconds = useClockSeconds(room);
   const pitch = pitchSecondsLeft(room, seconds);
   const label = room.phase === 'offers' ? 'Sharks are bidding' : pitch !== null ? 'Pitch time' : 'Questions';
   const hint = room.phase === 'offers' ? 'Secret bids are coming in. Fingers crossed!'
     : pitch !== null ? 'You have the floor. Sell it!' : 'Questions open! Answer the sharks.';
-  return <Screen>
+  const done = pitch !== null && !room.paused ? <button className="big dod-primary" onClick={() => void send('player:pitch-done')}>Ready for questions</button> : undefined;
+  return <Screen action={done}>
     {round.premise && <ProductCard premise={round.premise}/>}
     <div className={`dod-big-clock ${pitch !== null ? 'is-pitch' : ''}`}><small>{label}</small><b>{formatClock(pitch ?? seconds)}</b></div>
     <p className="dod-hint dod-center">{hint}</p>
@@ -337,7 +341,7 @@ export function PhoneApp({ urlRoomCode }: { urlRoomCode: string }) {
   } else if (round && ['reveal'].includes(room.phase)) {
     body = <RevealView room={room} round={round} me={me}/>;
   } else if (round && round.presenterId === me.id && room.phase !== 'break') {
-    body = <PresenterView room={room} round={round}/>;
+    body = <PresenterView room={room} round={round} send={send}/>;
   } else if (round && room.phase !== 'break') {
     body = <SharkView room={room} round={round} me={me} send={send}/>;
   } else if (room.phase === 'vote' || room.phase === 'vote-result') {

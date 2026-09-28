@@ -853,7 +853,18 @@ export class DealEngine implements RoomEngine<DealSnapshot> {
     this.finishRound(room);
   }
 
-  /** Ends pitch time early (a host skip). The stage clock keeps running for the questions. */
+  /** The presenter's "Ready for questions": ends pitch time early, like the host's skip. */
+  finishPitch(code: string, playerId: string): DealSnapshot {
+    const room = this.room(code);
+    this.requirePhase(room, 'stage');
+    this.requireNotPaused(room);
+    const round = this.round(room);
+    if (round.presenterId !== playerId) throw new Error('Only the presenter can do that');
+    if (!round.questionsOpen) this.openQuestions(room);
+    return this.commit(room);
+  }
+
+  /** Ends pitch time early (a host skip or the presenter's button). The stage clock keeps running for the questions. */
   private openQuestions(room: Room): void {
     this.round(room).questionsOpen = true;
   }

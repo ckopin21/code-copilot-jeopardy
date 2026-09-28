@@ -1,10 +1,10 @@
 // Renders live lines ahead of time from the server's full view of the game, so the TV finds them ready.
-// Names are prepared in the lobby, and each pitch intro as soon as its product locks during the build: that is
+// Names are prepared in the lobby, and each pitch intro and product read as soon as its product locks during the build: that is
 // what keeps slower computers (a MacBook Air) on time. Rendering only fills the narrator's cache; nothing is sent
 // to any screen, so a product stays secret until its pitch.
 import type { DealSnapshot } from './types';
 import { LIVE_LINES, type LiveLine } from './audio/narrationLines';
-import { lobbyPrefetch, pitchLine, spokenName } from './audio/narrationPlan';
+import { lobbyPrefetch, pitchLine, productLine, spokenName } from './audio/narrationPlan';
 import { VOICE_SERVICE_URL } from './voiceRoute';
 
 const prepared = new Set<string>();
@@ -14,9 +14,9 @@ let downUntil = 0;
 /** Lines worth rendering now for this state, most urgent first. */
 export function linesToPrepare(room: DealSnapshot): LiveLine[] {
   if (room.phase === 'lobby') return lobbyPrefetch(room);
-  // Pitch intros for every product that is locked but not yet pitched, next round first.
+  // Pitch intros and product reads for every product that is locked but not yet pitched, next round first.
   const intros = [...room.upcoming].sort((a, b) => a.index - b.index)
-    .map((round) => pitchLine(room, round))
+    .flatMap((round) => [pitchLine(room, round), productLine(room, round)])
     .filter((line): line is LiveLine => Boolean(line));
   return [...tieLines(room), ...intros];
 }

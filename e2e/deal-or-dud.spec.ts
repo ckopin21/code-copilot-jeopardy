@@ -97,8 +97,11 @@ test('Deal or Dud: four phones join by room key and the host starts round one', 
   await expect(shark.getByRole('button', { name: /React/ })).toHaveCount(0);
   await expect(shark.getByRole('button', { name: /Ready to bid/ })).toHaveCount(0);
 
-  // The host skips pitch time: questions open, and the sharks get reactions, I'm out and Ready to bid.
-  await host.getByRole('button', { name: 'Skip to questions ▶▶' }).click();
+  // The presenter ends pitch time from their phone (the host's "Skip to questions" does the same): questions open,
+  // and the sharks get reactions, I'm out and Ready to bid.
+  await expect(host.getByRole('button', { name: 'Skip to questions ▶▶' })).toBeVisible();
+  await phones[0].getByRole('button', { name: 'Ready for questions' }).click();
+  await expect(phones[0].getByRole('button', { name: 'Ready for questions' })).toHaveCount(0);
   await expect(host.getByText(/Questions open! Sharks: ask anything/)).toBeVisible();
   await expect(host.locator('.dod-product-card.is-stage-corner')).toBeVisible();
   await shark.getByRole('button', { name: 'React 😂' }).click();

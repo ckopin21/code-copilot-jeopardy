@@ -3,8 +3,8 @@ import { resolve } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { DealEngine } from '../../src/games/deal-or-dud/engine/DealEngine';
 import { sanitizeDealSnapshot } from '../../src/games/deal-or-dud/engine/sanitize';
-import { FIXED_LINES, HOST_VOICES, JOIN_GREETINGS, LIVE_LINES, MAX_LIVE_TEXT, PITCH_INTROS, fixedLineFile, raisedLine, speakable, type FixedLineId } from '../../src/games/deal-or-dud/audio/narrationLines';
-import { dueWarning, lobbyPrefetch, pitchLine, planNarration, revealTotalPlan, spokenName, type NarrationPlan, type Utterance } from '../../src/games/deal-or-dud/audio/narrationPlan';
+import { FIXED_LINES, HOST_VOICES, JOIN_GREETINGS, LIVE_LINES, MAX_LIVE_TEXT, PITCH_INTROS, PRODUCT_READS, fixedLineFile, raisedLine, speakable, type FixedLineId } from '../../src/games/deal-or-dud/audio/narrationLines';
+import { dueWarning, lobbyPrefetch, pitchLine, planNarration, productLine, revealTotalPlan, spokenName, type NarrationPlan, type Utterance } from '../../src/games/deal-or-dud/audio/narrationPlan';
 import { voiceRoute } from '../../src/games/deal-or-dud/voiceRoute';
 import { linesToPrepare, prepareVoices } from '../../src/games/deal-or-dud/voicePrep';
 import type { DealSnapshot } from '../../src/games/deal-or-dud/types';
@@ -93,26 +93,44 @@ describe('narration plan', () => {
     const plan = planNarration(before, after)!;
     expect(plan.interrupt).toBe(true);
     expect(plan.delayMs).toBeGreaterThan(0);
-    const intro = spoken(plan)[1];
-    expect(spoken(plan)).toEqual(['round-1', intro, 'pitch-go']);
-    // Just the presenter: never the product or the company.
+    const [, intro, product] = spoken(plan);
+    expect(spoken(plan)).toEqual(['round-1', intro, product, 'pitch-go']);
+    // The intro names the presenter; the other host then reads the product off the TV.
     expect(intro).toContain('Ava');
     expect(intro).not.toContain(premise.headline);
-    expect(intro.toLowerCase()).not.toContain(premise.headline.toLowerCase());
+    expect(product).toContain(premise.headline);
+    const voices = plan.items.slice(1, 3).map((item) => ('live' in item ? item.live.voice : null));
+    expect(voices[0]).not.toBe(voices[1]);
   });
 
-  it('prepares every pitch intro on the server as products lock, next round first', async () => {
+  it('reads the product in a few different ways, and skips it when there is nothing to say', () => {
+    const lines = PRODUCT_READS.map((_, variant) => LIVE_LINES.product('Haunted toasters for pirates', variant).text);
+    expect(new Set(lines).size).toBe(PRODUCT_READS.length);
+    for (const text of lines) expect(text).toContain('Haunted toasters for pirates');
+    // No recorded stand-in: without the live voice the line is just left out.
+    expect(LIVE_LINES.product('Toasters').fallback).toBeNull();
+    engine.startGame(code, host);
+    buildAll();
+    const room = tv();
+    room.round!.premise!.headline = '🦈🦈';
+    expect(productLine(room, room.round!)).toBeNull();
+    room.round!.premise!.headline = 'Toasters <for> {pirates}';
+    expect(productLine(room, room.round!)).toEqual(expect.objectContaining({ text: expect.stringContaining('Toasters for pirates'), caption: expect.stringContaining('<for>') }));
+  });
+
+  it('prepares every pitch intro and product read on the server as products lock, next round first', async () => {
     engine.startGame(code, host);
     expect(linesToPrepare(engine.snapshot(code))).toEqual([]);
     engine.lockPremiseRequest(code, ids[2]);
     engine.lockPremiseRequest(code, ids[1]);
     const full = engine.snapshot(code);
     const lines = linesToPrepare(full).map((line) => line.text);
-    expect(lines).toEqual([1, 2].map((index) => pitchLine(full, full.upcoming[index])!.text));
-    // Rounds 2 and 3 get different intros, each naming its presenter.
+    expect(lines).toEqual([1, 2].flatMap((index) => [pitchLine(full, full.upcoming[index])!.text, productLine(full, full.upcoming[index])!.text]));
+    // Rounds 2 and 3 get different intros, each naming its presenter, and each product read has its headline.
     expect(lines[0]).toContain(full.players[1].name);
-    expect(lines[1]).toContain(full.players[2].name);
-    expect(lines[0].replace(full.players[1].name, '')).not.toBe(lines[1].replace(full.players[2].name, ''));
+    expect(lines[2]).toContain(full.players[2].name);
+    expect(lines[0].replace(full.players[1].name, '')).not.toBe(lines[2].replace(full.players[2].name, ''));
+    expect(lines[1]).toContain(full.upcoming[1].premise!.headline);
     // The TV says exactly the line the server prepared, so it plays from the narrator's cache.
     engine.lockPremiseRequest(code, ids[0]);
     engine.lockPremiseRequest(code, ids[3]);
@@ -120,9 +138,9 @@ describe('narration plan', () => {
     const fake = (async (url: string) => { asked.push(decodeURIComponent(url)); return new Response('ok'); }) as unknown as typeof fetch;
     prepareVoices(engine.snapshot(code), fake);
     await new Promise((resolve) => setTimeout(resolve, 20));
-    // On stage: "X and Y both want in!" for each pair of this round's sharks, then the next pitch intros.
+    // On stage: "X and Y both want in!" for each pair of this round's sharks, then the next intros and product reads.
     expect(asked.slice(0, 3).map((url) => url.replace(/^.*text=/, ''))).toEqual(['Ben and Cy both want in!', 'Ben and Di both want in!', 'Cy and Di both want in!']);
-    expect(asked).toHaveLength(6);
+    expect(asked).toHaveLength(9);
     expect(asked[3]).toContain(full.players[1].name);
   });
 
@@ -139,7 +157,7 @@ describe('narration plan', () => {
     const after = tv();
     after.players[0].name = '🦈';
     expect(spokenName(after, ids[0])).toBeNull();
-    expect(spoken(planNarration(before, after))).toEqual(['round-1', 'pitch', 'pitch-go']);
+    expect(spoken(planNarration(before, after))).toEqual(['round-1', 'pitch', productLine(after, after.round!)!.text, 'pitch-go']);
   });
 
   it('speaks the pronunciation but captions the typed name', () => {

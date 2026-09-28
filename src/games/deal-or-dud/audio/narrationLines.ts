@@ -108,7 +108,7 @@ export const JOIN_GREETINGS: readonly ((name: string) => string)[] = [
 ];
 
 /**
- * Stage intros: just the presenter, never the product or company (the pitch reveals those). Each round gets a
+ * Stage intros: just the presenter. The other host reads the product next (PRODUCT_READS). Each round gets a
  * different one (see `introVariant`).
  */
 export const PITCH_INTROS: readonly ((name: string) => string)[] = [
@@ -124,6 +124,15 @@ export const PITCH_INTROS: readonly ((name: string) => string)[] = [
   (name) => `Big dreams, bigger ideas. Welcome, ${name}!`
 ];
 
+/** Right after the intro, the other host reads the product off the TV: "Today's pitch: haunted toasters for pirates!" */
+export const PRODUCT_READS: readonly ((headline: string) => string)[] = [
+  (headline) => `The product: ${headline}!`,
+  (headline) => `Today's pitch: ${headline}!`,
+  (headline) => `On the table: ${headline}!`,
+  (headline) => `Up for grabs: ${headline}!`,
+  (headline) => `Tonight's big idea: ${headline}!`
+];
+
 /** Live lines. A null name means the line cannot be built, so the caller plays the fallback. */
 export const LIVE_LINES = {
   joined: (name: string, variant = 0): LiveLine => {
@@ -136,6 +145,12 @@ export const LIVE_LINES = {
     const index = ((variant % PITCH_INTROS.length) + PITCH_INTROS.length) % PITCH_INTROS.length;
     return { text: PITCH_INTROS[index](name), voice: index % 2 ? 'george' : 'adam', fallback: 'pitch' };
   },
+  /** Said by the host who did not do the intro. No recorded fallback: without the live voice it is skipped. */
+  product: (headline: string, variant = 0): LiveLine => {
+    const index = ((variant % PRODUCT_READS.length) + PRODUCT_READS.length) % PRODUCT_READS.length;
+    const introIndex = ((variant % PITCH_INTROS.length) + PITCH_INTROS.length) % PITCH_INTROS.length;
+    return { text: PRODUCT_READS[index](headline), voice: introIndex % 2 ? 'adam' : 'george', fallback: null };
+  },
   out: (name: string): LiveLine => ({ text: `${name} is out!`, voice: 'george', fallback: 'out' }),
   dealIn: (name: string): LiveLine => ({ text: `${name} is in!`, voice: 'adam', fallback: 'deal-in' }),
   bothIn: (first: string, second: string): LiveLine => ({ text: `${first} and ${second} both want in!`, voice: 'adam', fallback: 'both-in' }),
@@ -147,7 +162,7 @@ export const LIVE_LINES = {
 export type LiveLineKind = keyof typeof LIVE_LINES;
 
 /** Lines worth rendering in the lobby for each player so they play without a wait later. */
-export const PER_PLAYER_LINES: readonly Exclude<LiveLineKind, 'pitch' | 'joined' | 'hotSeat' | 'bothIn'>[] = ['leader', 'stillLeads', 'out', 'dealIn', 'winner'];
+export const PER_PLAYER_LINES: readonly Exclude<LiveLineKind, 'pitch' | 'product' | 'joined' | 'hotSeat' | 'bothIn'>[] = ['leader', 'stillLeads', 'out', 'dealIn', 'winner'];
 
 /** "Nine hundred thousand dollars raised!" for a total in $K; null for $0 (the hosts say "Not a single offer!"). */
 export function raisedLine(total: number): FixedLineId | null {

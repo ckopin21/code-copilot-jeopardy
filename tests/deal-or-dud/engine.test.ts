@@ -289,6 +289,26 @@ describe('DealEngine', () => {
     expect(snap().phase).toBe('offers');
   });
 
+  it('lets the presenter end pitch time early, and only the presenter', () => {
+    engine.startGame(code, host);
+    buildAll();
+    const presenter = snap().round!.presenterId;
+    const shark = snap().round!.sharkIds[0];
+    expect(() => engine.finishPitch(code, shark)).toThrow(/Only the presenter/);
+    engine.pause(code, host);
+    expect(() => engine.finishPitch(code, presenter)).toThrow(/paused/);
+    engine.resume(code, host);
+    const left = snap().clock!.endsAt;
+    engine.finishPitch(code, presenter);
+    expect(snap().phase).toBe('stage');
+    expect(snap().round!.questionsOpen).toBe(true);
+    // The rest of the stage clock is now question time; a second tap does nothing.
+    expect(snap().clock!.endsAt).toBe(left);
+    engine.finishPitch(code, presenter);
+    expect(snap().phase).toBe('stage');
+    expect(() => engine.goOut(code, shark)).not.toThrow();
+  });
+
   it('keeps pitch time to a third of a short stage clock, and holds it while paused', () => {
     engine.updateSettings(code, host, { timerPreset: 'quick' });
     engine.startGame(code, host);

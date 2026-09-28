@@ -39,6 +39,7 @@ export const dealServerGame: ServerGame<DealEngine, DealSnapshot> = {
     'player:builder-skip': ({ engine, roomCode, playerId, payload }) => void engine.builderSkip(roomCode, playerId, payload.column),
     'player:builder-connector': ({ engine, roomCode, playerId, payload }) => void engine.builderConnector(roomCode, playerId, payload.connector),
     'player:builder-lock': ({ engine, roomCode, playerId }) => void engine.lockPremiseRequest(roomCode, playerId),
+    'player:pitch-done': ({ engine, roomCode, playerId }) => void engine.finishPitch(roomCode, playerId),
     'player:react': ({ engine, roomCode, playerId, payload }) => void engine.react(roomCode, playerId, payload.emoji),
     'player:out': ({ engine, roomCode, playerId }) => void engine.goOut(roomCode, playerId),
     'player:ready-to-bid': ({ engine, roomCode, playerId }) => void engine.toggleReadyToBid(roomCode, playerId),
