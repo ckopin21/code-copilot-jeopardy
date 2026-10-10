@@ -1,6 +1,6 @@
 # Repository instructions
 
-LAN party-game platform (Node + Socket.IO server, React 19 + Vite client, TypeScript). First game: Blue Stage Trivia. Read `docs/architecture.md` for the big picture and `docs/development.md` â†’ "Where a change belongs" before editing.
+LAN party-game platform (Node + Socket.IO server, React 19 + Vite client, TypeScript). First game: Blue Stage Trivia. Read `docs/architecture.md` for the big picture and `docs/development.md` → "Where a change belongs" before editing.
 
 ## Boundaries
 
@@ -11,7 +11,7 @@ LAN party-game platform (Node + Socket.IO server, React 19 + Vite client, TypeSc
 
 ## Don't
 
-- Don't change browser storage keys (`blue-stage-â€¦`), game ids, or `.data/` file names; saved rooms and reconnect seats depend on them.
+- Don't change browser storage keys (`blue-stage-…`), game ids, or `.data/` file names; saved rooms and reconnect seats depend on them.
 - Don't hand-edit `src/games/trivia/packs/generatedRegistry.ts`; run `npm run packs:sync`.
 - Don't reorder `src/games/trivia/styles/index.ts`; later sheets override earlier ones and tests assert the order. Add new sheets at the end.
 - Don't patch React-rendered DOM from outside React (MutationObserver/querySelector scripts). Put UI in components.
