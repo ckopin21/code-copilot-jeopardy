@@ -134,3 +134,7 @@ If you want more total questions without changing existing categories, add anoth
 ## Custom pack support
 
 There is currently no runtime JSON upload endpoint. Add new packs under `src/games/trivia/packs/`, validate them with `npm run questions:check`, and include them in the application build.
+
+## American History versions
+
+See [American History: Versions A and B](american-history-packs.md) for the matched 42-question packs, launch instructions, and factual reference ledger.
