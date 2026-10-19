@@ -99,4 +99,3 @@ Reviewed 2026-10-19 against archival, museum and government references. Each row
 | 400 | [Source](https://baseballhall.org/discover/inside-pitch/jackie/robinson/legacy) | [Source](https://nmaahc.si.edu/explore/stories/new-african-american-identity-harlem-renaissance) |
 | 500 | [Source](https://airandspace.si.edu/collection-objects/ryan-nyp-spirit-st-louis-charles-lindbergh/nasm_A19280021000) | [Source](https://www.nps.gov/places/woodstock-music-festival-site.htm) |
 | 1000 | [Source](https://www.nps.gov/yell/learn/historyculture/yellowstoneestablishment.htm) | [Source](https://www.dol.gov/general/aboutdol/history/mono-regsafepart07) |
-
