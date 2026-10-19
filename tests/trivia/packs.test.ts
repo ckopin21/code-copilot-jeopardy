@@ -68,8 +68,8 @@ describe('question pack catalog', () => {
     expect(likelyRepeatedFact(left, reworded)).toBe(true);
     expect(likelyRepeatedFact(left, differentFact)).toBe(false);
 
-    const leftPack = { ...builtInPacks[0], id: 'left-pack', finalQuestionId: undefined, questions: [left] };
-    const rightPack = { ...builtInPacks[1], id: 'right-pack', finalQuestionId: undefined, questions: [reworded] };
+    const leftPack = { ...builtInPacks[0], id: 'left-pack', categoryOrder: undefined, finalQuestionId: undefined, questions: [left] };
+    const rightPack = { ...builtInPacks[1], id: 'right-pack', categoryOrder: undefined, finalQuestionId: undefined, questions: [reworded] };
     expect(likelySimilarQuestions([leftPack, rightPack])).toEqual([expect.objectContaining({ left, right: reworded })]);
     expect(() => validatePackCatalog([leftPack, rightPack])).not.toThrow();
   });
@@ -123,7 +123,7 @@ describe('question pack catalog', () => {
     const template = builtInPacks[0].questions[0];
     const left = { ...template, id: 'review-left', packId: 'review', text: 'Which planet is known as the red planet in our solar system?', acceptedAnswers: ['Mars'], factKey: 'mars-red' };
     const right = { ...template, id: 'review-right', packId: 'review', text: 'Which planet is known as the red planet in the solar system?', acceptedAnswers: ['Earth'], factKey: 'earth-red' };
-    const reviewPack = { ...builtInPacks[0], id: 'review', finalQuestionId: undefined, questions: [left, right] };
+    const reviewPack = { ...builtInPacks[0], id: 'review', categoryOrder: undefined, finalQuestionId: undefined, questions: [left, right] };
     expect(likelySimilarQuestions([reviewPack])).toEqual([expect.objectContaining({ left, right })]);
     expect(() => validatePackCatalog([reviewPack])).not.toThrow();
   });
