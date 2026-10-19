@@ -61,7 +61,7 @@ for (const pack of [americanHistoryAPack, americanHistoryBPack]) {
       await host.screenshot({ path: testInfo.outputPath('host-clue.png') });
       await phones[0].screenshot({ path: testInfo.outputPath('phone-clue.png') });
       for (const phone of phones) await expect(phone.getByText(question.acceptedAnswers[0], { exact: true })).toHaveCount(0);
-      await expect(display.getByText(question.acceptedAnswers[0], { exact: true })).toHaveCount(0);
+      await expect(display.locator('.presentation-answer')).toHaveCount(0);
       const buzzer = phones[0].getByRole('button', { name: 'BUZZ', exact: true });
       await expect(buzzer).toBeEnabled({ timeout: 20_000 });
       // The live buzzer pulses continuously; use a real pointer click without waiting for animation stability.
@@ -69,7 +69,7 @@ for (const pack of [americanHistoryAPack, americanHistoryBPack]) {
       await expect(host.locator('.winner-chip')).toContainText(names[0]);
       await host.getByRole('button', { name: 'Reveal Answer', exact: true }).click();
       await expect(phones[0].getByText(question.acceptedAnswers[0], { exact: true })).toBeVisible();
-      await expect(display.getByText(question.acceptedAnswers[0], { exact: true })).toBeVisible();
+      await expect(display.locator('.presentation-answer strong')).toHaveText(question.acceptedAnswers.join(' / '));
       await host.getByRole('button', { name: 'Correct', exact: true }).click();
       await expect(phones[0].locator('[data-player-score]')).toHaveText(String(question.value));
       for (const phone of phones.slice(1)) await expect(phone.locator('[data-player-score]')).toHaveText('0');
