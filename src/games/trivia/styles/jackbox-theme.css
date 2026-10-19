@@ -642,3 +642,5 @@ input[type='range'] { accent-color: var(--jb-yellow); }
   paint-order: stroke fill;
   text-shadow: 0 .07em 0 var(--jb-ink) !important;
 }
+/* Lock-in cards are cream, so their copy stays ink even inside Final screens. */
+.response-locked.response-locked :is(h3, p, small, span, strong) { color: var(--jb-ink) !important; }
