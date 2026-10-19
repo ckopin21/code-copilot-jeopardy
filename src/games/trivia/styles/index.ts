@@ -32,3 +32,6 @@ import './normal-host-layout.css';
 import './player-customization.css';
 import './ui-layout-audit-fixes.css';
 import './ui-layout-contract.css';
+
+// Party-game look. Paint only, last so it wins.
+import './jackbox-theme.css';

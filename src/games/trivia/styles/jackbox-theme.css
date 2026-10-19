@@ -1,0 +1,644 @@
+/* Party-game theme: loud violet stage, chunky ink outlines, hard drop shadows, candy buttons and
+   bubbly display type. Paint only (color, font, border, shadow, background). Layout, sizing and
+   the avatar contract stay owned by the earlier sheets, so behavior and fit tests are unchanged. */
+
+:root {
+  --jb-ink: #170838;
+  --jb-stage-1: #8b4dff;
+  --jb-stage-2: #5b1fe0;
+  --jb-stage-3: #3a0f9e;
+  --jb-stage-4: #22076a;
+  --jb-panel-top: #5f27e3;
+  --jb-panel-bottom: #4515b8;
+  --jb-well: #2f0c86;
+  --jb-well-2: #3b119f;
+  --jb-tile-a: #6a2cf5;
+  --jb-tile-b: #7d43ff;
+  --jb-yellow: #ffd23f;
+  --jb-pink: #ff3d8b;
+  --jb-teal: #2ee6c8;
+  --jb-sky: #4cc9ff;
+  --jb-lime: #8cf25a;
+  --jb-red: #ff4a6b;
+  --jb-cream: #fff7e3;
+  --jb-lavender: #dccbff;
+  --jb-display: 'Passion One', 'Oswald', sans-serif;
+  --jb-body: 'Nunito', 'DM Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --jb-pop: 0 6px 0 var(--jb-ink);
+  --jb-pop-sm: 0 4px 0 var(--jb-ink);
+  --jb-lift: 0 8px 0 var(--jb-ink), 0 22px 44px rgba(16, 2, 52, .45);
+  --jb-stage:
+    repeating-conic-gradient(from -4deg at 50% 38%, rgba(255, 255, 255, .06) 0deg 8deg, transparent 8deg 16deg),
+    radial-gradient(circle at 50% 38%, var(--jb-stage-1) 0%, var(--jb-stage-2) 34%, var(--jb-stage-3) 66%, var(--jb-stage-4) 100%);
+
+  /* Legacy tokens used throughout the earlier sheets. */
+  --bg: var(--jb-stage-4);
+  --surface: var(--jb-well);
+  --surface-2: var(--jb-well-2);
+  --surface-3: var(--jb-panel-bottom);
+  --line: rgba(23, 8, 56, .9);
+  --line-soft: rgba(255, 255, 255, .14);
+  --muted: var(--jb-lavender);
+  --blue: var(--jb-sky);
+  --gold: var(--jb-yellow);
+  --green: var(--jb-lime);
+  --red: var(--jb-red);
+  --shadow: var(--jb-lift);
+  font-family: var(--jb-body);
+}
+
+html, body, #root { background: var(--jb-stage-4); }
+body { background: var(--jb-stage); background-attachment: fixed; font-family: var(--jb-body); }
+
+/* Display type: everything that used the condensed headline face. */
+.section-kicker,
+.brand-mark,
+.menu-footer,
+.mini-brand,
+.room-code,
+.score,
+.panel-v2 h1,
+.panel-v2 h2,
+.join-card-v2 strong,
+.board-header-v2 strong,
+.category-tile,
+.question-tile,
+.modifier-banner,
+.question-card-v2 h1,
+.state-card h1,
+.question-meta-v2,
+.countdown-panel strong,
+.response-progress strong,
+.answer-reveal-v2 strong,
+.timer>span,
+.recap-scene-v2>h1,
+.recap-card-v2>strong,
+.modal-room-code,
+.review-modal-v2 h2,
+.phone-brand,
+.phone-header-v2>b,
+.phone-state-v2 h1,
+.phone-question-v2 h2,
+.buzzer-button-v2,
+.response-reveal-phone strong,
+.spoken-answer-panel h1,
+.presentation-center>h1,
+.presentation-room strong,
+.presentation-question h1,
+.presentation-response-count strong,
+.presentation-scores-v2 strong,
+.question-modifier-strip,
+.buzzer-live-banner,
+.daily-double-burst,
+.modifier-reveal-card strong,
+.modifier-banner.x2 + .board .question-tile:not(.used)::after,
+.modifier-banner.x3 + .board .question-tile:not(.used)::after,
+.player-phone-v2.phone-fire::before,
+.player-phone-v2.phone-cold::before,
+.used-tile-value,
+.score-flight-token,
+.used-check-empty,
+.final-reveal-card strong,
+.recap-player-heading > strong,
+.saved-game-main strong,
+.menu-mode-section > header span,
+.menu-modal h2,
+.how-step-grid article > b,
+.game-transition-overlay h1,
+.category-intro-grid span,
+.question-tile.used.has-result .used-tile-value,
+.dev-presentation-value strong,
+.presentation-board .question-tile.used.has-result .used-tile-value,
+.board-presentation-mode .question-tile.used.has-result .used-tile-value,
+.presentation-board .question-tile.used.has-result .used-result-chip b,
+.board-presentation-mode .question-tile.used.has-result .used-result-chip b,
+.presentation-board .question-tile.used.has-result .used-result-chip em,
+.board-presentation-mode .question-tile.used.has-result .used-result-chip em,
+.effect-preview-buzz,
+.effect-preview-score,
+.effect-preview-stars,
+.presentation-winner-identity > h1 {
+  font-family: var(--jb-display) !important;
+  font-weight: 400 !important;
+}
+.question-tile.used small,
+.used-question-modifiers > span,
+.used-result-modifiers > i,
+.used-result-summary { font-family: var(--jb-body) !important; }
+
+/* Stage backgrounds. */
+.showcase-menu.menu-shell,
+.showcase-host.host-shell,
+.phone-shell,
+.player-phone-v2,
+.presentation-shell,
+.board-presentation-mode,
+.boot-screen,
+.presentation-boot {
+  background: var(--jb-stage) !important;
+}
+.showcase-menu .menu-backdrop:before { background: radial-gradient(circle at 50% 30%, rgba(255, 210, 63, .16), transparent 36%); }
+.showcase-menu .menu-backdrop i { opacity: 0; }
+.question-stage { background: transparent !important; }
+.game-transition-overlay {
+  background:
+    repeating-conic-gradient(from 0deg at 50% 42%, rgba(255, 255, 255, .07) 0deg 8deg, transparent 8deg 16deg),
+    radial-gradient(circle at 50% 42%, rgba(139, 77, 255, .97), rgba(58, 15, 158, .98) 60%, rgba(23, 8, 56, .98)) !important;
+}
+
+/* Logos and headline text: bubbly, outlined, dropped. */
+.brand-mark strong,
+.mini-brand strong,
+.phone-brand strong {
+  color: var(--jb-yellow) !important;
+  -webkit-text-stroke: .09em var(--jb-ink);
+  paint-order: stroke fill;
+  text-shadow: 0 .07em 0 var(--jb-ink) !important;
+  letter-spacing: .01em !important;
+}
+.brand-mark span,
+.mini-brand span,
+.phone-brand span { color: var(--jb-teal) !important; }
+.question-card-v2 h1,
+.state-card h1,
+.presentation-question h1,
+.presentation-center > h1,
+.game-transition-overlay h1,
+.phone-state-v2 h1,
+.spoken-answer-panel h1,
+.recap-scene-v2 > h1,
+.panel-v2 h1,
+.menu-modal h2,
+.presentation-winner-identity > h1 {
+  color: #fff;
+  text-shadow: 0 .06em 0 var(--jb-ink), 0 0 .5em rgba(23, 8, 56, .35) !important;
+  letter-spacing: .005em !important;
+}
+.panel-v2 h1,
+.game-transition-overlay h1 { color: var(--jb-yellow) !important; }
+.section-kicker { color: var(--jb-teal) !important; letter-spacing: .12em !important; }
+.section-kicker.gold, .gold { color: var(--jb-yellow) !important; }
+.helper-copy, .muted { color: var(--jb-lavender); }
+
+/* Big panels. */
+.showcase-lobby .panel-v2,
+.question-card-v2,
+.state-card,
+.modifier-reveal-card,
+.modal-card,
+.recap-card-v2,
+.phone-card,
+.menu-modal,
+.audio-drawer {
+  background: linear-gradient(180deg, var(--jb-panel-top), var(--jb-panel-bottom)) !important;
+  border-color: var(--jb-ink) !important;
+  border-style: solid !important;
+  box-shadow: var(--jb-lift) !important;
+}
+.showcase-lobby .panel-v2,
+.question-card-v2,
+.state-card,
+.modal-card,
+.phone-card,
+.menu-modal { border-width: 4px !important; }
+.showcase-menu .menu-card {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+/* Wells inside panels. */
+.roster-row,
+.enhanced-pack-card,
+.game-mode-card-v2,
+.toggle-v2,
+.menu-mode-section,
+.how-step-grid article,
+.countdown-panel,
+.customization-tabs,
+.customization-preview,
+.presentation-room,
+.menu-tool-button,
+.menu-music-volume,
+.music-track-select,
+.audio-slider-grid label,
+.reveal-first-note,
+.turn-selector,
+.grading-row,
+.response-progress,
+.saved-game-preview,
+.advanced-danger-zone {
+  background: var(--jb-well) !important;
+  border-color: var(--jb-ink) !important;
+  border-style: solid !important;
+  box-shadow: inset 0 3px 0 rgba(255, 255, 255, .07), var(--jb-pop-sm) !important;
+}
+.roster-row,
+.enhanced-pack-card,
+.game-mode-card-v2,
+.menu-mode-section,
+.how-step-grid article,
+.countdown-panel,
+.presentation-room,
+.saved-game-preview { border-width: 3px !important; }
+.menu-tool-button:not(:disabled):hover,
+.enhanced-pack-card:hover,
+.game-mode-card-v2:not(:disabled):hover { background: var(--jb-well-2) !important; }
+.enhanced-pack-card.selected,
+.game-mode-card-v2.selected {
+  background: linear-gradient(180deg, #7b3dff, #5a22d8) !important;
+  border-color: var(--jb-yellow) !important;
+  box-shadow: 0 0 0 3px var(--jb-ink), 0 6px 0 3px var(--jb-ink) !important;
+}
+.how-step-grid article > b { background: var(--jb-yellow) !important; color: var(--jb-ink) !important; border: 3px solid var(--jb-ink); }
+.menu-mode-section > header span { color: var(--jb-yellow) !important; }
+
+/* Candy buttons. */
+.primary-button,
+.secondary-button,
+.correct-button,
+.wrong-button,
+.nav-button,
+.presentation-audio-gate,
+.presentation-back,
+.seat-pause-button,
+.seat-remove-button,
+.advanced-reset-button,
+.wager-grid button,
+.host-command-trigger {
+  border: 3px solid var(--jb-ink) !important;
+  box-shadow: var(--jb-pop-sm) !important;
+  text-shadow: none !important;
+  font-weight: 900 !important;
+}
+.primary-button:not(:disabled):hover,
+.secondary-button:not(:disabled):hover,
+.correct-button:not(:disabled):hover,
+.wrong-button:not(:disabled):hover,
+.nav-button:not(:disabled):hover,
+.wager-grid button:not(:disabled):hover { box-shadow: 0 6px 0 var(--jb-ink) !important; }
+.primary-button:not(:disabled):active,
+.secondary-button:not(:disabled):active,
+.correct-button:not(:disabled):active,
+.wrong-button:not(:disabled):active,
+.nav-button:not(:disabled):active,
+.wager-grid button:not(:disabled):active { transform: translateY(3px) !important; box-shadow: 0 1px 0 var(--jb-ink) !important; }
+.primary-button { background: var(--jb-yellow) !important; color: var(--jb-ink) !important; }
+.secondary-button,
+.nav-button,
+.presentation-back,
+.presentation-audio-gate { background: var(--jb-sky) !important; color: var(--jb-ink) !important; }
+.secondary-button.reveal-button { background: var(--jb-pink) !important; color: #fff !important; }
+.correct-button { background: var(--jb-lime) !important; color: var(--jb-ink) !important; }
+.wrong-button,
+.nav-button.danger-ghost,
+.advanced-reset-button { background: var(--jb-red) !important; color: #fff !important; }
+.seat-pause-button { background: var(--jb-sky) !important; color: var(--jb-ink) !important; }
+.seat-remove-button { background: var(--jb-red) !important; color: #fff !important; }
+.wager-grid button { background: var(--jb-yellow) !important; color: var(--jb-ink) !important; }
+.showcase-menu .menu-secondary { background: var(--jb-sky) !important; border-width: 3px !important; color: var(--jb-ink) !important; }
+.showcase-menu .menu-primary small,
+.showcase-menu .menu-secondary small { opacity: .8; }
+.text-button { color: var(--jb-cream) !important; }
+.host-command-trigger,
+.dev-mode-trigger { background: var(--jb-well) !important; color: var(--jb-yellow) !important; }
+.menu-modal-close,
+.modal-close,
+.audio-close-button,
+.phone-menu,
+.phone-accessibility-trigger {
+  background: var(--jb-cream) !important;
+  color: var(--jb-ink) !important;
+  border: 3px solid var(--jb-ink) !important;
+  box-shadow: 0 3px 0 var(--jb-ink) !important;
+}
+
+/* Form controls. */
+.phone-card input,
+.join-form-v2 input,
+.phone-shell input:not([type='range']):not([type='checkbox']):not([type='radio']),
+.text-response-panel input,
+.text-response-panel textarea,
+.final-phone-v2 input {
+  background: var(--jb-cream) !important;
+  color: var(--jb-ink) !important;
+  border: 3px solid var(--jb-ink) !important;
+  font-weight: 800;
+}
+.phone-card input::placeholder,
+.text-response-panel input::placeholder,
+.text-response-panel textarea::placeholder { color: rgba(23, 8, 56, .45); }
+.showcase-host select,
+.showcase-menu select,
+.player-phone-v2 select,
+.phone-shell select {
+  background-color: var(--jb-well-2) !important;
+  color: #fff !important;
+  border: 2px solid var(--jb-ink) !important;
+}
+input[type='range'] { accent-color: var(--jb-yellow); }
+
+/* Top bar and pills. */
+.showcase-topbar.new-topbar {
+  background: var(--jb-well) !important;
+  border-bottom: 4px solid var(--jb-ink) !important;
+  box-shadow: 0 4px 0 rgba(23, 8, 56, .35) !important;
+}
+.showcase-topbar .room-code { color: var(--jb-lavender) !important; }
+.showcase-topbar .room-code strong { color: var(--jb-yellow) !important; }
+.connection-pill.online { background: var(--jb-lime) !important; color: var(--jb-ink) !important; border: 2px solid var(--jb-ink) !important; }
+.status-pill.neutral { border: 2px solid var(--jb-ink) !important; background: var(--jb-well) !important; color: var(--jb-lavender) !important; }
+
+/* Score cards: each player wears their own color. */
+.showcase-player-card.player-card:not(.is-fire):not(.is-cold),
+.presentation-name-card:not(.is-fire):not(.is-cold) {
+  background: linear-gradient(180deg, var(--jb-panel-top), var(--jb-panel-bottom)) !important;
+  border-color: var(--jb-ink) !important;
+  box-shadow: inset 0 7px 0 var(--accent, var(--jb-sky)), var(--jb-pop) !important;
+}
+.showcase-player-card.player-card.is-turn:not(.is-fire):not(.is-cold),
+.showcase-player-card.player-card.is-active:not(.is-fire):not(.is-cold),
+.presentation-name-card.is-turn:not(.is-fire):not(.is-cold) {
+  border-color: var(--jb-yellow) !important;
+  box-shadow: inset 0 7px 0 var(--accent, var(--jb-sky)), 0 0 0 3px var(--jb-ink), 0 7px 0 3px var(--jb-ink), 0 0 30px rgba(255, 210, 63, .45) !important;
+}
+.showcase-player-card .score,
+.presentation-name-card .score,
+.presentation-scores-v2 strong {
+  color: var(--jb-yellow) !important;
+  -webkit-text-stroke: .07em var(--jb-ink);
+  paint-order: stroke fill;
+  text-shadow: 0 .06em 0 var(--jb-ink) !important;
+}
+.player-avatar-large,
+.presentation-player-avatar,
+.ready-ring,
+.phone-seat-chip {
+  border-color: var(--jb-ink) !important;
+  border-width: 3px !important;
+  background-color: var(--jb-cream) !important;
+}
+.ready-ring { box-shadow: 0 0 0 4px var(--jb-yellow), var(--jb-pop) !important; }
+.turn-beacon {
+  background: var(--jb-yellow) !important;
+  color: var(--jb-ink) !important;
+  border: 2px solid var(--jb-ink) !important;
+  box-shadow: 0 3px 0 var(--jb-ink) !important;
+}
+
+/* Game board: checkerboard of bright tiles under cream headers. */
+.board {
+  background: var(--jb-ink) !important;
+  border-color: var(--jb-ink) !important;
+  box-shadow: 0 8px 0 rgba(23, 8, 56, .55), 0 26px 50px rgba(16, 2, 52, .5) !important;
+}
+.category-tile {
+  background: var(--jb-cream) !important;
+  color: var(--jb-ink) !important;
+  border-color: var(--jb-ink) !important;
+  text-shadow: none !important;
+}
+.question-tile:not(.used):not(.empty) {
+  background: linear-gradient(180deg, rgba(255, 255, 255, .14), rgba(255, 255, 255, 0) 55%), var(--jb-tile-a) !important;
+  border-color: var(--jb-ink) !important;
+  color: var(--jb-yellow) !important;
+  -webkit-text-stroke: .06em var(--jb-ink);
+  paint-order: stroke fill;
+  text-shadow: 0 .06em 0 var(--jb-ink) !important;
+}
+.question-tile:nth-child(even):not(.used):not(.empty) {
+  background: linear-gradient(180deg, rgba(255, 255, 255, .14), rgba(255, 255, 255, 0) 55%), var(--jb-tile-b) !important;
+}
+.question-tile:not(.used):not(.empty):not(:disabled):hover {
+  background: linear-gradient(180deg, rgba(255, 255, 255, .2), rgba(255, 255, 255, 0) 55%), var(--jb-pink) !important;
+  color: #fff !important;
+}
+.question-tile.used,
+.question-tile.empty {
+  background: var(--jb-well) !important;
+  border-color: rgba(23, 8, 56, .9) !important;
+  -webkit-text-stroke: 0;
+}
+.question-tile.used .used-tile-value { color: var(--jb-lavender) !important; }
+.modifier-banner,
+.question-modifier-strip,
+.inline-modifier {
+  border-color: var(--jb-ink) !important;
+  box-shadow: var(--jb-pop-sm) !important;
+}
+.category-intro-grid span {
+  background: var(--jb-cream) !important;
+  color: var(--jb-ink) !important;
+  border: 3px solid var(--jb-ink) !important;
+  box-shadow: var(--jb-pop) !important;
+}
+
+/* The TV never clicks tiles, so its disabled board keeps full color. */
+.presentation-board .question-tile:disabled { opacity: 1; cursor: default; }
+.score-controls-v2 > div {
+  background: var(--jb-well) !important;
+  border: 2px solid var(--jb-ink) !important;
+  box-shadow: 0 3px 0 var(--jb-ink) !important;
+}
+.score-controls-v2 button {
+  background: var(--jb-cream) !important;
+  color: var(--jb-ink) !important;
+  border: 2px solid var(--jb-ink) !important;
+  font-weight: 900;
+}
+
+/* Question beats. */
+.countdown-panel strong,
+.timer > span { color: var(--jb-yellow) !important; text-shadow: 0 .06em 0 var(--jb-ink) !important; }
+.question-meta-v2 { color: var(--jb-teal) !important; }
+.question-meta-v2 strong, .question-meta-v2 b { color: var(--jb-yellow) !important; }
+.answer-reveal-v2,
+.response-reveal-phone {
+  background: var(--jb-yellow) !important;
+  border: 4px solid var(--jb-ink) !important;
+  box-shadow: var(--jb-pop) !important;
+  color: var(--jb-ink) !important;
+}
+.answer-reveal-v2 small,
+.answer-reveal-v2 strong,
+.response-reveal-phone small,
+.response-reveal-phone strong { color: var(--jb-ink) !important; text-shadow: none !important; }
+.buzzer-live-banner,
+.daily-double-burst {
+  color: var(--jb-ink) !important;
+  background: var(--jb-yellow) !important;
+  border: 3px solid var(--jb-ink) !important;
+  box-shadow: var(--jb-pop) !important;
+  text-shadow: none !important;
+}
+.winner-chip { border: 3px solid var(--jb-ink) !important; box-shadow: var(--jb-pop-sm) !important; }
+
+/* Phone controller. */
+.phone-header-v2 {
+  background: var(--jb-well) !important;
+  border-bottom: 4px solid var(--jb-ink) !important;
+}
+.phone-header-v2 > b { color: var(--jb-yellow) !important; -webkit-text-stroke: .06em var(--jb-ink); paint-order: stroke fill; }
+.buzzer-button-v2 {
+  background: radial-gradient(circle at 45% 35%, #5d2be0, #3a0f9e 60%, #2a0a74) !important;
+  border-color: var(--jb-ink) !important;
+  color: var(--jb-lavender) !important;
+  box-shadow: 0 15px 0 var(--jb-ink), 0 26px 50px rgba(16, 2, 52, .5), inset 0 0 0 5px rgba(255, 255, 255, .12) !important;
+}
+.buzzer-button-v2.open {
+  background: radial-gradient(circle at 45% 35%, #ff7a9c, #ff2e63 55%, #c3123f) !important;
+  color: #fff !important;
+  -webkit-text-stroke: .05em var(--jb-ink);
+  paint-order: stroke fill;
+  box-shadow: 0 15px 0 var(--jb-ink), 0 0 50px rgba(255, 61, 139, .55), inset 0 0 0 5px rgba(255, 255, 255, .25) !important;
+}
+.buzzer-button-v2.winner,
+.buzzer-button-v2.winner:disabled {
+  opacity: 1;
+  background: radial-gradient(circle at 45% 35%, #fff09a, var(--jb-yellow) 55%, #e8a400) !important;
+  color: var(--jb-ink) !important;
+  -webkit-text-stroke: 0;
+  box-shadow: 0 15px 0 var(--jb-ink), 0 0 60px rgba(255, 210, 63, .55), inset 0 0 0 5px rgba(255, 255, 255, .35) !important;
+}
+
+/* Join customization pickers. */
+.customization-tabs button.selected,
+.choice-row-v3 button.selected,
+.avatar-category-strip button.selected {
+  background: var(--jb-yellow) !important;
+  border-color: var(--jb-ink) !important;
+  color: var(--jb-ink) !important;
+  box-shadow: 0 3px 0 var(--jb-ink) !important;
+}
+.avatar-grid-v3 > button.selected {
+  background: #7b3dff !important;
+  border: 3px solid var(--jb-yellow) !important;
+  box-shadow: 0 0 0 2px var(--jb-ink), 0 4px 0 2px var(--jb-ink) !important;
+}
+
+/* QR card and room code. */
+.join-card-v2 {
+  background: var(--jb-cream) !important;
+  border-color: var(--jb-ink) !important;
+  box-shadow: var(--jb-pop) !important;
+}
+.join-card-v2 strong { color: var(--jb-stage-2) !important; }
+.presentation-room strong,
+.modal-room-code { color: var(--jb-yellow) !important; text-shadow: 0 .06em 0 var(--jb-ink) !important; }
+
+/* Overlays. */
+.menu-modal-backdrop,
+.modal-backdrop { background: rgba(23, 8, 56, .82) !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  .primary-button, .secondary-button, .correct-button, .wrong-button, .nav-button { transition: none !important; }
+}
+
+/* Answered tiles sit back in the board; results keep their green and red chips. */
+.board .question-tile.used.has-result {
+  background: var(--jb-well) !important;
+  border-color: var(--jb-ink) !important;
+  -webkit-text-stroke: 0;
+}
+.board .question-tile.used.has-result .used-tile-value { color: var(--jb-lavender) !important; text-shadow: none !important; }
+
+/* Streak cards keep their meaning in party colors. */
+.showcase-player-card.player-card.is-cold,
+.presentation-name-card.is-cold {
+  background: linear-gradient(180deg, #49c7ff, #2a6fe0 62%, #2a3fb8) !important;
+  border-color: var(--jb-ink) !important;
+}
+.showcase-player-card.player-card.is-fire,
+.presentation-name-card.is-fire {
+  background: linear-gradient(180deg, #ffb13d, #ff6a1f 60%, #d63a1a) !important;
+  border-color: var(--jb-ink) !important;
+}
+
+/* Lists, lock-ins and final beats. */
+.submission-list-v2 > div,
+.final-response-v2 > span,
+.final-wager-rule,
+.presentation-scores-v2 > div,
+.phone-stats-grid,
+.recap-stats-list {
+  background: var(--jb-well) !important;
+  border: 3px solid var(--jb-ink) !important;
+  box-shadow: 0 3px 0 var(--jb-ink) !important;
+}
+.submission-list-v2 > div.done { background: #1f6f63 !important; }
+.submission-list-v2 small { color: var(--jb-lavender) !important; }
+.response-locked {
+  background: var(--jb-cream) !important;
+  border: 4px solid var(--jb-ink) !important;
+  box-shadow: var(--jb-pop) !important;
+  color: var(--jb-ink) !important;
+}
+.response-locked h3,
+.response-locked p,
+.response-locked small,
+.response-locked strong { color: var(--jb-ink) !important; }
+.lock-icon { background: var(--jb-lime) !important; border-color: var(--jb-ink) !important; color: var(--jb-ink) !important; }
+.final-phone-v2 textarea,
+.text-response-panel textarea {
+  background: var(--jb-cream) !important;
+  color: var(--jb-ink) !important;
+  border: 3px solid var(--jb-ink) !important;
+}
+.final-phone-v2 textarea::placeholder { color: rgba(23, 8, 56, .45); }
+.phone-seat-chip { color: var(--jb-ink) !important; }
+.final-reveal-spectacle {
+  background: radial-gradient(circle at 50% 44%, rgba(139, 77, 255, .55), rgba(34, 7, 106, .92) 58%, rgba(23, 8, 56, .98)) !important;
+}
+.final-reveal-card {
+  background: linear-gradient(180deg, var(--jb-panel-top), var(--jb-panel-bottom)) !important;
+  border: 5px solid var(--jb-ink) !important;
+  box-shadow: 0 10px 0 var(--jb-ink), 0 0 90px rgba(255, 210, 63, .35) !important;
+}
+.final-reveal-card small { color: var(--jb-teal) !important; }
+.final-reveal-card strong {
+  color: var(--jb-yellow) !important;
+  -webkit-text-stroke: .06em var(--jb-ink);
+  paint-order: stroke fill;
+  text-shadow: 0 .07em 0 var(--jb-ink) !important;
+}
+
+/* Winner scene. */
+.podium-scene { background: var(--jb-stage) !important; }
+.podium-card {
+  background: linear-gradient(180deg, var(--jb-panel-top), var(--jb-panel-bottom)) !important;
+  border-color: var(--jb-ink) !important;
+  box-shadow: var(--jb-pop) !important;
+}
+.podium-card.winner {
+  border-color: var(--jb-yellow) !important;
+  box-shadow: 0 0 0 3px var(--jb-ink), 0 7px 0 3px var(--jb-ink), 0 0 40px rgba(255, 210, 63, .5) !important;
+}
+.podium-pedestal {
+  background: var(--jb-yellow) !important;
+  color: var(--jb-ink) !important;
+  border: 3px solid var(--jb-ink);
+  border-bottom: 0;
+}
+.podium-pedestal:not(.place-1) { background: var(--jb-sky) !important; }
+
+/* Supporting copy and the last few dark wells. */
+.phone-state-v2 p,
+.spoken-answer-panel p,
+.presentation-center > p,
+.final-phone-v2 p { color: var(--jb-lavender) !important; }
+.judge-after-reveal,
+.winner-chip {
+  background: var(--jb-well) !important;
+  border: 3px solid var(--jb-ink) !important;
+  box-shadow: var(--jb-pop-sm) !important;
+}
+.judge-after-reveal small { color: var(--jb-teal) !important; }
+.podium-scene > h1,
+.podium-scene h1 {
+  font-family: var(--jb-display) !important;
+  font-weight: 400 !important;
+  color: var(--jb-yellow) !important;
+  -webkit-text-stroke: .06em var(--jb-ink);
+  paint-order: stroke fill;
+  text-shadow: 0 .07em 0 var(--jb-ink) !important;
+}
