@@ -70,6 +70,8 @@ describe('comeback boost consumption', () => {
   it('does not spend the turn owner boost when another player buzzes and answers correctly', () => {
     const { engine, host, leader, chaser } = setup();
     engine.openBuzzers(host.roomCode, host.hostToken);
+    // The chaser holds first chance on their own turn and passes it on.
+    engine.hostPassTurn(host.roomCode, host.hostToken);
     engine.localBuzz(host.roomCode, host.hostToken, leader.playerId);
     engine.revealAnswer(host.roomCode, host.hostToken);
     engine.resolveAnswer(host.roomCode, host.hostToken, leader.playerId, true);

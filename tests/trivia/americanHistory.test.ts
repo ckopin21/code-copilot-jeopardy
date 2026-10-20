@@ -75,6 +75,8 @@ describe('matched American History versions', () => {
           engine.selectQuestion(host.roomCode, host.hostToken, tile.questionId);
           expect(engine.snapshot(host.roomCode).currentQuestion?.turnPlayerId).not.toBe(player.playerId);
           engine.openBuzzers(host.roomCode, host.hostToken);
+          // The turn player passes first chance so another seat can answer.
+          engine.hostPassTurn(host.roomCode, host.hostToken);
           engine.localBuzz(host.roomCode, host.hostToken, player.playerId);
           for (const role of ['player', 'presentation'] as const) {
             const privateView = sanitizeRoomSnapshot(engine.snapshot(host.roomCode), role, player.playerId);
