@@ -37,7 +37,7 @@ Create `src/games/<id>/server.ts` exporting a `ServerGame` (see `src/games/trivi
 - `storageFile`: a unique file name under `.data/`, e.g. `word-race-rooms.json`
 - `createEngine(storage, { isRoomCodeTaken })`
 - `sanitize(snapshot, role, playerId)`: strip anything a phone or TV must not see. This is your privacy boundary.
-- `hostActions` / `playerActions`: map event names (`host:...`, `player:...`) to engine calls. Authorization is already done when these run.
+- `hostActions` / `playerActions`: map event names (`host:...`, `player:...`) to engine calls. Authorization is already done when these run. A `playerActions` return value goes to the phone as its acknowledgement without `sanitize`, so return `null` (or a small result like `{ accepted }`), never a snapshot; the sanitized `room:state` broadcast carries state.
 - Optional `onStateChange` to emit extra room events (trivia uses it for score animations), `httpRoutes` for read-only JSON GET endpoints, and `fileRoutes` for GET endpoints that answer with a file body such as audio (Deal or Dud uses one for live narration), and `startServices` for helper programs the real app starts beside the server and stops on exit (Deal or Dud's narrator voice; tests and `BLUE_STAGE_SERVICES=0` skip them).
 
 Add it to `SERVER_GAMES` in `server/games.ts`.

@@ -329,6 +329,44 @@ describe('LAN Socket.IO game server', () => {
     expect(trivia().snapshot(host.roomCode).players.find((player) => player.id === one.playerId)?.score).toBe(100);
   });
 
+  it('never hands a player the hidden answer in an action reply before the reveal', async () => {
+    await start();
+    const hostSocket = await connect();
+    const host = await request<HostRoomCredentials>(hostSocket, 'room:create', {
+      settings: { gameMode: 'free-response', selectedPackIds: ['free-response-general-1'], freeResponseReadSeconds: 0, dailyDoublesEnabled: false, finalRoundEnabled: false, timerSeconds: null }
+    });
+    const oneSocket = await connect();
+    const twoSocket = await connect();
+    const one = await join(oneSocket, host.roomCode, 'One');
+    await join(twoSocket, host.roomCode, 'Two');
+    await request(hostSocket, 'host:start-game', hostPayload(host));
+    const tile = trivia().snapshot(host.roomCode).board!.questions[0];
+    await request(hostSocket, 'host:select-question', hostPayload(host, { questionId: tile.questionId }));
+    const textReply = await request<unknown>(oneSocket, 'player:text-response', playerPayload(one, {
+      questionId: tile.questionId, gameStartedAt: trivia().snapshot(host.roomCode).gameStartedAt, answer: 'A deliberately wrong answer'
+    }));
+    const hiddenText = trivia().snapshot(host.roomCode).currentQuestion!;
+    expect(hiddenText.answerRevealed).toBe(false);
+    expect(hiddenText.acceptedAnswers?.length).toBeGreaterThan(0);
+    expect(textReply).toBeNull();
+
+    await request(hostSocket, 'host:reset-game', hostPayload(host));
+    await request(hostSocket, 'host:update-settings', hostPayload(host, { updates: { gameMode: 'classic', selectedPackIds: ['history-geography'], dailyDoublesEnabled: true, dailyDoubleCount: 16, finalRoundEnabled: false } }));
+    await request(hostSocket, 'host:start-game', hostPayload(host));
+    const daily = trivia().snapshot(host.roomCode).board!.questions.find((entry) => entry.dailyDouble)!;
+    await request(hostSocket, 'host:select-question', hostPayload(host, { questionId: daily.questionId, dailyDoublePlayerId: one.playerId }));
+    const wagerReply = await request<unknown>(oneSocket, 'player:daily-double-wager', playerPayload(one, {
+      questionId: daily.questionId, gameStartedAt: trivia().snapshot(host.roomCode).gameStartedAt, wager: 100
+    }));
+    const hiddenDaily = trivia().snapshot(host.roomCode).currentQuestion!;
+    expect(hiddenDaily.answerRevealed).toBe(false);
+    expect(hiddenDaily.acceptedAnswers?.length).toBeGreaterThan(0);
+    expect(wagerReply).toBeNull();
+    for (const reply of [textReply, wagerReply]) {
+      expect(JSON.stringify(reply ?? {})).not.toMatch(/acceptedAnswers|explanation/);
+    }
+  });
+
   it('does not broadcast room state for read-only requests', async () => {
     await start();
     const hostSocket = await connect();

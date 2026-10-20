@@ -95,7 +95,7 @@ export interface ServerGame<Engine extends RoomEngine<Snapshot>, Snapshot extend
   sanitize(snapshot: Snapshot, role: RoomRole, playerId?: string): Snapshot;
   /** Game-specific `host:*` actions. Platform actions (reconnect, pause/remove seat, display link) are handled for you. */
   hostActions: Record<string, (context: HostActionContext<Engine>) => unknown>;
-  /** Game-specific `player:*` actions. `player:join/reconnect/heartbeat` are handled for you. */
+  /** Game-specific `player:*` actions. `player:join/reconnect/heartbeat` are handled for you. The return value is the phone's ack as-is (not sanitized), so never return a snapshot; return null and let the sanitized `room:state` broadcast carry state. */
   playerActions: Record<string, (context: PlayerActionContext<Engine>) => unknown>;
   onStateChange?(context: StateChangeContext<Snapshot>): void;
   /** Extra read-only GET endpoints, e.g. `/api/packs`. */
