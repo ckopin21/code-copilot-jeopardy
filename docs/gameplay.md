@@ -21,7 +21,7 @@ The host chooses a game mode, exactly one compatible question pack, and the game
 
 Blue Stage has two authoritative game modes:
 
-- **Classic:** normal questions use first-buzz locking. The player on turn chooses the next question. Daily Doubles and keyboard/gamepad buzzers are available.
+- **Classic:** on normal questions the player on turn gets first chance; others buzz in line behind them (see [Turn player first chance](#turn-player-first-chance)). The player on turn chooses the next question. Daily Doubles and keyboard/gamepad buzzers are available.
 - **Free Response:** every player participating when the clue starts answers simultaneously by phone. The player on turn still chooses the next question, but there are no buzzers and Daily Doubles are disabled.
 
 Free Response can add a configurable reading-only delay of 0, 3, 5, 7, 10, or 15 seconds before answer boxes open. A player joining after a question has already started watches that clue and becomes eligible on the next one.
@@ -67,14 +67,28 @@ Fullscreen presentation is an in-page board view. Questions remain selectable th
 
 1. Host selects a tile.
 2. The question appears with the real point value in play.
-3. Buzzers open automatically after the countdown or immediately through the host control.
-4. The first accepted eligible buzz wins.
+3. Buzzers open automatically after the reading countdown or immediately through the host control. Nobody can buzz during the countdown.
+4. The player on turn has first chance; see below. Without a player on turn (they are away or already passed), the first accepted eligible buzz wins.
 5. Host reveals the accepted answer.
 6. Host marks the response Correct or Incorrect.
 7. Score state is resolved by the engine.
 8. On the host display, the awarded/lost number travels to the visible target player score card, the visible score changes on impact, and the card performs a centered positive/negative impact pulse. This applies in normal and in-page Presentation Mode; reduced-motion uses a brief non-moving highlight.
 9. The game returns to the board when grading is complete.
 10. The used tile records who answered and whether the result was correct or incorrect.
+
+### Turn player first chance
+
+When buzzers open on a normal buzzer clue, the player on turn holds the question:
+
+- They buzz to answer, or tap **Pass** on their phone. The host has a **Pass for** *name* button for a player on a keyboard/gamepad buzzer or a dropped phone.
+- Everyone else can buzz at any time. Their buzzes do not take the question; they line up in buzz order (phones show **IN LINE #n**; the host and TV show the line).
+- If the turn player answers, the line is dropped.
+- On a Pass, the first connected player in line answers. If nobody is in line, buzzing stays open for everyone except the passer and the first buzz answers. If nobody else can answer, the answer is revealed with no score change.
+- A wrong answer ends the clue for everyone. There is no steal.
+- If the timer runs out (or the host reveals) while the turn player still holds the question, they lose the clue value, as before. A player who passed is never penalized for the clue going unanswered.
+- One timer covers the whole clue: the lobby **Answer timer** plus 5 seconds. A Pass does not reset it. Daily Doubles, typed questions and the Final keep the plain lobby timer.
+- A turn player whose phone drops keeps first chance; when it reconnects they can still answer or pass. Locking and reopening buzzers restores first chance and starts a fresh line.
+- Turn rotation is unchanged: after the clue the turn moves on from the turn player, whoever answered.
 
 If the host reveals an answer before anybody buzzes, the answer now remains on screen. The host explicitly chooses **Continue to Board** instead of the game skipping the reveal.
 

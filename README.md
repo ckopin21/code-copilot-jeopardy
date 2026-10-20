@@ -16,7 +16,7 @@ https://ckopin21.github.io/code-copilot-jeopardy/
 - stable phone identity with automatic reconnect, heartbeat disconnect detection, and reserved seats
 - host can return to the main menu without dropping controllers; starting a new game reuses the same room, seats, and player profiles while resetting game progress
 - host-selectable board with in-page fullscreen presentation mode
-- first-buzz locking, keyboard/gamepad host buzzers, typed-response questions
+- turn player first chance with a buzz-in line and Pass, keyboard/gamepad host buzzers, typed-response questions
 - Daily Doubles with fixed wager choices
 - visible locked wagers and points in play on host and phones
 - 2× final-six and 3× final-three question values
