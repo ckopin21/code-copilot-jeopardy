@@ -1,0 +1,49 @@
+/* Turn player first chance on buzzer clues: phone note, Pass button, queued buzzer, host/TV status. */
+.priority-note-phone {
+  display: grid;
+  gap: 2px;
+  text-align: center;
+  padding: 10px 14px;
+  border: 1px solid rgba(170, 193, 245, .35);
+  border-radius: 14px;
+  background: rgba(8, 20, 34, .72);
+  color: #aac1f5;
+  font-size: .82rem;
+  overflow-wrap: anywhere;
+}
+.priority-note-phone strong { color: #fff; letter-spacing: .06em; font-size: .9rem; }
+.priority-note-phone.mine { border-color: var(--gold, #f6c84c); box-shadow: 0 0 22px rgba(246, 200, 76, .22); }
+.priority-note-phone.mine strong { color: var(--gold, #f6c84c); }
+.pass-turn-button {
+  align-self: center;
+  flex: none;
+  /* Narrow enough to clear the corner text-size button on phones. */
+  width: min(62vw, 300px);
+  margin-bottom: max(6px, env(safe-area-inset-bottom));
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.buzzer-button-v2.queued { font-size: clamp(1.8rem, 9vw, 4rem); border-color: var(--accent, #93c5fd); color: #e6eefc; }
+.buzz-priority-status {
+  --accent: #f6c84c;
+  display: grid;
+  gap: 3px;
+  justify-items: center;
+  margin: 8px auto 0;
+  padding: 8px 18px;
+  max-width: 100%;
+  border: 2px solid var(--accent);
+  border-radius: 999px;
+  background: #082943;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.buzz-priority-status strong { color: #fff; letter-spacing: .04em; }
+.buzz-priority-status span { color: #aac1f5; font-size: .82rem; }
+.presentation-question .buzz-priority-status strong { font-size: clamp(1.1rem, 2.2vw, 2rem); }
+.presentation-question .buzz-priority-status span { font-size: clamp(.85rem, 1.3vw, 1.2rem); }
+@media (max-width: 420px) {
+  .buzz-priority-status { border-radius: 18px; padding: 8px 12px; }
+}

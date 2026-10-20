@@ -15,7 +15,7 @@ export const GAME_MODES: readonly GameModeDefinition[] = [
   {
     id: 'classic',
     name: 'Classic',
-    description: 'Buzz in on standard clues. The player on turn chooses the next question.',
+    description: 'The player on turn gets first chance on standard clues and can pass; others buzz in line. The player on turn chooses the next question.',
     questionBadge: 'FREE RESPONSE',
     questionResponse: 'question-default',
     dailyDoubles: true,

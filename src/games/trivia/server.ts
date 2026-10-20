@@ -45,6 +45,7 @@ export const triviaServerGame: ServerGame<TriviaEngine, RoomSnapshot> = {
     'host:daily-double-wager': ({ engine, roomCode, hostToken, payload }) => engine.setDailyDoubleWager(roomCode, hostToken, Number(payload.wager)),
     'host:open-buzzers': ({ engine, roomCode, hostToken }) => engine.openBuzzers(roomCode, hostToken),
     'host:close-buzzers': ({ engine, roomCode, hostToken }) => engine.closeBuzzers(roomCode, hostToken),
+    'host:pass-turn': ({ engine, roomCode, hostToken }) => engine.hostPassTurn(roomCode, hostToken),
     'host:local-buzz': ({ engine, roomCode, hostToken, payload }) => engine.localBuzz(roomCode, hostToken, playerIdOf(payload)),
     'host:resolve-answer': ({ engine, roomCode, hostToken, payload }) => engine.resolveAnswer(roomCode, hostToken, playerIdOf(payload), Boolean(payload.correct)),
     'host:resolve-text': ({ engine, roomCode, hostToken, payload }) => engine.resolveTextResponse(roomCode, hostToken, playerIdOf(payload), Boolean(payload.correct)),
@@ -69,7 +70,12 @@ export const triviaServerGame: ServerGame<TriviaEngine, RoomSnapshot> = {
   playerActions: {
     'player:buzz': ({ engine, roomCode, playerId, reconnectToken, payload }) => {
       const result = engine.buzz(roomCode, playerId, reconnectToken, questionId(payload), gameStartedAt(payload));
-      return { accepted: result.accepted, reason: result.reason };
+      return { accepted: result.accepted, queued: result.queued ?? false, reason: result.reason };
+    },
+    'player:pass': ({ engine, roomCode, playerId, reconnectToken, payload }) => {
+      // The reply goes to the phone unsanitized, so it carries no snapshot.
+      engine.passTurn(roomCode, playerId, reconnectToken, questionId(payload), gameStartedAt(payload));
+      return null;
     },
     // Player replies skip sanitize, so they never return an engine snapshot (it holds the hidden answer).
     'player:text-response': ({ engine, roomCode, playerId, reconnectToken, payload }) => {

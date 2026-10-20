@@ -30,6 +30,8 @@ class MathRandomSource implements RandomSource { next(): number { return Math.ra
 const STORAGE_KEYS: RoomStorageKeys = { primary: 'blue-stage-p2p-engine-v2', backup: 'blue-stage-p2p-engine-v2-backup' };
 const ROOM_TTL_MS = 24 * 60 * 60 * 1000;
 const emptyTimer = () => ({ running: false, durationMs: null, endsAt: null, remainingMs: null });
+/** Extra time on a buzzer clue for the turn player's answer-or-pass decision. */
+export const BUZZ_CLUE_TIMER_BONUS_MS = 5_000;
 
 export interface TriviaEngineOptions {
   /** Lets the room server keep codes unique across every game. */
@@ -102,6 +104,9 @@ export class TriviaEngine implements RoomEngine<RoomSnapshot> {
         record.state.currentQuestion.resolvedPlayerId ??= null;
         record.state.currentQuestion.responseOpensAt ??= null;
         record.state.currentQuestion.responseReadRemainingMs ??= null;
+        record.state.currentQuestion.priorityPlayerId ??= null;
+        record.state.currentQuestion.buzzQueue ??= [];
+        record.state.currentQuestion.priorityPassedBy ??= null;
         for (const response of Object.values(record.state.currentQuestion.textResponses ?? {})) {
           response.reviewCorrect ??= response.autoCorrect;
         }
@@ -275,6 +280,18 @@ export class TriviaEngine implements RoomEngine<RoomSnapshot> {
       .filter((player) => eligible.has(player.id))
       .sort((a, b) => a.seat - b.seat);
   }
+  /** Whether a player may press their buzzer on the open clue right now. */
+  private canBuzz(room: RoomRecord, player: Player): boolean {
+    const current = room.state.currentQuestion;
+    if (!current || !player.connected) return false;
+    if (current.participantIds && !current.participantIds.includes(player.id)) return false;
+    if (current.buzzQueue?.includes(player.id)) return false;
+    return room.state.settings.allowRepeatBuzzAfterMiss || !current.attemptedPlayerIds.includes(player.id);
+  }
+  private refreshBuzzEligibility(room: RoomRecord): boolean {
+    room.state.players.forEach((player) => { player.buzzEligible = this.canBuzz(room, player); });
+    return room.state.players.some((player) => player.buzzEligible);
+  }
   private ensureTurnPlayer(room: RoomRecord): Player | null {
     const connected = this.connectedPlayers(room);
     if (!connected.length) { room.state.turnPlayerId = null; return null; }
@@ -417,10 +434,7 @@ export class TriviaEngine implements RoomEngine<RoomSnapshot> {
     player.connected = true;
     const current = room.state.currentQuestion;
     if (room.state.phase === 'board') this.ensureTurnPlayer(room);
-    if (current?.buzzOpen && !current.buzzWinnerId && current.responseMode !== 'text') {
-      const participating = !current.participantIds || current.participantIds.includes(player.id);
-      player.buzzEligible = participating && (room.state.settings.allowRepeatBuzzAfterMiss || !current.attemptedPlayerIds.includes(player.id));
-    }
+    if (current?.buzzOpen && !current.buzzWinnerId && current.responseMode !== 'text') player.buzzEligible = this.canBuzz(room, player);
     this.persist();
     return { playerId, reconnectToken, roomCode: room.state.code };
   }
@@ -432,13 +446,11 @@ export class TriviaEngine implements RoomEngine<RoomSnapshot> {
     if (!connected) {
       // A transient disconnect must not permanently close a typed/Final response window.
       // Timers or the host still close those phases; reconnecting players can continue if time remains.
+      // A turn player keeps first chance through a brief drop; the host can pass for them.
       player.buzzEligible = false;
     } else {
       const current = room.state.currentQuestion;
-      if (current?.buzzOpen && !current.buzzWinnerId && current.responseMode !== 'text') {
-        const participating = !current.participantIds || current.participantIds.includes(player.id);
-        player.buzzEligible = participating && (room.state.settings.allowRepeatBuzzAfterMiss || !current.attemptedPlayerIds.includes(player.id));
-      }
+      if (current?.buzzOpen && !current.buzzWinnerId && current.responseMode !== 'text') player.buzzEligible = this.canBuzz(room, player);
     }
     if (room.state.phase === 'board') this.ensureTurnPlayer(room);
     this.touch(room);
@@ -484,6 +496,8 @@ export class TriviaEngine implements RoomEngine<RoomSnapshot> {
 
     this.clearUndo(room);
     const removedBuzzWinner = current?.buzzWinnerId === playerId && !current.answerRevealed;
+    const removedPriorityHolder = current?.priorityPlayerId === playerId && room.state.phase === 'question' && !current.answerRevealed;
+    if (current?.buzzQueue) current.buzzQueue = current.buzzQueue.filter((idValue) => idValue !== playerId);
     const removedTurnOwner = room.state.turnPlayerId === playerId;
     const removedSeat = player.seat;
     if (current?.textResponses?.[playerId]) delete current.textResponses[playerId];
@@ -496,16 +510,16 @@ export class TriviaEngine implements RoomEngine<RoomSnapshot> {
       if (current.responseMode === 'text') {
         const active = this.currentQuestionParticipants(room);
         if (active.length === 0 || active.every((candidate) => Boolean(current.textResponses?.[candidate.id]))) this.closeTextResponsesInternal(room);
+      } else if (removedPriorityHolder) {
+        current.priorityPlayerId = null;
+        current.priorityPassedBy = playerId;
+        this.handOffPassedClue(room);
       } else if (removedBuzzWinner) {
         current.buzzWinnerId = null;
-        const participants = new Set(current.participantIds ?? room.state.players.map((candidate) => candidate.id));
-        room.state.players.forEach((candidate) => {
-          candidate.buzzEligible = candidate.connected && participants.has(candidate.id) && (room.state.settings.allowRepeatBuzzAfterMiss || !current.attemptedPlayerIds.includes(candidate.id));
-        });
-        const someoneEligible = room.state.players.some((candidate) => candidate.buzzEligible);
+        const someoneEligible = this.refreshBuzzEligibility(room);
         current.buzzOpen = someoneEligible;
         current.buzzOpenedAt = someoneEligible ? Date.now() : null;
-        if (someoneEligible) this.startTimerInternal(room);
+        if (someoneEligible) this.startTimerInternal(room, Date.now(), BUZZ_CLUE_TIMER_BONUS_MS);
         else {
           current.answerRevealed = true;
           this.stopTimerInternal(room);
@@ -756,7 +770,10 @@ export class TriviaEngine implements RoomEngine<RoomSnapshot> {
       buzzOpen: false,
       buzzWinnerId: null,
       buzzOpenedAt: null,
-      attemptedPlayerIds: []
+      attemptedPlayerIds: [],
+      priorityPlayerId: null,
+      buzzQueue: [],
+      priorityPassedBy: null
     };
     room.state.players.forEach((player) => { player.buzzEligible = false; player.hasBuzzedThisQuestion = false; });
     if (isPlayableDailyDouble) {
@@ -846,11 +863,13 @@ export class TriviaEngine implements RoomEngine<RoomSnapshot> {
     current.buzzOpen = true;
     current.buzzWinnerId = null;
     current.buzzOpenedAt = Date.now();
-    const participants = new Set(current.participantIds ?? room.state.players.map((player) => player.id));
-    room.state.players.forEach((player) => { player.buzzEligible = player.connected && participants.has(player.id) && (room.state.settings.allowRepeatBuzzAfterMiss || !current.attemptedPlayerIds.includes(player.id)); });
-    const someoneEligible = room.state.players.some((player) => player.buzzEligible);
+    current.buzzQueue = [];
+    const someoneEligible = this.refreshBuzzEligibility(room);
+    // The turn player gets first chance unless they already passed this clue.
+    const turnPlayer = room.state.players.find((player) => player.id === current.turnPlayerId);
+    current.priorityPlayerId = !current.priorityPassedBy && turnPlayer?.buzzEligible ? turnPlayer.id : null;
     if (!someoneEligible) current.buzzOpen = false;
-    if (someoneEligible) this.startTimerInternal(room);
+    if (someoneEligible) this.startTimerInternal(room, Date.now(), BUZZ_CLUE_TIMER_BONUS_MS);
     else this.stopTimerInternal(room);
     this.persist();
     return this.snapshot(roomCode);
@@ -858,14 +877,20 @@ export class TriviaEngine implements RoomEngine<RoomSnapshot> {
 
   closeBuzzers(roomCode: string, hostToken: string): RoomSnapshot {
     const room = this.hostRoom(roomCode, hostToken);
-    if (room.state.currentQuestion) room.state.currentQuestion.buzzOpen = false;
+    const current = room.state.currentQuestion;
+    if (current) {
+      current.buzzOpen = false;
+      // Reopening grants first chance again and starts a fresh line.
+      current.priorityPlayerId = null;
+      current.buzzQueue = [];
+    }
     room.state.players.forEach((player) => { player.buzzEligible = false; });
     this.stopTimerInternal(room);
     this.persist();
     return this.snapshot(roomCode);
   }
 
-  buzz(roomCode: string, playerId: string, reconnectToken: string, expectedQuestionId?: string, expectedGameStartedAt?: number): { accepted: boolean; reason?: string; snapshot: RoomSnapshot } {
+  buzz(roomCode: string, playerId: string, reconnectToken: string, expectedQuestionId?: string, expectedGameStartedAt?: number): { accepted: boolean; queued?: boolean; reason?: string; snapshot: RoomSnapshot } {
     const [room, player] = this.playerRoom(roomCode, playerId, reconnectToken);
     this.assertQuestionContext(room, expectedQuestionId, expectedGameStartedAt);
     const timerExpired = this.expireTimerIfNeeded(room);
@@ -874,35 +899,106 @@ export class TriviaEngine implements RoomEngine<RoomSnapshot> {
       if (timerExpired) this.persist();
       return { accepted: false, reason: 'Buzzers are locked', snapshot: this.snapshot(roomCode) };
     }
-    if (!player.connected || !player.buzzEligible || (!room.state.settings.allowRepeatBuzzAfterMiss && current.attemptedPlayerIds.includes(player.id))) {
+    if (!player.buzzEligible || !this.canBuzz(room, player)) {
       if (timerExpired) this.persist();
       return { accepted: false, reason: 'You are not eligible to buzz', snapshot: this.snapshot(roomCode) };
     }
+    const queued = this.registerBuzz(room, player) === 'queued';
+    this.persist();
+    return { accepted: true, queued, snapshot: this.snapshot(roomCode) };
+  }
+
+  /**
+   * Accepts an eligible buzz. While the turn player holds first chance, anyone else's
+   * buzz only joins the line; the turn player's own buzz, or any buzz without priority, wins.
+   */
+  private registerBuzz(room: RoomRecord, player: Player): 'won' | 'queued' {
+    const current = room.state.currentQuestion!;
+    const latency = current.buzzOpenedAt ? Math.max(0, Date.now() - current.buzzOpenedAt) : null;
+    if (latency !== null && (player.stats.fastestBuzzMs === null || latency < player.stats.fastestBuzzMs)) player.stats.fastestBuzzMs = latency;
+    player.hasBuzzedThisQuestion = true;
+    if (current.priorityPlayerId && current.priorityPlayerId !== player.id) {
+      current.buzzQueue = [...(current.buzzQueue ?? []), player.id];
+      player.buzzEligible = false;
+      return 'queued';
+    }
+    this.awardBuzz(room, player);
+    return 'won';
+  }
+  private awardBuzz(room: RoomRecord, player: Player): void {
+    const current = room.state.currentQuestion!;
     current.buzzWinnerId = player.id;
     current.resolvedPlayerId = null;
     current.buzzOpen = false;
+    current.priorityPlayerId = null;
+    current.buzzQueue = [];
     current.attemptedPlayerIds.push(player.id);
-    player.hasBuzzedThisQuestion = true;
     room.state.players.forEach((item) => { item.buzzEligible = false; });
-    const latency = current.buzzOpenedAt ? Math.max(0, Date.now() - current.buzzOpenedAt) : null;
-    if (latency !== null && (player.stats.fastestBuzzMs === null || latency < player.stats.fastestBuzzMs)) player.stats.fastestBuzzMs = latency;
     this.stopTimerInternal(room);
+  }
+
+  /** The turn player gives up first chance. The first player in line answers, or buzzing stays open. */
+  passTurn(roomCode: string, playerId: string, reconnectToken: string, expectedQuestionId?: string, expectedGameStartedAt?: number): RoomSnapshot {
+    const [room, player] = this.playerRoom(roomCode, playerId, reconnectToken);
+    this.assertQuestionContext(room, expectedQuestionId, expectedGameStartedAt);
+    const timerExpired = this.expireTimerIfNeeded(room);
+    const current = room.state.currentQuestion;
+    if (room.state.phase !== 'question' || !current?.buzzOpen || current.buzzWinnerId || current.priorityPlayerId !== player.id) {
+      if (timerExpired) this.persist();
+      throw new Error('Only the player with first chance can pass right now');
+    }
+    this.passPriorityInternal(room);
     this.persist();
-    return { accepted: true, snapshot: this.snapshot(roomCode) };
+    return this.snapshot(roomCode);
+  }
+
+  /** Host pass for a turn player answering on a keyboard or gamepad buzzer. */
+  hostPassTurn(roomCode: string, hostToken: string): RoomSnapshot {
+    const room = this.hostRoom(roomCode, hostToken);
+    const timerExpired = this.expireTimerIfNeeded(room);
+    const current = room.state.currentQuestion;
+    if (room.state.phase !== 'question' || !current?.buzzOpen || current.buzzWinnerId || !current.priorityPlayerId) {
+      if (timerExpired) this.persist();
+      throw new Error('Nobody has first chance to pass right now');
+    }
+    this.passPriorityInternal(room);
+    this.persist();
+    return this.snapshot(roomCode);
+  }
+
+  private passPriorityInternal(room: RoomRecord): void {
+    const current = room.state.currentQuestion;
+    if (!current?.priorityPlayerId) return;
+    const passerId = current.priorityPlayerId;
+    current.priorityPassedBy = passerId;
+    current.priorityPlayerId = null;
+    if (!current.attemptedPlayerIds.includes(passerId)) current.attemptedPlayerIds.push(passerId);
+    const passer = room.state.players.find((player) => player.id === passerId);
+    if (passer) passer.buzzEligible = false;
+    this.handOffPassedClue(room);
+  }
+  /** After a pass, the first connected player in line answers; otherwise the others keep buzzing. */
+  private handOffPassedClue(room: RoomRecord): void {
+    const current = room.state.currentQuestion;
+    if (!current) return;
+    const next = (current.buzzQueue ?? [])
+      .map((playerId) => room.state.players.find((player) => player.id === playerId))
+      .find((player): player is Player => Boolean(player?.connected));
+    if (next) { this.awardBuzz(room, next); return; }
+    current.buzzQueue = [];
+    if (this.refreshBuzzEligibility(room)) return;
+    // Nobody is left to answer: the clue closes with no penalty for the passer.
+    current.buzzOpen = false;
+    current.answerRevealed = true;
+    this.stopTimerInternal(room);
   }
 
   localBuzz(roomCode: string, hostToken: string, playerId: string): RoomSnapshot {
     const room = this.hostRoom(roomCode, hostToken);
     const current = room.state.currentQuestion;
     const player = room.state.players.find((item) => item.id === playerId);
-    if (room.state.phase !== 'question' || !player || !player.connected || !current?.buzzOpen || current.buzzWinnerId || !player.buzzEligible) throw new Error('Local buzz is not valid');
-    current.buzzWinnerId = player.id;
-    current.resolvedPlayerId = null;
-    current.buzzOpen = false;
-    current.attemptedPlayerIds.push(player.id);
-    player.hasBuzzedThisQuestion = true;
-    room.state.players.forEach((item) => { item.buzzEligible = false; });
-    this.stopTimerInternal(room);
+    if (room.state.phase !== 'question' || !player || !current?.buzzOpen || current.buzzWinnerId || !player.buzzEligible || !this.canBuzz(room, player)) throw new Error('Local buzz is not valid');
+    this.registerBuzz(room, player);
     this.persist();
     return this.snapshot(roomCode);
   }
@@ -977,9 +1073,7 @@ export class TriviaEngine implements RoomEngine<RoomSnapshot> {
       current.buzzOpen = false;
     } else {
       current.buzzWinnerId = null;
-      const participants = new Set(current.participantIds ?? room.state.players.map((candidate) => candidate.id));
-      room.state.players.forEach((candidate) => { candidate.buzzEligible = candidate.connected && participants.has(candidate.id) && (room.state.settings.allowRepeatBuzzAfterMiss || !current.attemptedPlayerIds.includes(candidate.id)); });
-      const someoneEligible = room.state.players.some((candidate) => candidate.buzzEligible);
+      const someoneEligible = this.refreshBuzzEligibility(room);
       current.buzzOpen = someoneEligible;
       current.buzzOpenedAt = someoneEligible ? Date.now() : null;
       if (someoneEligible) this.startTimerInternal(room); else current.answerRevealed = true;
@@ -1123,6 +1217,7 @@ export class TriviaEngine implements RoomEngine<RoomSnapshot> {
     current.answerRevealed = true;
     if (current.responseMode === 'text') this.refreshTextPenaltyPreview(room);
     current.buzzOpen = false;
+    current.priorityPlayerId = null;
     room.state.players.forEach((player) => { player.buzzEligible = false; });
     this.stopTimerInternal(room);
     this.persist();
@@ -1204,10 +1299,10 @@ export class TriviaEngine implements RoomEngine<RoomSnapshot> {
     return this.snapshot(roomCode);
   }
 
-  private startTimerInternal(room: RoomRecord, now = Date.now()): void {
+  private startTimerInternal(room: RoomRecord, now = Date.now(), bonusMs = 0): void {
     const seconds = room.state.settings.timerSeconds;
     if (!seconds) { room.state.timer = emptyTimer(); return; }
-    const durationMs = seconds * 1000;
+    const durationMs = seconds * 1000 + bonusMs;
     room.state.timer = { running: true, durationMs, endsAt: now + durationMs, remainingMs: durationMs };
   }
   private openTextResponseWindowIfReady(room: RoomRecord, now = Date.now()): boolean {
@@ -1244,6 +1339,13 @@ export class TriviaEngine implements RoomEngine<RoomSnapshot> {
     if (current.responseMode === 'text' && Object.keys(current.textResponses ?? {}).length > 0) return;
     const player = room.state.players.find((candidate) => candidate.id === current.turnPlayerId);
     if (!player) return;
+    if (current.priorityPassedBy) {
+      // A turn player who passed is safe; the clue just closes unanswered.
+      current.answerRevealed = true;
+      current.buzzOpen = false;
+      room.state.players.forEach((candidate) => { candidate.buzzEligible = false; });
+      return;
+    }
     this.checkpointScore(room);
     let points = current.effectiveValue;
     if (current.dailyDouble) {
@@ -1259,6 +1361,7 @@ export class TriviaEngine implements RoomEngine<RoomSnapshot> {
     current.answerRevealed = true;
     current.responsesClosed = true;
     current.buzzOpen = false;
+    current.priorityPlayerId = null;
     room.state.players.forEach((candidate) => { candidate.buzzEligible = false; });
   }
 

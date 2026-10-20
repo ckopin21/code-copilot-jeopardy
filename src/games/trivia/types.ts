@@ -220,6 +220,12 @@ export interface CurrentQuestionState {
   buzzWinnerId: string | null;
   buzzOpenedAt: number | null;
   attemptedPlayerIds: string[];
+  /** Turn player holding first chance on an open buzzer clue. Null once they answer or pass. */
+  priorityPlayerId?: string | null;
+  /** Players who buzzed while the turn player held priority, in buzz order. The first gets a pass. */
+  buzzQueue?: string[];
+  /** Turn player who passed this clue. A pass means no timeout penalty for them. */
+  priorityPassedBy?: string | null;
 }
 
 export interface FinalRoundState {
