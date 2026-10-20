@@ -11,6 +11,7 @@ import { gameModeDefinition } from '../gameModes';
 import { freeResponseReadingTimer } from '../ui/freeResponseFlow';
 import { PlayerAvatar } from '../../../platform/players/PlayerAvatar';
 import { normalizePlayerCustomization } from '../../../platform/players/playerCustomization';
+import { BuzzPriorityStatus } from './BuzzPriorityStatus';
 
 function musicFor(room: RoomSnapshot) {
   if (room.phase.startsWith('final')) return 'final' as const;
@@ -180,6 +181,7 @@ export function PresentationApp() {
       <h1>{current.text}</h1>
       {readingTimer ? <div className="presentation-reading-countdown"><small>ANSWERS OPEN IN</small><Timer timer={readingTimer} serverNow={room.serverNow}/></div> : <Timer timer={room.timer} serverNow={room.serverNow}/>}
       {current.responseMode === 'text' && !current.answerRevealed && !readingTimer && <div className="presentation-response-count"><strong>{responseCount}/{activeQuestionPlayers.length}</strong><span>RESPONSES IN</span></div>}
+      <BuzzPriorityStatus current={current} players={room.players} />
       {current.buzzWinnerId && (() => { const player = room.players.find((candidate) => candidate.id === current.buzzWinnerId); if (!player) return null; const customization = normalizePlayerCustomization(player); return <div className="winner-chip presentation-winner" style={{ '--accent': player.accent } as React.CSSProperties}><PlayerAvatar avatarId={player.avatarId} fallback={player.avatar} frameStyle={customization.frameStyle} accent={player.accent} /><span>{player.name}</span></div>; })()}
       {current.answerRevealed && <div className="answer-reveal-v2 presentation-answer"><small>CORRECT ANSWER</small><strong>{current.acceptedAnswers?.join(' / ')}</strong></div>}
     </article></section>}

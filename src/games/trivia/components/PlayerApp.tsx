@@ -303,11 +303,21 @@ export function PlayerApp() {
     setBuzzMessage('');
     try {
       await audio.unlock();
-      const result = await emitAck<{ accepted: boolean; reason?: string }>('player:buzz', { ...credentials, questionId: room.currentQuestion?.questionId, gameStartedAt: room.gameStartedAt });
-      if (result.accepted) { audio.playerBuzz(normalizePlayerCustomization(me).buzzerSound); setBuzzMessage('BUZZ REGISTERED'); }
+      const result = await emitAck<{ accepted: boolean; queued?: boolean; reason?: string }>('player:buzz', { ...credentials, questionId: room.currentQuestion?.questionId, gameStartedAt: room.gameStartedAt });
+      if (result.accepted) { audio.playerBuzz(normalizePlayerCustomization(me).buzzerSound); setBuzzMessage(result.queued ? '' : 'BUZZ REGISTERED'); }
       else { audio.cue('locked'); setBuzzMessage(result.reason ?? 'LOCKED OUT'); }
     } catch (err) {
       setBuzzMessage(err instanceof Error ? err.message : 'Buzz failed');
+    }
+  };
+
+  const passTurn = async () => {
+    if (!credentials || !room) return;
+    setBuzzMessage('');
+    try {
+      await emitAck('player:pass', { ...credentials, questionId: room.currentQuestion?.questionId, gameStartedAt: room.gameStartedAt });
+    } catch (err) {
+      setBuzzMessage(err instanceof Error ? err.message : 'Pass failed');
     }
   };
 
@@ -381,6 +391,12 @@ export function PlayerApp() {
   const customization = normalizePlayerCustomization(me);
   const buzzerOpen = room.phase === 'question' && current?.responseMode !== 'text' && current?.buzzOpen && me.buzzEligible;
   const winner = current?.buzzWinnerId === me.id;
+  const liveBuzzClue = room.phase === 'question' && current?.responseMode !== 'text' && !current?.dailyDouble && Boolean(current?.buzzOpen) && !current?.buzzWinnerId && !current?.answerRevealed;
+  const priorityHolder = liveBuzzClue && current?.priorityPlayerId ? room.players.find((player) => player.id === current.priorityPlayerId) ?? null : null;
+  const holdsFirstChance = priorityHolder?.id === me.id;
+  const linePosition = liveBuzzClue ? (current?.buzzQueue ?? []).indexOf(me.id) + 1 : 0;
+  const passedBy = liveBuzzClue && current?.priorityPassedBy ? room.players.find((player) => player.id === current.priorityPassedBy) ?? null : null;
+  const buzzerLabel = winner ? 'YOU’RE IN' : linePosition ? `IN LINE #${linePosition}` : buzzerOpen ? 'BUZZ' : current?.buzzWinnerId ? 'LOCKED' : 'GET READY';
   const myResponse = current?.textResponses?.[me.id];
   const readingTimer = freeResponseReadingTimer(current, room.settings, room.serverNow);
   const isQuestionParticipant = !current?.participantIds || current.participantIds.includes(me.id);
@@ -416,7 +432,11 @@ export function PlayerApp() {
 
       {!isQuestionParticipant && !current.answerRevealed ? <div className="spoken-answer-panel"><div className="section-kicker">NEXT QUESTION</div><h1>Watching this one</h1><p>You joined after this question started. You’ll be active on the next question.</p></div> : current.responseMode === 'text' && !current.dailyDouble ? <div className="text-response-panel">
         {!current.answerRevealed ? readingTimer ? <div className="reading-lock-panel"><div className="section-kicker">READING TIME</div><h3>Read the question first.</h3><Timer timer={readingTimer} serverNow={room.serverNow} /><p>Your answer box opens when the countdown reaches zero.</p></div> : myResponse ? <div className="response-locked"><div className="lock-icon">✓</div><h3>Response locked</h3><p>{myResponse.answer}</p><small>Waiting for the other active players.</small></div> : <><label>Your answer<textarea value={textAnswer} maxLength={200} onChange={(event)=>setTextAnswer(event.target.value)} placeholder="Type your response" autoFocus /></label><button className="primary-button giant" disabled={!textAnswer.trim()} onClick={() => void submitText()}>Lock Response</button></> : <div className="response-reveal-phone answer-only-phone"><small>CORRECT ANSWER</small><strong>{current.acceptedAnswers?.join(' / ')}</strong>{myResponse ? <><p>Your response: {myResponse.answer}</p><div className={`ruling-badge ${myResponse.resolvedCorrect === true ? 'correct' : myResponse.resolvedCorrect === false ? 'wrong' : ''}`}>{myResponse.resolvedCorrect === true ? 'AWARDED' : myResponse.resolvedCorrect === false ? 'REJECTED' : 'HOST REVIEWING'}</div>{myResponse.resolvedCorrect === null && <small>If rejected: -{pendingMissPenalty.toLocaleString()} points</small>}</> : <><p>No response submitted.</p><div className="ruling-badge wrong">PENDING -{pendingMissPenalty.toLocaleString()}</div></>}</div>}
-      </div> : current.answerRevealed ? <div className="response-reveal-phone answer-only-phone"><small>CORRECT ANSWER</small><strong>{current.acceptedAnswers?.[0]}</strong></div> : current.dailyDouble ? (current.dailyDoublePlayerId === me.id ? <div className="spoken-answer-panel"><div className="section-kicker gold">YOU HAVE IT</div><h1>Answer aloud</h1><p>Your <strong>{current.wager?.toLocaleString()}</strong> wager is locked. You are playing for <strong>{pointsAtStake.toLocaleString()}</strong> points.</p></div> : <div className="spoken-answer-panel"><div className="section-kicker">LOCKED</div><h1>Daily Double</h1><p>{dailyDoublePlayer?.name} locked <strong>{current.wager?.toLocaleString()}</strong> and is playing for <strong>{pointsAtStake.toLocaleString()}</strong> points.</p></div>) : <button type="button" className={`buzzer-button-v2 ${buzzerOpen?'open':''} ${winner?'winner':''}`} disabled={!buzzerOpen} onPointerDown={buzz}><span>{winner ? 'YOU’RE IN' : buzzerOpen ? 'BUZZ' : current.buzzWinnerId ? 'LOCKED' : 'GET READY'}</span></button>}
+      </div> : current.answerRevealed ? <div className="response-reveal-phone answer-only-phone"><small>CORRECT ANSWER</small><strong>{current.acceptedAnswers?.[0]}</strong></div> : current.dailyDouble ? (current.dailyDoublePlayerId === me.id ? <div className="spoken-answer-panel"><div className="section-kicker gold">YOU HAVE IT</div><h1>Answer aloud</h1><p>Your <strong>{current.wager?.toLocaleString()}</strong> wager is locked. You are playing for <strong>{pointsAtStake.toLocaleString()}</strong> points.</p></div> : <div className="spoken-answer-panel"><div className="section-kicker">LOCKED</div><h1>Daily Double</h1><p>{dailyDoublePlayer?.name} locked <strong>{current.wager?.toLocaleString()}</strong> and is playing for <strong>{pointsAtStake.toLocaleString()}</strong> points.</p></div>) : <>
+        {(priorityHolder || passedBy) && <div className={`priority-note-phone ${holdsFirstChance ? 'mine' : ''}`} role="status">{holdsFirstChance ? <><strong>FIRST CHANCE</strong><span>Buzz to answer, or pass it to the first player who buzzed.</span></> : priorityHolder ? <><strong>{priorityHolder.name.toUpperCase()} HAS FIRST CHANCE</strong><span>{linePosition ? 'You get it if they pass.' : 'Buzz now to be next in line.'}</span></> : <><strong>{passedBy!.name.toUpperCase()} PASSED</strong><span>First buzz answers.</span></>}</div>}
+        <button type="button" className={`buzzer-button-v2 ${buzzerOpen?'open':''} ${winner?'winner':''} ${linePosition?'queued':''}`} disabled={!buzzerOpen} onPointerDown={buzz}><span>{buzzerLabel}</span></button>
+        {holdsFirstChance && <button type="button" className="secondary-button pass-turn-button" onClick={() => void passTurn()}>Pass</button>}
+      </>}
 
       {buzzMessage && !current.answerRevealed && <div className="buzz-message-v2">{buzzMessage}</div>}
       {error && <p className="form-error">{error}</p>}
