@@ -71,10 +71,15 @@ export const triviaServerGame: ServerGame<TriviaEngine, RoomSnapshot> = {
       const result = engine.buzz(roomCode, playerId, reconnectToken, questionId(payload), gameStartedAt(payload));
       return { accepted: result.accepted, reason: result.reason };
     },
-    'player:text-response': ({ engine, roomCode, playerId, reconnectToken, payload }) =>
-      engine.submitTextResponse(roomCode, playerId, reconnectToken, String(payload.answer ?? ''), questionId(payload), gameStartedAt(payload)),
-    'player:daily-double-wager': ({ engine, roomCode, playerId, reconnectToken, payload }) =>
-      engine.submitDailyDoubleWager(roomCode, playerId, reconnectToken, Number(payload.wager), questionId(payload), gameStartedAt(payload)),
+    // Player replies skip sanitize, so they never return an engine snapshot (it holds the hidden answer).
+    'player:text-response': ({ engine, roomCode, playerId, reconnectToken, payload }) => {
+      engine.submitTextResponse(roomCode, playerId, reconnectToken, String(payload.answer ?? ''), questionId(payload), gameStartedAt(payload));
+      return null;
+    },
+    'player:daily-double-wager': ({ engine, roomCode, playerId, reconnectToken, payload }) => {
+      engine.submitDailyDoubleWager(roomCode, playerId, reconnectToken, Number(payload.wager), questionId(payload), gameStartedAt(payload));
+      return null;
+    },
     'player:final-wager': ({ engine, roomCode, playerId, reconnectToken, payload }) => {
       engine.submitFinalWager(roomCode, playerId, reconnectToken, Number(payload.wager), gameStartedAt(payload));
       return null;
