@@ -38,7 +38,7 @@ docs/                         maintained technical and gameplay documentation
 
 ## Install and run
 
-Node.js 22+ is required on the laptop. `npm ci` installs the committed lockfile. For real gameplay, `npm start` builds the app and starts the authoritative HTTP/Socket.IO server on port 3000 (`npm run serve` starts an already-built app without rebuilding). For development, `npm run dev` starts the same server with Vite middleware and hot reload. Both bind to `0.0.0.0` by default and print a LAN Host URL. The Join QR uses the server's runtime-discovered LAN address; set `BLUE_STAGE_BASE_URL` if another adapter is preferred. `PORT` and `HOST` can change the listener.
+Node.js 22+ is required on the laptop. `npm ci` installs the committed lockfile. For real gameplay, `npm start` builds the app and starts the authoritative HTTP/Socket.IO server on port 3000 (`npm run serve` starts an already-built app without rebuilding). For development, `npm run dev` starts the same server with Vite middleware and hot reload. `npm start`/`npm run serve` bind to `0.0.0.0` and print a LAN Host URL. `npm run dev` binds to `127.0.0.1` and prints a localhost URL, because the Vite dev middleware should not face the network; use `npm run dev:lan` (or set `HOST=0.0.0.0`) when testing with phones on the LAN, and stop it when done. The Join QR uses the server's runtime-discovered LAN address; set `BLUE_STAGE_BASE_URL` if another adapter is preferred. `PORT` and `HOST` can change the listener.
 
 ```bash
 npm ci
