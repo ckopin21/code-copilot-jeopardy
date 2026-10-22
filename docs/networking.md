@@ -50,7 +50,7 @@ If a phone cannot open the Join URL:
 4. Allow Node.js through Windows Firewall on the **Private** network profile. A Public profile or blocked inbound port 3000 can prevent phones from connecting even while `localhost` works on the laptop.
 5. Check guest Wi-Fi or access-point client isolation, and temporarily disconnect a VPN that routes local traffic away from the LAN.
 
-If the server itself stops, restart it with `npm start` (or `npm run dev` during development), reopen the Host page, and let each phone reconnect. Server-side room persistence is a local recovery aid, not a cloud backup.
+If the server itself stops, restart it with `npm start` (or `npm run dev:lan` during development with phones), reopen the Host page, and let each phone reconnect. Server-side room persistence is a local recovery aid, not a cloud backup.
 
 ## GitHub Pages and the old PeerJS test
 

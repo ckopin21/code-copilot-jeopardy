@@ -55,7 +55,7 @@ npm ci
 npm start
 ```
 
-`npm start` builds the app and starts its HTTP/Socket.IO server on port 3000, listening on the LAN. Open the printed Host URL on the laptop. Allow Node.js through Windows Firewall for **Private** networks if prompted. Put the laptop and phones on the same reachable Wi-Fi; the Host shows a room code, player Join URL/QR, and an optional Presentation link. Keep the server process running during the game. `npm run dev` starts the same server with Vite for development. [Start here](START-HERE.md) has the short setup and connection checklist.
+`npm start` builds the app and starts its HTTP/Socket.IO server on port 3000, listening on the LAN. Open the printed Host URL on the laptop. Allow Node.js through Windows Firewall for **Private** networks if prompted. Put the laptop and phones on the same reachable Wi-Fi; the Host shows a room code, player Join URL/QR, and an optional Presentation link. Keep the server process running during the game. `npm run dev` starts the same server with Vite for development, reachable only from the laptop; `npm run dev:lan` opens it to phones on the LAN. [Start here](START-HERE.md) has the short setup and connection checklist.
 
 The laptop server owns rooms, gameplay, and scoring through `src/games/trivia/engine/TriviaEngine.ts`. The browser Host is an authenticated client; refreshing it leaves the room on the server. Phones and a remote Presentation browser connect through `src/platform/net/socket.ts`, the Socket.IO client adapter. Normal same-room gameplay needs no public Internet after dependencies and assets are installed. GitHub Pages cannot host the Node server and is only useful as a static preview or landing page.
 

@@ -38,12 +38,15 @@ export interface LocalGameServer {
 
 export async function startLocalGameServer(options: { port?: number; host?: string; baseUrl?: string; distDir?: string; dev?: boolean; services?: boolean } = {}): Promise<LocalGameServer> {
   const port = options.port ?? Number(process.env.PORT ?? 3000);
-  const host = options.host ?? process.env.HOST ?? '0.0.0.0';
+  // Production serves the LAN. The Vite dev server stays on this machine unless
+  // HOST or --lan opts in, because its middleware is not meant to face a network.
+  const host = options.host ?? process.env.HOST ?? (options.dev ? '127.0.0.1' : '0.0.0.0');
   const distDir = resolve(options.distDir ?? 'dist-client');
   if (!options.dev && !existsSync(resolve(distDir, 'index.html'))) throw new Error(`Production application is missing from ${distDir}. Run npm run build first.`);
   let vite: ViteDevServer | null = null;
   const httpServer = createServer((request, response) => { void serveRequest(request, response); });
-  const game = createRoomServer({ httpServer, baseUrl: options.baseUrl ?? process.env.BLUE_STAGE_BASE_URL });
+  const loopbackOnly = host === '127.0.0.1' || host === 'localhost' || host === '::1';
+  const game = createRoomServer({ httpServer, baseUrl: options.baseUrl ?? process.env.BLUE_STAGE_BASE_URL ?? (loopbackOnly ? `http://localhost:${port}` : undefined) });
   if (options.dev) {
     vite = await createViteServer({
       appType: 'spa',
@@ -119,7 +122,7 @@ export async function startLocalGameServer(options: { port?: number; host?: stri
 
 const launchedFromCli = process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href;
 if (launchedFromCli) {
-  startLocalGameServer({ dev: process.argv.includes('--dev'), services: process.env.BLUE_STAGE_SERVICES !== '0' }).then(({ game, close }) => {
+  startLocalGameServer({ dev: process.argv.includes('--dev'), host: process.argv.includes('--lan') ? '0.0.0.0' : undefined, services: process.env.BLUE_STAGE_SERVICES !== '0' }).then(({ game, close }) => {
     process.stdout.write(`Blue Stage Trivia is running.\nHost: ${game.baseUrl()}/?mode=host\nJoin and Presentation links appear in Host after room creation.\n`);
     let stopping = false;
     const stop = () => {

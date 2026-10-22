@@ -5,7 +5,7 @@ export default defineConfig({
   base: './',
   plugins: [react()],
   server: {
-    host: true,
+    // Vite's default is localhost; pass --host to expose the standalone dev server.
     port: 5173,
     proxy: {
       '/api': 'http://localhost:3000'
