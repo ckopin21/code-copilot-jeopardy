@@ -78,6 +78,8 @@ class AudioEngine {
   private effects: GainNode | null = null;
   private musicState: MusicState | null = null;
   private musicTimer: number | null = null;
+  /** Counts setMusic and stop calls, so a setMusic still waiting on unlock() can tell it was overtaken. */
+  private musicRequest = 0;
   private transitionTimer: number | null = null;
   private clickTimer: number | null = null;
   private generation = 0;
@@ -317,6 +319,7 @@ class AudioEngine {
   }
 
   async setMusic(state: MusicState): Promise<void> {
+    const request = ++this.musicRequest;
     if (this.settings.backgroundTrack !== 'dynamic') {
       this.stopScheduledMusic();
       this.musicState = state;
@@ -327,6 +330,7 @@ class AudioEngine {
     if (this.musicState === state && this.musicTimer !== null) return;
     this.stopMediaTrack();
     await this.unlock();
+    if (request !== this.musicRequest) return;
     this.stopScheduledMusic();
     this.musicState = state;
     if (!this.context || !this.music) return;
@@ -343,6 +347,7 @@ class AudioEngine {
   }
 
   stop(): void {
+    this.musicRequest += 1;
     this.musicState = null;
     this.stopMediaTrack();
     this.stopScheduledMusic();
