@@ -56,6 +56,8 @@ export function TriviaApp() {
     return () => {
       window.removeEventListener('popstate', onPopState);
       document.removeEventListener('pointerdown', onPointerDown, { capture: true });
+      // Leaving trivia ("All games"): its music stops with it.
+      audio.stop();
     };
   }, []);
 

@@ -118,6 +118,9 @@ class DealAudio {
     return this.context ? this.load(file) : Promise.resolve(null);
   }
 
+  /** Bumped by stopStings, so a sting that was still loading doesn't start afterwards. */
+  private stingGeneration = 0;
+
   /**
    * Switches loops: the old one fades out in well under a second and the new one comes in just after, so two songs
    * barely overlap.
@@ -156,8 +159,9 @@ class DealAudio {
   /** Plays a one-shot. Resolves with its length in seconds once it starts, or 0 if it cannot play. */
   async sting(name: Sting, level = 1): Promise<number> {
     if (!this.context) return 0;
+    const generation = this.stingGeneration;
     const buffer = await this.load(STING_FILES[name]);
-    if (!buffer) return 0;
+    if (!buffer || generation !== this.stingGeneration) return 0;
     const source = this.context.createBufferSource();
     source.buffer = buffer;
     const gain = this.context.createGain();
@@ -174,6 +178,7 @@ class DealAudio {
 
   /** Fades out the musical stings still playing (the fanfare after a quick skip, the winner after Play again). */
   stopStings(): void {
+    this.stingGeneration += 1;
     if (!this.context) return;
     const now = this.context.currentTime;
     for (const { source, gain } of this.playingStings) {

@@ -4,6 +4,7 @@ import type { DealSnapshot, Phase } from '../types';
 import { dealAudio, type MusicTrack, type Sting } from './dealAudio';
 import { TUTORIAL_TIMELINE, clockElapsed, revealSchedule } from '../ui/labels';
 import { useNarration } from './useNarration';
+import { narrator } from './narrator';
 
 const MUSIC_FOR: Record<Phase, MusicTrack> = {
   lobby: 'lobby', tutorial: 'lobby', build: 'bed', stage: 'bed',
@@ -42,6 +43,9 @@ export function useSoundtrack(room: DealSnapshot | null, enabled: boolean, onTut
   const audioSettings = room?.settings.audio;
   useEffect(() => { if (audioSettings) dealAudio.applySettings(audioSettings); }, [audioSettings]);
   useEffect(() => () => window.clearTimeout(holdTimer.current), []);
+  // Leaving the game (the Games button, or anything else that closes this screen): the music, stings and hosts stop
+  // with it, since the audio engine outlives the screen.
+  useEffect(() => () => { void dealAudio.music(null); dealAudio.stopStings(); narrator.stop(); }, []);
 
   useEffect(() => {
     const before = previous.current;
