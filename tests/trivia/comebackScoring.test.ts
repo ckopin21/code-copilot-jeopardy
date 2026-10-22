@@ -214,6 +214,7 @@ describe('limited comeback scoring', () => {
     const beforeChaser = before.players.find((player) => player.id === chaser.playerId)!.score;
     selectValue(engine, host.roomCode, host.hostToken, chaser.playerId, 100);
     engine.openBuzzers(host.roomCode, host.hostToken);
+    engine.hostPassTurn(host.roomCode, host.hostToken);
     engine.localBuzz(host.roomCode, host.hostToken, leader.playerId);
     engine.revealAnswer(host.roomCode, host.hostToken);
     const resolved = engine.resolveAnswer(host.roomCode, host.hostToken, leader.playerId, true);

@@ -61,7 +61,7 @@
 .showcase-host .enhanced-pack-main strong {
   font-size: clamp(.75rem, 1.35vh, .9rem);
   line-height: 1.08;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .showcase-host .enhanced-pack-main span {
@@ -274,6 +274,28 @@
 }
 
 @media (max-width: 759px) {
+  /* A 1fr track's automatic minimum let long setup controls widen both panels
+     beyond the phone viewport, where the host shell silently clipped them. */
+  .showcase-host > .showcase-lobby.lobby-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .showcase-host .showcase-lobby > .panel-v2 {
+    min-width: 0;
+  }
+  .showcase-host .enhanced-pack-main strong {
+    font-size: .8rem;
+    white-space: normal;
+    overflow: visible;
+  }
+  .showcase-host .enhanced-pack-main span {
+    display: block;
+    overflow: visible;
+    -webkit-line-clamp: unset;
+    font-size: .7rem;
+  }
+  .showcase-host .enhanced-pack-main small {
+    font-size: .65rem;
+  }
   .showcase-host .enhanced-pack-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

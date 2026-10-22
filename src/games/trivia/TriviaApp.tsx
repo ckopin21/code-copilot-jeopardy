@@ -3,7 +3,7 @@ import { MusicTrackSelect } from './components/BackgroundMusicPicker';
 import { audio } from '../../platform/audio/audio';
 import { hostPhaseLabel, readHostPreview } from './ui/hostPreview';
 import { readSavedHostCredentials } from '../../platform/session/hostCredentials';
-import { resetInstance } from '../../platform/session/resetInstance';
+import { navigateInApp, pickerUrl, resetInstance } from '../../platform/session/resetInstance';
 import { useOutsideDismiss } from '../../platform/ui/useOutsideDismiss';
 import { fullscreenSupported, toggleFullscreen, useFullscreenActive } from '../../platform/ui/fullscreen';
 
@@ -168,6 +168,7 @@ function Menu({ onNavigate }: { onNavigate: (mode: AppMode, fresh?: boolean) => 
       </div>
 
       <div className="menu-tool-row" aria-label="Menu tools">
+        <button className="menu-tool-button" onClick={() => navigateInApp(pickerUrl())}><span aria-hidden="true">←</span>All games</button>
         <button className="menu-tool-button" disabled={!canFullscreen} onClick={() => void toggleFullscreen()}><span aria-hidden="true">⛶</span>{fullscreen ? 'Exit Fullscreen' : 'Fullscreen'}</button>
         <button className="menu-tool-button" onClick={(event) => { modalTriggerRef.current = event.currentTarget; setModal('how'); }}><span aria-hidden="true">?</span>How to Play</button>
         <button className="menu-tool-button" onClick={(event) => { modalTriggerRef.current = event.currentTarget; setModal('advanced'); }}><span aria-hidden="true">⚙</span>Advanced</button>

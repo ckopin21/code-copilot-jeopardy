@@ -17,7 +17,8 @@ export default defineConfig({
   webServer: {
     // Run the actual authoritative server and WebSocket path in both browsers.
     command: `${process.execPath} node_modules/tsx/dist/cli.mjs server/index.ts --dev`,
-    env: { PORT: '4173', HOST: '127.0.0.1', BLUE_STAGE_BASE_URL: 'http://127.0.0.1:4173' },
+    // No helper programs (the narrator voice) in tests.
+    env: { PORT: '4173', HOST: '127.0.0.1', BLUE_STAGE_BASE_URL: 'http://127.0.0.1:4173', BLUE_STAGE_SERVICES: '0' },
     url: 'http://127.0.0.1:4173/api/health',
     reuseExistingServer: false
   }

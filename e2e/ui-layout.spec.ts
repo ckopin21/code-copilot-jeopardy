@@ -208,7 +208,7 @@ async function openDevPresentationHarness(page, { playerCount = 5, multiplier = 
 }
 
 test('fresh instances start music volume at 50 percent', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/?game=trivia');
   await page.evaluate(() => localStorage.clear());
   await page.reload();
 
@@ -220,7 +220,7 @@ test('fresh instances start music volume at 50 percent', async ({ page }) => {
 for (const viewport of menuViewports) {
   test(`desktop menu panels stay compact and centered at ${viewport.width}x${viewport.height}`, async ({ page }) => {
     await page.setViewportSize(viewport);
-    await page.goto('/');
+    await page.goto('/?game=trivia');
     await expect(page.locator('.showcase-menu .menu-mode-grid')).toBeVisible();
 
     const geometry = await page.evaluate(() => {
@@ -427,7 +427,7 @@ test('dismissible host panels preserve inside clicks and close outside', async (
 });
 
 test('menu dialogs trap focus and restore it to their trigger', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/?game=trivia');
   const trigger = page.getByRole('button', { name: 'How to Play' });
   await trigger.click();
 

@@ -1,0 +1,327 @@
+// Shared types for Deal or Dud. Used by the server engine and the browser screens.
+
+export const GAME_ID = 'deal-or-dud';
+export const PLAYER_COUNT = 4;
+/** Rounds in one pass: everyone pitches once. A game plays `settings.pitches` passes. */
+export const ROUND_COUNT = 4;
+/** How many times each player can pitch in one game (the "Pitches per player" setting). */
+export const PITCH_LIMITS = { min: 1, max: 3 } as const;
+
+export type Tone = 'clean' | 'silly' | 'crude';
+
+/** What kind of thing the main product is. Twists declare which forms they suit. */
+export type ProductForm = 'food' | 'gadget' | 'goods' | 'pet' | 'service' | 'rental' | 'digital' | 'event';
+
+/** Live reactions a shark can send once questions open. They float up on the TV and score nothing. */
+export const REACTIONS = ['😂', '🔥', '🤔', '💀'] as const;
+export type ReactionEmoji = typeof REACTIONS[number];
+
+export type TimerPreset = 'quick' | 'standard' | 'relaxed' | 'custom';
+
+export interface TimerSettings {
+  /** Product builder clock (seconds). The key is `prep` so saved settings keep working. */
+  prep: number;
+  /** One clock for the whole time on stage: the pitch and the sharks' questions. */
+  stage: number;
+  offers: number;
+  /** How long the bid reveal stays up (the drumroll, the flips and the total). */
+  reveal: number;
+  /** The scores break between rounds. */
+  scores: number;
+  tiebreaker: number;
+}
+
+export interface AudioSettings {
+  music: number;
+  effects: number;
+  narration: number;
+  muted: boolean;
+}
+
+export interface BonusSettings {
+  /** +2 when no shark says "I'm out" during your pitch. */
+  noWalkout: boolean;
+  /** +3 when all three sharks bid $300K or more. */
+  ovation: boolean;
+  /** A vote at the end: pitch of the night, +5. */
+  pitchVote: boolean;
+}
+
+export const BONUS_POINTS = { noWalkout: 2, ovation: 3, pitchVote: 5 } as const;
+/** The smallest bid from every shark that counts as a standing ovation, in $K. */
+export const OVATION_MIN_BID = 300;
+export const DEFAULT_BONUSES: BonusSettings = { noWalkout: true, ovation: true, pitchVote: true };
+
+export interface DealSettings {
+  timerPreset: TimerPreset;
+  timers: TimerSettings;
+  /** Pitches per player: each pass is a fresh build, then four rounds. */
+  pitches: number;
+  tone: Tone;
+  tutorial: boolean;
+  captions: boolean;
+  /** Extra ways for a presenter to score, each switchable in the settings. */
+  bonuses: BonusSettings;
+  audio: AudioSettings;
+}
+
+
+export type Phase =
+  | 'lobby'
+  | 'tutorial'
+  | 'build'
+  | 'stage'
+  | 'offers'
+  | 'reveal'
+  | 'break'
+  | 'final'
+  | 'vote'
+  | 'vote-result'
+  | 'forecast'
+  | 'forecast-result'
+  | 'gameover';
+
+export type PlayerLook =
+  | { kind: 'preset'; presetId: string }
+  | { kind: 'photo'; photo: string };
+
+export interface DealPlayer {
+  id: string;
+  name: string;
+  connected: boolean;
+  look: PlayerLook;
+  score: number;
+  joinedAt: number;
+  /** False until the phone finishes picking an avatar; the lobby hides the player until then. */
+  lookSet: boolean;
+  /** Four digits that get this seat back on any phone. Only the player's own phone receives it. */
+  seatCode: string | null;
+  /** How the narrator should pronounce the name, set by the host ("Shiv-awn"). Absent means say the name as typed. */
+  sayAs?: string;
+}
+
+/** A reaction on its way up the TV. `id` counts up within the round so each one animates once. */
+export interface Reaction {
+  id: number;
+  sharkId: string;
+  emoji: ReactionEmoji;
+  at: number;
+}
+
+/** A shark who said "I'm out" on stage: their bid is locked at $0. `at` drives the TV sting. */
+export interface SharkOut {
+  sharkId: string;
+  at: number;
+}
+
+export type BuilderColumn = 'products' | 'modifiers' | 'audiences' | 'features';
+/** The steps a player can skip. The product is always there. */
+export type OptionalColumn = Exclude<BuilderColumn, 'products'>;
+
+/** A player's picks in the card builder. Ids refer to the content pools. */
+export interface BuilderPicks {
+  product: string | null;
+  modifier: string | null;
+  audience: string | null;
+  feature?: string | null;
+  /** The word before the who: "for", "made by", "tested on"… (a `CONNECTORS` id). Missing means "for". */
+  connector?: string;
+  /** Steps the player chose to leave out ("No twist"). */
+  skipped?: Partial<Record<OptionalColumn, true>>;
+  /** The cards currently offered in each step (🔀 deals new ones). */
+  hands: Record<BuilderColumn, string[]>;
+  /** A step the player wrote themselves ("✏️ Write your own"; not the product), instead of a card. Its card pick is then null. */
+  custom?: Partial<Record<BuilderColumn, string>>;
+}
+
+export interface LockedPremise {
+  headline: string;
+  mainProductId: string;
+  form: ProductForm;
+  /** The picked cards' emoji in reading order (twist, product, who, feature), for the product card on the TV and phones. */
+  emojis: string[];
+}
+
+/** A shark's bid in $K. 0 means no money ("no way", or out). */
+export type OfferChoice = 0 | 100 | 200 | 300 | 400 | 500;
+
+export interface ClockState {
+  /** Server time the clock reaches zero while running. */
+  endsAt: number | null;
+  /** Remaining time while paused or not yet started. */
+  remainingMs: number;
+  totalMs: number;
+}
+
+export interface RoundScore {
+  playerId: string;
+  delta: number;
+  reason: string;
+}
+
+export interface RoundResult {
+  presenterId: string;
+  headline: string;
+  /** Presenter bonuses this round, already included in their score line. */
+  bonuses: { id: 'noWalkout' | 'ovation'; points: number }[];
+  /** Every shark's bid; "I'm out" and unlocked bids are $0. */
+  offers: Record<string, OfferChoice>;
+  /** Sharks in the order the reveal flips them: lowest bid first. */
+  revealOrder: string[];
+  /** All bids added up, in $K (0 to 1,500). */
+  total: number;
+  /** The top bidder "makes the deal" (for show). Several on a tie at the top; none when nobody bid. */
+  dealSharkIds: string[];
+  scores: RoundScore[];
+}
+
+export interface RoundState {
+  index: number;
+  presenterId: string;
+  sharkIds: string[];
+  builder: BuilderPicks;
+  premise: LockedPremise | null;
+  /** When the presenter locked their product during the build. */
+  lockedAt?: number | null;
+  /** False during pitch time (the start of the stage clock); the sharks' buttons unlock when it turns true. */
+  questionsOpen: boolean;
+  /** The last few reactions, newest last. */
+  reactions: Reaction[];
+  /** Sharks who said "I'm out", in order. */
+  out: SharkOut[];
+  offers: Record<string, OfferChoice | null>;
+  lockedOffers: string[];
+  /** Sharks who tapped "Ready to bid". When every shark still in has, the stage ends early. */
+  readyToBid: string[];
+  result: RoundResult | null;
+}
+
+export interface ForecastCardPublic {
+  id: string;
+  title: string;
+  clues: string[];
+  question: string;
+}
+
+/**
+ * The end-of-game votes. Nominees are rounds, by their index in `history`: a round's business name, or its pitch. Nobody
+ * votes for their own. Votes stay secret until the result.
+ */
+export interface VoteState {
+  pitches: Record<string, number | null>;
+  submitted: string[];
+  /** Winning rounds (ties share), filled in when the votes are counted. */
+  pitchWinners: number[];
+}
+
+export interface ForecastState {
+  attempt: 1 | 2;
+  playerIds: string[];
+  card: ForecastCardPublic;
+  answer: number | null;
+  guesses: Record<string, number | null>;
+  submitted: string[];
+  winnerId: string | null;
+  closestIds: string[];
+  randomDraw: boolean;
+}
+
+export interface DealSnapshot {
+  game: typeof GAME_ID;
+  code: string;
+  createdAt: number;
+  expiresAt: number;
+  revision: number;
+  serverNow: number;
+  phase: Phase;
+  paused: boolean;
+  pausedAt: number | null;
+  pauseReason: 'host' | 'presenter-offline' | null;
+  settings: DealSettings;
+  players: DealPlayer[];
+  hostConnected: boolean;
+  /** Player who can use host controls from their phone (first to join). */
+  vipId: string | null;
+  roundIndex: number;
+  round: RoundState | null;
+  /**
+   * Rounds not yet played, in pitch order. Everyone builds their product at once before round 1, so during the
+   * build this holds all four; each round moves to `round` when it goes on stage. A phone only ever sees its own.
+   */
+  upcoming: RoundState[];
+  history: RoundResult[];
+  clock: ClockState | null;
+  forecast: ForecastState | null;
+  votes: VoteState | null;
+  winnerIds: string[];
+  tutorialRun: number;
+  /** Phase to return to after a replayed tutorial. */
+  tutorialReturn: Phase | null;
+  gameNumber: number;
+  joinUrl: string;
+}
+
+/** Pitch time: the first 60 seconds on stage, or the first third of a stage clock under 3:00. */
+export function pitchSeconds(stageSeconds: number): number {
+  return stageSeconds >= 180 ? 60 : Math.round(stageSeconds / 3);
+}
+
+/** The presets only set the stage clock (pitch and questions). Every other timer has one flat default. */
+export const STAGE_PRESETS: Record<Exclude<TimerPreset, 'custom'>, number> = { quick: 120, standard: 180, relaxed: 240 };
+export const DEFAULT_TIMERS: TimerSettings = { prep: 90, stage: 180, offers: 45, reveal: 10, scores: 5, tiebreaker: 20 };
+/** The timers under "More timers" in the host settings. */
+export const OTHER_TIMERS: readonly (keyof TimerSettings)[] = ['prep', 'offers', 'reveal', 'scores', 'tiebreaker'];
+
+export const TIMER_LIMITS: Record<keyof TimerSettings, { min: number; max: number; step: number; label: string }> = {
+  prep: { min: 20, max: 180, step: 5, label: 'Product builder' },
+  stage: { min: 60, max: 600, step: 30, label: 'On stage (pitch & questions)' },
+  offers: { min: 20, max: 90, step: 5, label: 'Offer lock' },
+  reveal: { min: 5, max: 30, step: 1, label: 'The bid reveal' },
+  scores: { min: 3, max: 20, step: 1, label: 'Scores between rounds' },
+  tiebreaker: { min: 10, max: 40, step: 5, label: 'Tiebreaker guess' }
+};
+
+/** There is no tone setting: every game uses the full funny set of cards (clean, silly and mild bathroom humor). */
+export const GAME_TONE: Tone = 'crude';
+
+export const DEFAULT_SETTINGS: DealSettings = {
+  timerPreset: 'standard',
+  timers: { ...DEFAULT_TIMERS },
+  pitches: 1,
+  tone: GAME_TONE,
+  tutorial: true,
+  bonuses: { ...DEFAULT_BONUSES },
+  captions: true,
+  audio: { music: 55, effects: 75, narration: 90, muted: false }
+};
+
+/** Fixed rule timings (seconds) that are not host settings. */
+export const RULE_TIMINGS = {
+  forecastResult: 8,
+  vote: 45,
+  voteResult: 10,
+  tutorialSeconds: 40
+} as const;
+
+/** Every bid a shark can lock, in $K. */
+export const OFFER_CHOICES: readonly OfferChoice[] = [0, 100, 200, 300, 400, 500];
+
+/** A shark's reactions closer together than this are dropped quietly, so nobody floods the TV. */
+export const REACTION_GAP_MS = 600;
+
+export const TONE_ORDER: Record<Tone, number> = { clean: 0, silly: 1, crude: 2 };
+export function toneAllows(setting: Tone, itemTone: Tone | undefined): boolean {
+  return TONE_ORDER[itemTone ?? 'clean'] <= TONE_ORDER[setting];
+}
+
+/** Every round in a game: four per pass. */
+export function totalRounds(settings: Pick<DealSettings, 'pitches'>): number {
+  return ROUND_COUNT * (settings.pitches ?? 1);
+}
+
+/** Plain-language total time estimate in minutes: per pass, one shared build and four rounds. */
+export function estimateMinutes(timers: TimerSettings, tutorial: boolean, pitches = 1): { low: number; high: number } {
+  const perRound = timers.stage + timers.offers + timers.reveal + timers.scores;
+  const base = (timers.prep + perRound * ROUND_COUNT) * pitches + (tutorial ? RULE_TIMINGS.tutorialSeconds : 0) + 60 /* lobby and final scores */ + RULE_TIMINGS.vote;
+  return { low: Math.round((base * 0.85) / 60), high: Math.round((base * 1.05) / 60) };
+}

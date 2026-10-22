@@ -32,7 +32,7 @@ Everything runs from the user's laptop for multiplayer. `server/index.ts` serves
                Host browser  Player phones  Presentation
 ```
 
-`npm start` builds and starts the production app on `0.0.0.0:3000`; `npm run dev` runs the same server with Vite middleware. The server advertises a runtime-discovered numeric LAN address through `/api/network`. `/api/qr` is a platform route; `/api/packs` is contributed by trivia through its `httpRoutes`. GitHub Pages may host a static preview, but it cannot run this authority and is not a multiplayer endpoint.
+`npm start` builds and starts the production app on `0.0.0.0:3000`; `npm run dev` runs the same server with Vite middleware. The server advertises a runtime-discovered numeric LAN address through `/api/network`. `/api/qr` is a platform route; `/api/packs` is contributed by trivia through its `httpRoutes`, and `/api/deal-or-dud/voice` by Deal or Dud through its `fileRoutes`. GitHub Pages may host a static preview, but it cannot run this authority and is not a multiplayer endpoint.
 
 ## Main entry points
 

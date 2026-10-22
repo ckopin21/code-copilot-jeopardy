@@ -1,6 +1,6 @@
 # Blue Stage Trivia
 
-A shared-screen trivia game with a Host display and up to five phone controllers. The repo is organized as a small game platform (`src/platform/`, `server/`) with trivia as its first game (`src/games/trivia/`), so more games can be added alongside it. For multiplayer, the user's laptop runs the authoritative Node + Socket.IO server; Host, phones, and Presentation connect over the same Wi-Fi/LAN.
+A shared-screen trivia game with a Host display and up to five phone controllers. The repo is organized as a small game platform (`src/platform/`, `server/`) with trivia as its first game (`src/games/trivia/`) and **Deal or Dud** (`src/games/deal-or-dud/`, a four-player pitch game; see [docs/deal-or-dud.md](docs/deal-or-dud.md)) as its second. Opening the server's root URL shows a game picker. For multiplayer, the user's laptop runs the authoritative Node + Socket.IO server; Host, phones, and Presentation connect over the same Wi-Fi/LAN.
 
 GitHub Pages hosts a static preview, not the multiplayer server:
 
@@ -16,7 +16,7 @@ https://ckopin21.github.io/code-copilot-jeopardy/
 - stable phone identity with automatic reconnect, heartbeat disconnect detection, and reserved seats
 - host can return to the main menu without dropping controllers; starting a new game reuses the same room, seats, and player profiles while resetting game progress
 - host-selectable board with in-page fullscreen presentation mode
-- first-buzz locking, keyboard/gamepad host buzzers, typed-response questions
+- turn player first chance with a buzz-in line and Pass, keyboard/gamepad host buzzers, typed-response questions
 - Daily Doubles with fixed wager choices
 - visible locked wagers and points in play on host and phones
 - 2× final-six and 3× final-three question values

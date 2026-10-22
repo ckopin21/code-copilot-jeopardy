@@ -6,7 +6,7 @@ test('WebKit boots the menu and Join Game screen without runtime errors', async 
   const pageErrors: string[] = [];
   page.on('pageerror', (error) => pageErrors.push(error.message));
 
-  await page.goto('/');
+  await page.goto('/?game=trivia');
   await expect(page.locator('.showcase-menu')).toBeVisible();
   await page.getByRole('button', { name: /Join a Game/i }).click();
   await expect(page.locator('.phone-shell.phone-join')).toBeVisible();
